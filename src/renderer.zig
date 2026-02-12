@@ -228,8 +228,8 @@ pub const Renderer = struct {
 
     const zero4 = [4]f32{ 0, 0, 0, 0 };
     const zero2 = [2]f32{ 0, 0 };
-    const padding_x: f32 = 4.0; // logical pixels
-    const padding_y: f32 = 2.0;
+    pub const padding_x: f32 = 4.0; // logical pixels
+    pub const padding_y: f32 = 2.0;
 
     fn writeQuad(buf: [*]Vertex, idx: *u32, x0: f32, y0: f32, x1: f32, y1: f32, uv0: [2]f32, uv1: [2]f32, fg: [4]f32, bg: [4]f32, is_bg: f32) void {
         // Two triangles: (0,1,2) and (1,3,2) forming a quad

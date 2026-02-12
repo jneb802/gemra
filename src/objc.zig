@@ -101,6 +101,34 @@ pub fn addMethod(cls: Class, name: SEL, imp: IMP, types: [*:0]const u8) void {
     }
 }
 
+pub const Super = extern struct {
+    receiver: id,
+    super_class: Class,
+};
+
+pub fn msgSendSuper(comptime ReturnType: type, super_struct: *const Super, selector: SEL, args: anytype) ReturnType {
+    const ArgsTuple = @TypeOf(args);
+    const FnType = comptime blk: {
+        const args_info = @typeInfo(ArgsTuple).@"struct".fields;
+        var params: [args_info.len + 2]std.builtin.Type.Fn.Param = undefined;
+        params[0] = .{ .is_generic = false, .is_noalias = false, .type = *const Super };
+        params[1] = .{ .is_generic = false, .is_noalias = false, .type = SEL };
+        for (args_info, 0..) |arg, i| {
+            params[i + 2] = .{ .is_generic = false, .is_noalias = false, .type = arg.type };
+        }
+        break :blk *const @Type(.{ .@"fn" = .{
+            .calling_convention = std.builtin.CallingConvention.c,
+            .is_generic = false,
+            .is_var_args = false,
+            .return_type = ReturnType,
+            .params = &params,
+        } });
+    };
+
+    const func: FnType = @ptrCast(&c.objc_msgSendSuper);
+    return @call(.auto, func, .{ super_struct, selector } ++ args);
+}
+
 pub fn addIvar(cls: Class, name: [*:0]const u8, size: usize, alignment: u8, types: [*:0]const u8) void {
     if (!c.class_addIvar(cls, name, size, alignment, types)) {
         @panic("class_addIvar failed");

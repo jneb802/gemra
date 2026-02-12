@@ -1,5 +1,6 @@
 const std = @import("std");
 const objc = @import("objc.zig");
+const Renderer = @import("renderer.zig").Renderer;
 
 pub const AppContext = struct {
     pty: *@import("pty.zig").Pty,
@@ -177,6 +178,61 @@ fn viewCanBecomeKeyView(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
     return objc.YES;
 }
 
+fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) callconv(.C) void {
+    // Call super's setFrameSize:
+    const super = objc.Super{
+        .receiver = self_view,
+        .super_class = objc.getClass("NSView"),
+    };
+    objc.msgSendSuper(void, &super, _sel, .{new_size});
+
+    const ctx = global_app_context orelse return;
+
+    const win = objc.msgSend(objc.id, self_view, objc.sel("window"), .{});
+    if (win == null) return;
+    const scale = objc.msgSend(objc.CGFloat, win, objc.sel("backingScaleFactor"), .{});
+
+    const scaled_w = new_size.width * scale;
+    const scaled_h = new_size.height * scale;
+
+    // Update Metal layer
+    objc.msgSendVoid(ctx.layer, objc.sel("setContentsScale:"), .{scale});
+    objc.msgSendVoid(ctx.layer, objc.sel("setDrawableSize:"), .{objc.CGSize{ .width = scaled_w, .height = scaled_h }});
+
+    // Update renderer viewport
+    ctx.renderer.updateViewport(@floatCast(scaled_w), @floatCast(scaled_h));
+
+    // Calculate new grid dimensions
+    const pad_x = Renderer.padding_x * ctx.renderer.atlas.scale;
+    const pad_y = Renderer.padding_y * ctx.renderer.atlas.scale;
+    const cell_w = ctx.renderer.atlas.cell_width;
+    const cell_h = ctx.renderer.atlas.cell_height;
+
+    const usable_w: f32 = @floatCast(scaled_w - 2.0 * pad_x);
+    const usable_h: f32 = @floatCast(scaled_h - 2.0 * pad_y);
+    if (usable_w <= 0 or usable_h <= 0) return;
+
+    const new_cols: u16 = @intFromFloat(@floor(usable_w / cell_w));
+    const new_rows: u16 = @intFromFloat(@floor(usable_h / cell_h));
+    if (new_cols < 1 or new_rows < 1) return;
+
+    if (new_cols != ctx.grid.cols or new_rows != ctx.grid.rows) {
+        ctx.mutex.lock();
+        defer ctx.mutex.unlock();
+
+        ctx.grid.resize(new_cols, new_rows);
+        ctx.pty.setSize(new_cols, new_rows);
+
+        // Invalidate vertex buffer (size changed)
+        if (ctx.renderer.vertex_buffer != null) {
+            objc.msgSendVoid(ctx.renderer.vertex_buffer, objc.sel("release"), .{});
+            ctx.renderer.vertex_buffer = null;
+        }
+    }
+
+    ctx.needs_render.store(true, .release);
+}
+
 fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) objc.BOOL {
     return objc.YES;
 }
@@ -209,6 +265,7 @@ pub fn createViewClass() objc.Class {
     objc.addMethod(cls, objc.sel("wantsLayer"), @ptrCast(&viewWantsLayer), "B@:");
     objc.addMethod(cls, objc.sel("isOpaque"), @ptrCast(&viewIsOpaque), "B@:");
     objc.addMethod(cls, objc.sel("canBecomeKeyView"), @ptrCast(&viewCanBecomeKeyView), "B@:");
+    objc.addMethod(cls, objc.sel("setFrameSize:"), @ptrCast(&viewSetFrameSize), "v@:{CGSize=dd}");
 
     objc.registerClassPair(cls);
     return cls;
@@ -289,14 +346,19 @@ pub fn setup(ctx: *AppContext) !void {
     objc.msgSendVoid(win, objc.sel("makeKeyAndOrderFront:"), .{@as(objc.id, null)});
     objc.msgSendVoid(win, objc.sel("center"), .{});
 
-    // Timer for rendering at ~60fps
-    _ = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSTimer"))), objc.sel("scheduledTimerWithTimeInterval:target:selector:userInfo:repeats:"), .{
+    // Timer for rendering at ~60fps (use common modes so it fires during live resize)
+    const timer = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSTimer"))), objc.sel("timerWithTimeInterval:target:selector:userInfo:repeats:"), .{
         @as(f64, 1.0 / 60.0),
         delegate_obj,
         objc.sel("timerFired:"),
         @as(objc.id, null),
         objc.YES,
     });
+    const run_loop = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSRunLoop"))), objc.sel("currentRunLoop"), .{});
+    const common_modes = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSString"))), objc.sel("stringWithUTF8String:"), .{
+        @as([*:0]const u8, "kCFRunLoopCommonModes"),
+    });
+    objc.msgSendVoid(run_loop, objc.sel("addTimer:forMode:"), .{ timer, common_modes });
 }
 
 pub fn runApp() void {

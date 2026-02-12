@@ -113,6 +113,31 @@ pub const Grid = struct {
         self.allocator.free(self.cells);
     }
 
+    pub fn resize(self: *Grid, new_cols: u16, new_rows: u16) void {
+        if (new_cols == self.cols and new_rows == self.rows) return;
+
+        const new_cells = self.allocator.alloc(Cell, @as(usize, new_cols) * @as(usize, new_rows)) catch return;
+        @memset(new_cells, Cell{});
+
+        const copy_cols = @as(usize, @min(self.cols, new_cols));
+        const copy_rows = @as(usize, @min(self.rows, new_rows));
+        for (0..copy_rows) |row| {
+            const old_start = row * @as(usize, self.cols);
+            const new_start = row * @as(usize, new_cols);
+            @memcpy(new_cells[new_start .. new_start + copy_cols], self.cells[old_start .. old_start + copy_cols]);
+        }
+
+        self.allocator.free(self.cells);
+        self.cells = new_cells;
+        self.cols = new_cols;
+        self.rows = new_rows;
+        self.scroll_top = 0;
+        self.scroll_bottom = new_rows - 1;
+        self.cursor_col = @min(self.cursor_col, new_cols -| 1);
+        self.cursor_row = @min(self.cursor_row, new_rows -| 1);
+        self.dirty = true;
+    }
+
     fn cellAt(self: *Grid, col: u16, row: u16) *Cell {
         return &self.cells[@as(usize, row) * @as(usize, self.cols) + @as(usize, col)];
     }
