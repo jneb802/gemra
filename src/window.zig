@@ -37,8 +37,10 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
     if (cmd and (char_val == 'v' or char_val == 'V')) {
         const NSPasteboard = @as(objc.id, @ptrCast(objc.getClass("NSPasteboard")));
         const pb = objc.msgSend(objc.id, NSPasteboard, objc.sel("generalPasteboard"), .{});
-        const NSString = @as(objc.id, @ptrCast(objc.getClass("NSString")));
-        const str = objc.msgSend(objc.id, pb, objc.sel("stringForType:"), .{NSString});
+        const pb_type = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSString"))), objc.sel("stringWithUTF8String:"), .{
+            @as([*:0]const u8, "public.utf8-plain-text"),
+        });
+        const str = objc.msgSend(objc.id, pb, objc.sel("stringForType:"), .{pb_type});
         if (str != null) {
             const utf8 = objc.msgSend(?[*:0]const u8, str, objc.sel("UTF8String"), .{});
             if (utf8) |s| {
