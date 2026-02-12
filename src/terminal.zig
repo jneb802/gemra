@@ -57,6 +57,98 @@ pub const Cell = struct {
     attrs: Attributes = .{},
 };
 
+pub const Selection = struct {
+    anchor: GridPoint,
+    endpoint: GridPoint,
+    active: bool = false,
+    mode: Mode = .normal,
+    rectangle: bool = false,
+
+    pub const GridPoint = struct {
+        col: u16,
+        row: u16,
+    };
+
+    pub const Mode = enum { normal, word, line };
+
+    pub fn ordered(self: Selection) struct { start: GridPoint, end: GridPoint } {
+        if (self.anchor.row < self.endpoint.row or
+            (self.anchor.row == self.endpoint.row and self.anchor.col <= self.endpoint.col))
+        {
+            return .{ .start = self.anchor, .end = self.endpoint };
+        }
+        return .{ .start = self.endpoint, .end = self.anchor };
+    }
+
+    pub fn contains(self: Selection, col: u16, row: u16) bool {
+        if (!self.active) return false;
+        const sel = self.ordered();
+        if (self.rectangle) {
+            const min_col = @min(self.anchor.col, self.endpoint.col);
+            const max_col = @max(self.anchor.col, self.endpoint.col);
+            return row >= sel.start.row and row <= sel.end.row and
+                col >= min_col and col <= max_col;
+        }
+        if (row < sel.start.row or row > sel.end.row) return false;
+        if (row == sel.start.row and row == sel.end.row) {
+            return col >= sel.start.col and col <= sel.end.col;
+        }
+        if (row == sel.start.row) return col >= sel.start.col;
+        if (row == sel.end.row) return col <= sel.end.col;
+        return true;
+    }
+
+    pub fn extractText(self: Selection, grid: *const Grid, allocator: std.mem.Allocator) ![]u8 {
+        const sel = self.ordered();
+        var result = std.ArrayList(u8).init(allocator);
+        errdefer result.deinit();
+
+        var row = sel.start.row;
+        while (row <= sel.end.row) : (row += 1) {
+            const start_col = if (row == sel.start.row) sel.start.col else 0;
+            const end_col = if (row == sel.end.row) sel.end.col else grid.cols - 1;
+
+            if (self.rectangle) {
+                const min_col = @min(self.anchor.col, self.endpoint.col);
+                const max_col = @max(self.anchor.col, self.endpoint.col);
+                try appendRowText(&result, grid, row, min_col, max_col);
+            } else {
+                try appendRowText(&result, grid, row, start_col, end_col);
+            }
+
+            if (row < sel.end.row) {
+                try result.append('\n');
+            }
+        }
+
+        return result.toOwnedSlice();
+    }
+
+    fn appendRowText(result: *std.ArrayList(u8), grid: *const Grid, row: u16, start_col: u16, end_col: u16) !void {
+        // Find last non-space character to trim trailing whitespace
+        var last_content: u16 = start_col;
+        var has_content = false;
+        var col = start_col;
+        while (col <= end_col) : (col += 1) {
+            const cell = grid.cells[@as(usize, row) * @as(usize, grid.cols) + @as(usize, col)];
+            if (cell.char > ' ' and cell.char != 127) {
+                last_content = col;
+                has_content = true;
+            }
+        }
+
+        if (!has_content) return;
+
+        col = start_col;
+        while (col <= last_content) : (col += 1) {
+            const cell = grid.cells[@as(usize, row) * @as(usize, grid.cols) + @as(usize, col)];
+            var buf: [4]u8 = undefined;
+            const len = std.unicode.utf8Encode(cell.char, &buf) catch continue;
+            try result.appendSlice(buf[0..len]);
+        }
+    }
+};
+
 pub const Grid = struct {
     cells: []Cell,
     cols: u16,
@@ -93,6 +185,9 @@ pub const Grid = struct {
 
     // PTY fd for write-back (DSR responses)
     pty_master_fd: std.posix.fd_t = -1,
+
+    // Text selection
+    selection: ?Selection = null,
 
     allocator: std.mem.Allocator,
 
@@ -140,6 +235,32 @@ pub const Grid = struct {
 
     fn cellAt(self: *Grid, col: u16, row: u16) *Cell {
         return &self.cells[@as(usize, row) * @as(usize, self.cols) + @as(usize, col)];
+    }
+
+    const word_delimiters = " \t!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
+
+    fn isWordChar(self: *const Grid, col: u16, row: u16) bool {
+        const cell = self.cells[@as(usize, row) * @as(usize, self.cols) + @as(usize, col)];
+        if (cell.char <= ' ' or cell.char == 127) return false;
+        for (word_delimiters) |d| {
+            if (cell.char == d) return false;
+        }
+        return true;
+    }
+
+    pub fn wordBounds(self: *const Grid, col: u16, row: u16) struct { start: u16, end: u16 } {
+        var start = col;
+        var end = col;
+        if (!self.isWordChar(col, row)) {
+            return .{ .start = col, .end = col };
+        }
+        while (start > 0 and self.isWordChar(start - 1, row)) {
+            start -= 1;
+        }
+        while (end < self.cols - 1 and self.isWordChar(end + 1, row)) {
+            end += 1;
+        }
+        return .{ .start = start, .end = end };
     }
 
     fn scrollUpInRegion(self: *Grid, top: u16, bottom: u16) void {

@@ -263,15 +263,25 @@ pub const Renderer = struct {
         const buf_ptr = objc.msgSend([*]Vertex, self.vertex_buffer, objc.sel("contents"), .{});
         var idx: u32 = 0;
 
+        // Selection highlight colors
+        const sel_bg = [4]f32{ 0.26, 0.47, 0.73, 1.0 }; // blue highlight
+        const sel_fg = [4]f32{ 1.0, 1.0, 1.0, 1.0 }; // white text
+
         // Background pass
         for (0..rows) |row| {
             for (0..cols) |col| {
                 const cell = grid.cells[row * @as(usize, cols) + col];
-                if (cell.bg.eql(terminal.default_bg)) continue;
+                const is_selected = if (grid.selection) |sel|
+                    sel.contains(@intCast(col), @intCast(row))
+                else
+                    false;
+
+                const bg = if (is_selected) sel_bg else cell.bg.toFloat4();
+                if (!is_selected and cell.bg.eql(terminal.default_bg)) continue;
 
                 const x0 = @as(f32, @floatFromInt(col)) * cell_w + pad_x;
                 const y0 = @as(f32, @floatFromInt(row)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, x0, y0, x0 + cell_w, y0 + cell_h, zero2, zero2, zero4, cell.bg.toFloat4(), 1.0);
+                writeQuad(buf_ptr, &idx, x0, y0, x0 + cell_w, y0 + cell_h, zero2, zero2, zero4, bg, 1.0);
             }
         }
 
@@ -281,10 +291,17 @@ pub const Renderer = struct {
                 const cell = grid.cells[row * @as(usize, cols) + col];
                 if (cell.char <= ' ' or cell.char == 127) continue;
 
+                const is_selected = if (grid.selection) |sel|
+                    sel.contains(@intCast(col), @intCast(row))
+                else
+                    false;
+
+                const fg = if (is_selected) sel_fg else cell.fg.toFloat4();
+
                 const glyph = self.atlas.getGlyph(cell.char);
                 const x0 = @as(f32, @floatFromInt(col)) * cell_w + pad_x;
                 const y0 = @as(f32, @floatFromInt(row)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, x0, y0, x0 + glyph.width, y0 + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, cell.fg.toFloat4(), zero4, 0.0);
+                writeQuad(buf_ptr, &idx, x0, y0, x0 + glyph.width, y0 + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, fg, zero4, 0.0);
             }
         }
 
