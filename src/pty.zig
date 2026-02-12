@@ -61,15 +61,21 @@ pub const Pty = struct {
             // Get user's default shell
             const shell = getDefaultShell();
 
+            // Build a login shell argv[0] by prefixing the basename with '-'
+            // e.g. "/bin/zsh" → "-zsh". This tells the shell it's a login shell,
+            // which triggers /etc/zprofile, ~/.zprofile, and "Last login:" message.
+            var login_name_buf: [256]u8 = undefined;
+            const login_name = makeLoginShellName(&login_name_buf, shell);
+
             // Exec the shell using execvp (inherits environment)
-            var argv0 = [_:null]?[*:0]u8{@constCast(shell)};
+            var argv0 = [_:null]?[*:0]u8{@constCast(login_name)};
             _ = c.execvp(shell, @ptrCast(&argv0));
 
             // If execvp fails, try /bin/zsh, then /bin/sh
-            var zsh_argv = [_:null]?[*:0]u8{@constCast(@as([*:0]const u8, "/bin/zsh"))};
+            var zsh_argv = [_:null]?[*:0]u8{@constCast(@as([*:0]const u8, "-zsh"))};
             _ = c.execvp("/bin/zsh", @ptrCast(&zsh_argv));
 
-            var sh_argv = [_:null]?[*:0]u8{@constCast(@as([*:0]const u8, "/bin/sh"))};
+            var sh_argv = [_:null]?[*:0]u8{@constCast(@as([*:0]const u8, "-sh"))};
             _ = c.execvp("/bin/sh", @ptrCast(&sh_argv));
 
             posix.exit(1);
@@ -119,6 +125,26 @@ pub const Pty = struct {
         return result == 0;
     }
 };
+
+/// Given a shell path like "/bin/zsh", writes "-zsh" into buf and returns
+/// a sentinel-terminated pointer to it. Falls back to the original shell
+/// name if the buffer is too small.
+fn makeLoginShellName(buf: []u8, shell: [*:0]const u8) [*:0]const u8 {
+    const shell_span = std.mem.span(shell);
+    // Find the basename: everything after the last '/'
+    const basename = if (std.mem.lastIndexOfScalar(u8, shell_span, '/')) |pos|
+        shell_span[pos + 1 ..]
+    else
+        shell_span;
+
+    // Need room for '-' + basename + null terminator
+    if (basename.len + 2 > buf.len) return shell;
+
+    buf[0] = '-';
+    @memcpy(buf[1 .. 1 + basename.len], basename);
+    buf[1 + basename.len] = 0;
+    return @ptrCast(buf[0 .. 1 + basename.len :0]);
+}
 
 fn getDefaultShell() [*:0]const u8 {
     // Try SHELL env var first
