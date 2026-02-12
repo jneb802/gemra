@@ -6,6 +6,18 @@ const ct = @cImport({
     @cInclude("CoreGraphics/CoreGraphics.h");
 });
 
+pub const FontConfig = struct {
+    family: [*:0]const u8 = "Menlo",
+    size: f32 = 14.0,
+};
+
+pub const FontVariant = enum(u2) {
+    regular = 0,
+    bold = 1,
+    italic = 2,
+    bold_italic = 3,
+};
+
 pub const GlyphInfo = struct {
     // UV coordinates in the atlas texture (0..1)
     u0: f32,
@@ -29,19 +41,25 @@ const MTLRegion = extern struct {
     size_d: u64,
 };
 
+pub const GlyphKey = packed struct {
+    codepoint: u21,
+    variant: FontVariant,
+    _pad: u9 = 0,
+};
+
 pub const Atlas = struct {
     texture: objc.id = null,
     width: u32 = 2048,
     height: u32 = 2048,
-    glyphs: [128]GlyphInfo = undefined,
+    ascii_glyphs: [4][128]GlyphInfo = undefined,
     cell_width: f32 = 0,
     cell_height: f32 = 0,
     font_ascent: f32 = 0,
     font_descent: f32 = 0,
     scale: f32 = 1.0,
 
-    // Dynamic glyph cache for non-ASCII
-    unicode_glyphs: std.AutoHashMap(u21, GlyphInfo),
+    // Dynamic glyph cache for non-ASCII (keyed by codepoint + variant)
+    unicode_glyphs: std.AutoHashMap(GlyphKey, GlyphInfo),
     allocator: std.mem.Allocator,
 
     // Atlas packing state
@@ -51,151 +69,146 @@ pub const Atlas = struct {
     glyph_w: u32 = 0,
     glyph_h: u32 = 0,
 
+    // Eviction
+    generation: u32 = 0,
+
     // Retained resources for on-demand rasterization
-    font: ct.CTFontRef = null,
+    fonts: [4]ct.CTFontRef = .{ null, null, null, null },
     color_space: ct.CGColorSpaceRef = null,
     device: objc.id = null,
     raster_buf: []u8 = &.{},
 
-    pub fn init(allocator: std.mem.Allocator, device: objc.id, font_size: f32, scale: f32) !Atlas {
+    pub fn init(allocator: std.mem.Allocator, device: objc.id, config: FontConfig, scale: f32) !Atlas {
         var self = Atlas{
-            .unicode_glyphs = std.AutoHashMap(u21, GlyphInfo).init(allocator),
+            .unicode_glyphs = std.AutoHashMap(GlyphKey, GlyphInfo).init(allocator),
             .allocator = allocator,
         };
         self.scale = scale;
         self.device = device;
 
-        // Rasterize at scaled size for Retina
-        const render_size = font_size * scale;
+        const render_size = config.size * scale;
 
-        // Create CTFont for Menlo
-        const font_name = ct.CFStringCreateWithCString(
-            null,
-            "Menlo",
-            ct.kCFStringEncodingUTF8,
-        );
+        // Create base CTFont from config
+        const font_name = ct.CFStringCreateWithCString(null, config.family, ct.kCFStringEncodingUTF8);
         defer ct.CFRelease(font_name);
 
-        const font = ct.CTFontCreateWithName(font_name, render_size, null);
-        // Retain font for later use — don't defer release
-        self.font = font;
+        const base_font = ct.CTFontCreateWithName(font_name, render_size, null);
+        self.fonts[@intFromEnum(FontVariant.regular)] = base_font;
 
-        // Get font metrics
-        self.font_ascent = @floatCast(ct.CTFontGetAscent(font));
-        self.font_descent = @floatCast(ct.CTFontGetDescent(font));
-        const leading: f32 = @floatCast(ct.CTFontGetLeading(font));
+        // Derive bold/italic/bold_italic variants
+        const kCTFontBoldTrait: u32 = 2;
+        const kCTFontItalicTrait: u32 = 1;
+        const trait_masks = [3]u32{ kCTFontBoldTrait, kCTFontItalicTrait, kCTFontBoldTrait | kCTFontItalicTrait };
+        const variant_indices = [3]usize{ @intFromEnum(FontVariant.bold), @intFromEnum(FontVariant.italic), @intFromEnum(FontVariant.bold_italic) };
 
+        for (trait_masks, variant_indices) |traits, vi| {
+            const derived = ct.CTFontCreateCopyWithSymbolicTraits(base_font, 0.0, null, traits, traits);
+            if (derived != null) {
+                self.fonts[vi] = derived;
+            } else {
+                // Fallback: retain base font for this slot
+                _ = ct.CFRetain(base_font);
+                self.fonts[vi] = base_font;
+            }
+        }
+
+        // Get font metrics from regular variant
+        self.font_ascent = @floatCast(ct.CTFontGetAscent(base_font));
+        self.font_descent = @floatCast(ct.CTFontGetDescent(base_font));
+        const leading: f32 = @floatCast(ct.CTFontGetLeading(base_font));
         self.cell_height = @ceil(self.font_ascent + self.font_descent + leading);
 
-        // Get advance width for a space character to determine cell width
+        // Get cell width from space advance
         var space_glyph: ct.CGGlyph = 0;
         var space_char: ct.UniChar = ' ';
-        _ = ct.CTFontGetGlyphsForCharacters(font, &space_char, &space_glyph, 1);
+        _ = ct.CTFontGetGlyphsForCharacters(base_font, &space_char, &space_glyph, 1);
         var advance: ct.CGSize = .{ .width = 0, .height = 0 };
-        _ = ct.CTFontGetAdvancesForGlyphs(font, ct.kCTFontOrientationHorizontal, &space_glyph, &advance, 1);
+        _ = ct.CTFontGetAdvancesForGlyphs(base_font, ct.kCTFontOrientationHorizontal, &space_glyph, &advance, 1);
         self.cell_width = @ceil(@as(f32, @floatCast(advance.width)));
 
-        // Create bitmap context for rasterization
         self.glyph_w = @intFromFloat(@ceil(self.cell_width) + 4);
         self.glyph_h = @intFromFloat(@ceil(self.cell_height) + 4);
-
-        // Calculate atlas layout
-        const glyphs_per_row = self.width / self.glyph_w;
-
-        // Create atlas pixel buffer
-        const atlas_pixels = try std.heap.page_allocator.alloc(u8, @as(usize, self.width) * @as(usize, self.height) * 4);
-        defer std.heap.page_allocator.free(atlas_pixels);
-        @memset(atlas_pixels, 0);
 
         // Allocate persistent glyph bitmap buffer
         const bmp_w = self.glyph_w;
         const bmp_h = self.glyph_h;
         const row_bytes = bmp_w * 4;
         self.raster_buf = try allocator.alloc(u8, @as(usize, row_bytes) * @as(usize, bmp_h));
-
-        // Retain color space for later use
         self.color_space = ct.CGColorSpaceCreateDeviceRGB();
 
-        // Rasterize each ASCII glyph
-        for (32..127) |i| {
-            const char_code: u8 = @intCast(i);
-            var uni_char: ct.UniChar = char_code;
-            var glyph: ct.CGGlyph = 0;
-            _ = ct.CTFontGetGlyphsForCharacters(font, &uni_char, &glyph, 1);
+        // Create atlas pixel buffer
+        const atlas_pixels = try std.heap.page_allocator.alloc(u8, @as(usize, self.width) * @as(usize, self.height) * 4);
+        defer std.heap.page_allocator.free(atlas_pixels);
+        @memset(atlas_pixels, 0);
 
-            // Get glyph bounding box
-            var bbox: ct.CGRect = .{
-                .origin = .{ .x = 0, .y = 0 },
-                .size = .{ .width = 0, .height = 0 },
-            };
-            _ = ct.CTFontGetBoundingRectsForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &bbox, 1);
+        // Rasterize ASCII 32..126 for all 4 font variants
+        const glyphs_per_row = self.width / self.glyph_w;
+        const ascii_count: u32 = 95; // 32..126
+        const ascii_rows_per_variant = (ascii_count + glyphs_per_row - 1) / glyphs_per_row;
 
-            var glyph_advance: ct.CGSize = .{ .width = 0, .height = 0 };
-            _ = ct.CTFontGetAdvancesForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &glyph_advance, 1);
+        for (0..4) |vi| {
+            const font = self.fonts[vi];
+            const variant_base_y = @as(u32, @intCast(vi)) * ascii_rows_per_variant * self.glyph_h;
 
-            // Atlas position
-            const idx = i - 32;
-            const atlas_x = @as(u32, @intCast(idx % glyphs_per_row)) * self.glyph_w;
-            const atlas_y = @as(u32, @intCast(idx / glyphs_per_row)) * self.glyph_h;
+            for (32..127) |i| {
+                var uni_char: ct.UniChar = @intCast(i);
+                var glyph: ct.CGGlyph = 0;
+                _ = ct.CTFontGetGlyphsForCharacters(font, &uni_char, &glyph, 1);
 
-            @memset(self.raster_buf, 0);
+                var bbox: ct.CGRect = .{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
+                _ = ct.CTFontGetBoundingRectsForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &bbox, 1);
 
-            const ctx = ct.CGBitmapContextCreate(
-                self.raster_buf.ptr,
-                bmp_w,
-                bmp_h,
-                8,
-                row_bytes,
-                self.color_space,
-                ct.kCGImageAlphaPremultipliedLast,
-            );
-            if (ctx == null) continue;
-            defer ct.CGContextRelease(ctx);
+                var glyph_advance: ct.CGSize = .{ .width = 0, .height = 0 };
+                _ = ct.CTFontGetAdvancesForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &glyph_advance, 1);
 
-            // Set text color to white
-            ct.CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+                const idx = i - 32;
+                const atlas_x = @as(u32, @intCast(idx % glyphs_per_row)) * self.glyph_w;
+                const atlas_y = variant_base_y + @as(u32, @intCast(idx / glyphs_per_row)) * self.glyph_h;
 
-            // Draw glyph at baseline position
-            const draw_x: ct.CGFloat = 2.0 - bbox.origin.x;
-            const draw_y: ct.CGFloat = 2.0 + self.font_descent;
-            var position = ct.CGPoint{ .x = draw_x, .y = draw_y };
-            ct.CTFontDrawGlyphs(font, &glyph, &position, 1, ctx);
+                @memset(self.raster_buf, 0);
 
-            // Copy bitmap into atlas
-            for (0..bmp_h) |row| {
-                const dst_y = atlas_y + @as(u32, @intCast(row));
-                if (dst_y >= self.height) break;
-                const src_offset = row * row_bytes;
-                const dst_offset = @as(usize, dst_y) * @as(usize, self.width) * 4 + @as(usize, atlas_x) * 4;
-                const copy_bytes = @min(@as(usize, bmp_w) * 4, @as(usize, self.width) * 4 - @as(usize, atlas_x) * 4);
-                @memcpy(atlas_pixels[dst_offset .. dst_offset + copy_bytes], self.raster_buf[src_offset .. src_offset + copy_bytes]);
+                const ctx = ct.CGBitmapContextCreate(self.raster_buf.ptr, bmp_w, bmp_h, 8, row_bytes, self.color_space, ct.kCGImageAlphaPremultipliedLast);
+                if (ctx == null) continue;
+                defer ct.CGContextRelease(ctx);
+
+                ct.CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+                const draw_x: ct.CGFloat = 2.0 - bbox.origin.x;
+                const draw_y: ct.CGFloat = 2.0 + self.font_descent;
+                var position = ct.CGPoint{ .x = draw_x, .y = draw_y };
+                ct.CTFontDrawGlyphs(font, &glyph, &position, 1, ctx);
+
+                for (0..bmp_h) |row| {
+                    const dst_y = atlas_y + @as(u32, @intCast(row));
+                    if (dst_y >= self.height) break;
+                    const src_offset = row * row_bytes;
+                    const dst_offset = @as(usize, dst_y) * @as(usize, self.width) * 4 + @as(usize, atlas_x) * 4;
+                    const copy_bytes = @min(@as(usize, bmp_w) * 4, @as(usize, self.width) * 4 - @as(usize, atlas_x) * 4);
+                    @memcpy(atlas_pixels[dst_offset .. dst_offset + copy_bytes], self.raster_buf[src_offset .. src_offset + copy_bytes]);
+                }
+
+                self.ascii_glyphs[vi][i] = .{
+                    .u0 = @as(f32, @floatFromInt(atlas_x)) / @as(f32, @floatFromInt(self.width)),
+                    .v0 = @as(f32, @floatFromInt(atlas_y)) / @as(f32, @floatFromInt(self.height)),
+                    .u1 = @as(f32, @floatFromInt(atlas_x + bmp_w)) / @as(f32, @floatFromInt(self.width)),
+                    .v1 = @as(f32, @floatFromInt(atlas_y + bmp_h)) / @as(f32, @floatFromInt(self.height)),
+                    .width = @floatFromInt(bmp_w),
+                    .height = @floatFromInt(bmp_h),
+                    .bearing_x = @floatCast(bbox.origin.x),
+                    .bearing_y = @floatCast(bbox.origin.y),
+                    .advance = @floatCast(glyph_advance.width),
+                };
             }
 
-            // Store glyph info with UV coordinates
-            self.glyphs[i] = .{
-                .u0 = @as(f32, @floatFromInt(atlas_x)) / @as(f32, @floatFromInt(self.width)),
-                .v0 = @as(f32, @floatFromInt(atlas_y)) / @as(f32, @floatFromInt(self.height)),
-                .u1 = @as(f32, @floatFromInt(atlas_x + bmp_w)) / @as(f32, @floatFromInt(self.width)),
-                .v1 = @as(f32, @floatFromInt(atlas_y + bmp_h)) / @as(f32, @floatFromInt(self.height)),
-                .width = @floatFromInt(bmp_w),
-                .height = @floatFromInt(bmp_h),
-                .bearing_x = @floatCast(bbox.origin.x),
-                .bearing_y = @floatCast(bbox.origin.y),
-                .advance = @floatCast(glyph_advance.width),
-            };
+            // Fill non-printable defaults
+            for (0..32) |i| {
+                self.ascii_glyphs[vi][i] = self.ascii_glyphs[vi][' '];
+            }
+            self.ascii_glyphs[vi][127] = self.ascii_glyphs[vi][' '];
         }
 
-        // Fill in default for non-printable characters
-        for (0..32) |i| {
-            self.glyphs[i] = self.glyphs[' '];
-        }
-        self.glyphs[127] = self.glyphs[' '];
-
-        // Set packing cursor past the ASCII glyphs
-        const ascii_count: u32 = 95; // 32..126
-        const ascii_rows = (ascii_count + glyphs_per_row - 1) / glyphs_per_row;
+        // Set packing cursor past all ASCII glyph regions (4 variants)
         self.next_x = 0;
-        self.next_y = ascii_rows * self.glyph_h;
+        self.next_y = 4 * ascii_rows_per_variant * self.glyph_h;
         self.row_height = self.glyph_h;
 
         // Create Metal texture
@@ -208,7 +221,6 @@ pub const Atlas = struct {
 
         self.texture = objc.msgSend(objc.id, device, objc.sel("newTextureWithDescriptor:"), .{descriptor});
 
-        // Upload pixel data
         const region = MTLRegion{
             .origin_x = 0,
             .origin_y = 0,
@@ -233,79 +245,111 @@ pub const Atlas = struct {
         if (self.raster_buf.len > 0) {
             self.allocator.free(self.raster_buf);
         }
-        if (self.font != null) ct.CFRelease(self.font);
+        for (&self.fonts) |f| {
+            if (f != null) ct.CFRelease(f);
+        }
         if (self.color_space != null) ct.CGColorSpaceRelease(self.color_space);
     }
 
-    fn rasterizeGlyph(self: *Atlas, codepoint: u21) ?GlyphInfo {
+    fn rasterizeGlyph(self: *Atlas, codepoint: u21, variant: FontVariant) ?GlyphInfo {
+        const font = self.fonts[@intFromEnum(variant)];
+
         // Encode codepoint to UTF-16 for CoreText
         var unichars: [2]ct.UniChar = undefined;
         var unichar_count: usize = 1;
         if (codepoint <= 0xFFFF) {
             unichars[0] = @intCast(codepoint);
         } else {
-            // Supplementary plane — surrogate pair
             const cp = codepoint - 0x10000;
             unichars[0] = @intCast(0xD800 + (cp >> 10));
             unichars[1] = @intCast(0xDC00 + (cp & 0x3FF));
             unichar_count = 2;
         }
 
+        // Check if primary font has the glyph; if not, get a fallback font
         var glyphs_out: [2]ct.CGGlyph = .{ 0, 0 };
-        const ok = ct.CTFontGetGlyphsForCharacters(self.font, &unichars, &glyphs_out, @intCast(unichar_count));
-        if (!ok or glyphs_out[0] == 0) return null;
+        const has_glyph = ct.CTFontGetGlyphsForCharacters(font, &unichars, &glyphs_out, @intCast(unichar_count));
+        var render_font = font;
+        var owns_render_font = false;
+        if (!has_glyph or glyphs_out[0] == 0) {
+            // Try font fallback via CTFontCreateForString
+            const cf_str = ct.CFStringCreateWithCharacters(null, &unichars, @intCast(unichar_count));
+            if (cf_str == null) return null;
+            defer ct.CFRelease(cf_str);
+            const fallback = ct.CTFontCreateForString(font, cf_str, ct.CFRangeMake(0, @intCast(unichar_count)));
+            if (fallback == null) return null;
+            render_font = fallback;
+            owns_render_font = true;
+        }
+        defer if (owns_render_font) ct.CFRelease(render_font);
 
-        const glyph = glyphs_out[0];
+        // Use CTLine for rendering
+        const cf_str = ct.CFStringCreateWithCharacters(null, &unichars, @intCast(unichar_count));
+        if (cf_str == null) return null;
+        defer ct.CFRelease(cf_str);
+
+        const attr_str = ct.CFAttributedStringCreateMutable(null, 0);
+        if (attr_str == null) return null;
+        defer ct.CFRelease(attr_str);
+
+        ct.CFAttributedStringReplaceString(attr_str, ct.CFRangeMake(0, 0), cf_str);
+        const str_len = ct.CFAttributedStringGetLength(attr_str);
+        const full_range = ct.CFRangeMake(0, str_len);
+
+        // Set font attribute
+        const font_attr_key = ct.kCTFontAttributeName;
+        ct.CFAttributedStringSetAttribute(attr_str, full_range, font_attr_key, render_font);
+
+        // Use context color (white) for drawing
+        const fg_from_ctx_key = ct.kCTForegroundColorFromContextAttributeName;
+        ct.CFAttributedStringSetAttribute(attr_str, full_range, fg_from_ctx_key, ct.kCFBooleanTrue);
+
+        const line = ct.CTLineCreateWithAttributedString(@ptrCast(attr_str));
+        if (line == null) return null;
+        defer ct.CFRelease(line);
+
+        // Get typographic bounds
+        var ascent_d: ct.CGFloat = 0;
+        var descent_d: ct.CGFloat = 0;
+        var leading_d: ct.CGFloat = 0;
+        const line_width = ct.CTLineGetTypographicBounds(line, &ascent_d, &descent_d, &leading_d);
+
         const bmp_w = self.glyph_w;
         const bmp_h = self.glyph_h;
         const row_bytes = bmp_w * 4;
 
-        // Get glyph bounding box
-        var bbox: ct.CGRect = .{
-            .origin = .{ .x = 0, .y = 0 },
-            .size = .{ .width = 0, .height = 0 },
-        };
-        _ = ct.CTFontGetBoundingRectsForGlyphs(self.font, ct.kCTFontOrientationHorizontal, &glyph, &bbox, 1);
-
-        var glyph_advance: ct.CGSize = .{ .width = 0, .height = 0 };
-        _ = ct.CTFontGetAdvancesForGlyphs(self.font, ct.kCTFontOrientationHorizontal, &glyph, &glyph_advance, 1);
-
-        // Check if we have room in the atlas
+        // Allocate atlas space (with eviction retry)
         if (self.next_x + bmp_w > self.width) {
             self.next_x = 0;
             self.next_y += self.row_height;
         }
         if (self.next_y + bmp_h > self.height) {
-            return null; // Atlas full
+            self.evictAndReset();
+            // Retry after eviction
+            if (self.next_x + bmp_w > self.width) {
+                self.next_x = 0;
+                self.next_y += self.row_height;
+            }
+            if (self.next_y + bmp_h > self.height) {
+                return null; // Still full after eviction
+            }
         }
 
         const atlas_x = self.next_x;
         const atlas_y = self.next_y;
 
-        // Rasterize into buffer
+        // Rasterize via CTLineDraw
         @memset(self.raster_buf, 0);
 
-        const ctx = ct.CGBitmapContextCreate(
-            self.raster_buf.ptr,
-            bmp_w,
-            bmp_h,
-            8,
-            row_bytes,
-            self.color_space,
-            ct.kCGImageAlphaPremultipliedLast,
-        );
+        const ctx = ct.CGBitmapContextCreate(self.raster_buf.ptr, bmp_w, bmp_h, 8, row_bytes, self.color_space, ct.kCGImageAlphaPremultipliedLast);
         if (ctx == null) return null;
         defer ct.CGContextRelease(ctx);
 
         ct.CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+        ct.CGContextSetTextPosition(ctx, 2.0, 2.0 + self.font_descent);
+        ct.CTLineDraw(line, ctx);
 
-        const draw_x: ct.CGFloat = 2.0 - bbox.origin.x;
-        const draw_y: ct.CGFloat = 2.0 + self.font_descent;
-        var position = ct.CGPoint{ .x = draw_x, .y = draw_y };
-        var glyph_mut = glyph;
-        ct.CTFontDrawGlyphs(self.font, &glyph_mut, &position, 1, ctx);
-
-        // Upload to atlas texture via partial replaceRegion
+        // Upload to atlas texture
         const region = MTLRegion{
             .origin_x = atlas_x,
             .origin_y = atlas_y,
@@ -322,7 +366,6 @@ pub const Atlas = struct {
             @as(u64, row_bytes),
         });
 
-        // Build GlyphInfo
         const info = GlyphInfo{
             .u0 = @as(f32, @floatFromInt(atlas_x)) / @as(f32, @floatFromInt(self.width)),
             .v0 = @as(f32, @floatFromInt(atlas_y)) / @as(f32, @floatFromInt(self.height)),
@@ -330,15 +373,13 @@ pub const Atlas = struct {
             .v1 = @as(f32, @floatFromInt(atlas_y + bmp_h)) / @as(f32, @floatFromInt(self.height)),
             .width = @floatFromInt(bmp_w),
             .height = @floatFromInt(bmp_h),
-            .bearing_x = @floatCast(bbox.origin.x),
-            .bearing_y = @floatCast(bbox.origin.y),
-            .advance = @floatCast(glyph_advance.width),
+            .bearing_x = 0,
+            .bearing_y = 0,
+            .advance = @floatCast(@as(f32, @floatCast(line_width))),
         };
 
-        // Cache in HashMap
-        self.unicode_glyphs.put(codepoint, info) catch {};
-
-        // Advance packing cursor
+        const key = GlyphKey{ .codepoint = codepoint, .variant = variant };
+        self.unicode_glyphs.put(key, info) catch {};
         self.next_x += bmp_w;
 
         return info;
@@ -560,13 +601,20 @@ pub const Atlas = struct {
             }
         }
 
-        // Pack into atlas
+        // Pack into atlas (with eviction retry)
         if (self.next_x + self.glyph_w > self.width) {
             self.next_x = 0;
             self.next_y += self.row_height;
         }
         if (self.next_y + self.glyph_h > self.height) {
-            return null;
+            self.evictAndReset();
+            if (self.next_x + self.glyph_w > self.width) {
+                self.next_x = 0;
+                self.next_y += self.row_height;
+            }
+            if (self.next_y + self.glyph_h > self.height) {
+                return null;
+            }
         }
 
         const atlas_x = self.next_x;
@@ -601,18 +649,22 @@ pub const Atlas = struct {
             .advance = @floatFromInt(cell_w),
         };
 
-        self.unicode_glyphs.put(codepoint, info) catch {};
+        // Box drawing always uses regular variant for cache key
+        const key = GlyphKey{ .codepoint = codepoint, .variant = .regular };
+        self.unicode_glyphs.put(key, info) catch {};
         self.next_x += self.glyph_w;
 
         return info;
     }
 
-    pub fn getGlyph(self: *Atlas, char: u21) GlyphInfo {
+    pub fn getGlyph(self: *Atlas, char: u21, variant: FontVariant) GlyphInfo {
         if (char < 128) {
-            return self.glyphs[@intCast(char)];
+            return self.ascii_glyphs[@intFromEnum(variant)][@intCast(char)];
         }
-        // Check cache
-        if (self.unicode_glyphs.get(char)) |info| {
+        // Check cache (box drawing always uses regular variant)
+        const cache_variant = if (char >= 0x2500 and char <= 0x259F) FontVariant.regular else variant;
+        const key = GlyphKey{ .codepoint = char, .variant = cache_variant };
+        if (self.unicode_glyphs.get(key)) |info| {
             return info;
         }
         // For box-drawing, block elements, and quadrants, use procedural rendering
@@ -622,10 +674,94 @@ pub const Atlas = struct {
             }
         }
         // Cache miss — rasterize from font on demand
-        if (self.rasterizeGlyph(char)) |info| {
+        if (self.rasterizeGlyph(char, variant)) |info| {
             return info;
         }
         // Fallback to space
-        return self.glyphs[' '];
+        return self.ascii_glyphs[@intFromEnum(variant)][' '];
+    }
+
+    fn evictAndReset(self: *Atlas) void {
+        self.generation += 1;
+        self.unicode_glyphs.clearRetainingCapacity();
+
+        // Re-rasterize all 4 variants of ASCII into the atlas texture
+        const glyphs_per_row = self.width / self.glyph_w;
+        const ascii_count: u32 = 95;
+        const ascii_rows_per_variant = (ascii_count + glyphs_per_row - 1) / glyphs_per_row;
+        const bmp_w = self.glyph_w;
+        const bmp_h = self.glyph_h;
+        const row_bytes = bmp_w * 4;
+
+        for (0..4) |vi| {
+            const font = self.fonts[vi];
+            const variant_base_y = @as(u32, @intCast(vi)) * ascii_rows_per_variant * self.glyph_h;
+
+            for (32..127) |i| {
+                var uni_char: ct.UniChar = @intCast(i);
+                var glyph: ct.CGGlyph = 0;
+                _ = ct.CTFontGetGlyphsForCharacters(font, &uni_char, &glyph, 1);
+
+                var bbox: ct.CGRect = .{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = 0, .height = 0 } };
+                _ = ct.CTFontGetBoundingRectsForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &bbox, 1);
+
+                var glyph_advance: ct.CGSize = .{ .width = 0, .height = 0 };
+                _ = ct.CTFontGetAdvancesForGlyphs(font, ct.kCTFontOrientationHorizontal, &glyph, &glyph_advance, 1);
+
+                const idx = i - 32;
+                const atlas_x = @as(u32, @intCast(idx % glyphs_per_row)) * self.glyph_w;
+                const atlas_y = variant_base_y + @as(u32, @intCast(idx / glyphs_per_row)) * self.glyph_h;
+
+                @memset(self.raster_buf, 0);
+
+                const ctx = ct.CGBitmapContextCreate(self.raster_buf.ptr, bmp_w, bmp_h, 8, row_bytes, self.color_space, ct.kCGImageAlphaPremultipliedLast);
+                if (ctx == null) continue;
+                defer ct.CGContextRelease(ctx);
+
+                ct.CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+                const draw_x: ct.CGFloat = 2.0 - bbox.origin.x;
+                const draw_y: ct.CGFloat = 2.0 + self.font_descent;
+                var position = ct.CGPoint{ .x = draw_x, .y = draw_y };
+                ct.CTFontDrawGlyphs(font, &glyph, &position, 1, ctx);
+
+                const region = MTLRegion{
+                    .origin_x = atlas_x,
+                    .origin_y = atlas_y,
+                    .origin_z = 0,
+                    .size_w = bmp_w,
+                    .size_h = bmp_h,
+                    .size_d = 1,
+                };
+
+                objc.msgSendVoid(self.texture, objc.sel("replaceRegion:mipmapLevel:withBytes:bytesPerRow:"), .{
+                    region,
+                    @as(u64, 0),
+                    @as(*const anyopaque, self.raster_buf.ptr),
+                    @as(u64, row_bytes),
+                });
+
+                self.ascii_glyphs[vi][i] = .{
+                    .u0 = @as(f32, @floatFromInt(atlas_x)) / @as(f32, @floatFromInt(self.width)),
+                    .v0 = @as(f32, @floatFromInt(atlas_y)) / @as(f32, @floatFromInt(self.height)),
+                    .u1 = @as(f32, @floatFromInt(atlas_x + bmp_w)) / @as(f32, @floatFromInt(self.width)),
+                    .v1 = @as(f32, @floatFromInt(atlas_y + bmp_h)) / @as(f32, @floatFromInt(self.height)),
+                    .width = @floatFromInt(bmp_w),
+                    .height = @floatFromInt(bmp_h),
+                    .bearing_x = @floatCast(bbox.origin.x),
+                    .bearing_y = @floatCast(bbox.origin.y),
+                    .advance = @floatCast(glyph_advance.width),
+                };
+            }
+
+            for (0..32) |i| {
+                self.ascii_glyphs[vi][i] = self.ascii_glyphs[vi][' '];
+            }
+            self.ascii_glyphs[vi][127] = self.ascii_glyphs[vi][' '];
+        }
+
+        // Reset packing cursor past ASCII
+        self.next_x = 0;
+        self.next_y = 4 * ascii_rows_per_variant * self.glyph_h;
+        self.row_height = self.glyph_h;
     }
 };

@@ -2,7 +2,9 @@ const std = @import("std");
 const objc = @import("objc.zig");
 const Pty = @import("pty.zig").Pty;
 const terminal = @import("terminal.zig");
-const Renderer = @import("renderer.zig").Renderer;
+const renderer_mod = @import("renderer.zig");
+const Renderer = renderer_mod.Renderer;
+const FontConfig = renderer_mod.FontConfig;
 const window = @import("window.zig");
 
 const COLS: u16 = 80;
@@ -42,7 +44,8 @@ pub fn main() !void {
     // Create renderer at physical pixel dimensions
     const phys_width = 800.0 * scale_factor;
     const phys_height = 600.0 * scale_factor;
-    var renderer = try Renderer.init(allocator, device, phys_width, phys_height, scale_factor);
+    const font_config = FontConfig{};
+    var renderer = try Renderer.init(allocator, device, phys_width, phys_height, scale_factor, font_config);
     defer renderer.atlas.deinit();
 
     // Shared state

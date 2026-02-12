@@ -1,7 +1,10 @@
 const std = @import("std");
 const objc = @import("objc.zig");
 const terminal = @import("terminal.zig");
-const Atlas = @import("atlas.zig").Atlas;
+const atlas_mod = @import("atlas.zig");
+const Atlas = atlas_mod.Atlas;
+pub const FontConfig = atlas_mod.FontConfig;
+const FontVariant = atlas_mod.FontVariant;
 
 // Metal enum constants
 const MTLPixelFormatBGRA8Unorm: u64 = 80;
@@ -45,7 +48,7 @@ pub const Renderer = struct {
     viewport_height: f32,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, device: objc.id, viewport_width: f32, viewport_height: f32, scale: f32) !Renderer {
+    pub fn init(allocator: std.mem.Allocator, device: objc.id, viewport_width: f32, viewport_height: f32, scale: f32, font_config: FontConfig) !Renderer {
         const command_queue = objc.msgSend(objc.id, device, objc.sel("newCommandQueue"), .{});
 
         // Compile Metal shader
@@ -170,7 +173,7 @@ pub const Renderer = struct {
         });
 
         // Create atlas at Retina scale
-        const atlas = try Atlas.init(allocator, device, 14.0, scale);
+        const atlas = try Atlas.init(allocator, device, font_config, scale);
 
         return Renderer{
             .device = device,
@@ -255,8 +258,8 @@ pub const Renderer = struct {
             return;
         }
 
-        // Each cell needs 2 quads (bg + fg) = 12 vertices, plus cursor = 6
-        const max_vertices = cols * rows * 12 + 6;
+        // Each cell: bg(6) + fg(6) + underline(6) + strikethrough(6) + overline(6) = 30, plus cursor = 6
+        const max_vertices = cols * rows * 30 + 6;
         const buf_size = max_vertices * @sizeOf(Vertex);
 
         if (self.vertex_buffer == null) {
@@ -298,20 +301,34 @@ pub const Renderer = struct {
                     writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, sel_bg, 1.0);
                 } else {
                     const style = if (raw_cell.hasStyling()) styles[x] else default_style;
-                    const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse continue;
+                    const has_styling = raw_cell.hasStyling();
 
-                    // Skip if same as default background
-                    if (bg_rgb.r == terminal.default_bg.r and bg_rgb.g == terminal.default_bg.g and bg_rgb.b == terminal.default_bg.b) continue;
+                    // Handle inverse: use fg as bg
+                    if (has_styling and style.flags.inverse) {
+                        const fg_rgb = style.fg(.{
+                            .default = rs.colors.foreground,
+                            .palette = &rs.colors.palette,
+                        });
+                        const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                        const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                        const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                        writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(fg_rgb), 1.0);
+                    } else {
+                        const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse continue;
 
-                    const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
-                    const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
-                    const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
-                    writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(bg_rgb), 1.0);
+                        // Skip if same as default background
+                        if (bg_rgb.r == terminal.default_bg.r and bg_rgb.g == terminal.default_bg.g and bg_rgb.b == terminal.default_bg.b) continue;
+
+                        const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                        const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                        const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                        writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(bg_rgb), 1.0);
+                    }
                 }
             }
         }
 
-        // Foreground (glyph) pass
+        // Foreground (glyph) pass + decoration pass
         for (cells_list, 0..) |cells, y| {
             const cell_slice = cells.slice();
             const raw_cells = cell_slice.items(.raw);
@@ -321,25 +338,95 @@ pub const Renderer = struct {
                 if (raw_cell.wide == .spacer_tail) continue;
 
                 const cp = raw_cell.codepoint();
-                if (cp <= ' ' or cp == 127) continue;
 
                 const is_selected = if (term.selection) |sel|
                     sel.contains(@intCast(x), @intCast(y))
                 else
                     false;
 
-                const fg = if (is_selected) sel_fg else blk: {
-                    const style = if (raw_cell.hasStyling()) styles[x] else default_style;
-                    break :blk rgbToFloat4(style.fg(.{
+                const style = if (raw_cell.hasStyling()) styles[x] else default_style;
+                const has_styling = raw_cell.hasStyling();
+
+                // Determine font variant from style flags
+                const variant: FontVariant = if (has_styling and style.flags.bold and style.flags.italic)
+                    .bold_italic
+                else if (has_styling and style.flags.bold)
+                    .bold
+                else if (has_styling and style.flags.italic)
+                    .italic
+                else
+                    .regular;
+
+                // Handle invisible: skip glyph entirely
+                if (has_styling and style.flags.invisible) {
+                    // Still process decorations below, but skip glyph
+                } else if (cp > ' ' and cp != 127) {
+                    // Resolve colors with inverse support
+                    var fg: [4]f32 = undefined;
+                    if (is_selected) {
+                        fg = sel_fg;
+                    } else if (has_styling and style.flags.inverse) {
+                        // Inverse: use bg color as fg
+                        const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse terminal.default_bg;
+                        fg = rgbToFloat4(bg_rgb);
+                    } else {
+                        fg = rgbToFloat4(style.fg(.{
+                            .default = rs.colors.foreground,
+                            .palette = &rs.colors.palette,
+                        }));
+                    }
+
+                    // Handle faint: halve alpha
+                    if (has_styling and style.flags.faint) {
+                        fg[3] = 0.5;
+                    }
+
+                    const glyph = self.atlas.getGlyph(cp, variant);
+                    const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                    const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                    writeQuad(buf_ptr, &idx, xf, yf, xf + glyph.width, yf + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, fg, zero4, 0.0);
+                }
+
+                // Decorations (underline, strikethrough, overline)
+                if (has_styling) {
+                    const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                    const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                    const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                    const line_thickness = @max(1.0, @ceil(self.atlas.scale));
+
+                    // Resolve decoration color (fg color by default)
+                    const dec_color = if (is_selected) sel_fg else rgbToFloat4(style.fg(.{
                         .default = rs.colors.foreground,
                         .palette = &rs.colors.palette,
                     }));
-                };
 
-                const glyph = self.atlas.getGlyph(cp);
-                const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
-                const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, xf, yf, xf + glyph.width, yf + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, fg, zero4, 0.0);
+                    // Underline
+                    if (style.flags.underline != .none) {
+                        const ul_color = blk: {
+                            if (style.underlineColor(&rs.colors.palette)) |c| {
+                                break :blk rgbToFloat4(c);
+                            }
+                            break :blk dec_color;
+                        };
+                        const ul_y = yf + self.atlas.font_ascent + 1.0;
+                        writeQuad(buf_ptr, &idx, xf, ul_y, xf + w, ul_y + line_thickness, zero2, zero2, zero4, ul_color, 1.0);
+                        if (style.flags.underline == .double) {
+                            const ul_y2 = ul_y + line_thickness + 1.0;
+                            writeQuad(buf_ptr, &idx, xf, ul_y2, xf + w, ul_y2 + line_thickness, zero2, zero2, zero4, ul_color, 1.0);
+                        }
+                    }
+
+                    // Strikethrough
+                    if (style.flags.strikethrough) {
+                        const st_y = yf + cell_h * 0.5 - line_thickness * 0.5;
+                        writeQuad(buf_ptr, &idx, xf, st_y, xf + w, st_y + line_thickness, zero2, zero2, zero4, dec_color, 1.0);
+                    }
+
+                    // Overline
+                    if (style.flags.overline) {
+                        writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + line_thickness, zero2, zero2, zero4, dec_color, 1.0);
+                    }
+                }
             }
         }
 
