@@ -117,6 +117,24 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     // Build mods
     const mods = input.modsFromNSEventFlags(flags);
 
+    // macOS pre-translates Ctrl+key into control characters in `characters`
+    // (e.g. Ctrl+C → 0x03 instead of 'c'). The ghostty encoder expects the
+    // base letter so it can apply its own ctrl-seq logic. Use the text from
+    // `charactersIgnoringModifiers` to undo the pre-translation.
+    if (mods.ctrl and utf8_len == 1 and utf8_buf[0] < 0x20) {
+        if (unmod_chars != null) {
+            const unmod_utf8 = objc.msgSend(?[*:0]const u8, unmod_chars, objc.sel("UTF8String"), .{});
+            if (unmod_utf8) |s| {
+                utf8_len = 0;
+                var j: usize = 0;
+                while (s[j] != 0 and utf8_len < utf8_buf.len) : (j += 1) {
+                    utf8_buf[utf8_len] = s[j];
+                    utf8_len += 1;
+                }
+            }
+        }
+    }
+
     // Build consumed_mods: shift is consumed if it produced different text
     var consumed_mods: input.KeyMods = .{};
     if (mods.shift and utf8_len > 0) {
