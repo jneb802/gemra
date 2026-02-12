@@ -96,8 +96,7 @@ fn ioLoop(pty: *Pty, term: *terminal.Terminal, mutex: *std.Thread.Mutex, needs_r
         defer mutex.unlock();
         term.feed(buf[0..n]);
 
-        if (term.isDirty()) {
-            needs_render.store(true, .release);
-        }
+        // Always render after receiving PTY data
+        needs_render.store(true, .release);
     }
 }

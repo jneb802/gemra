@@ -123,16 +123,4 @@ pub const Terminal = struct {
         try self.render_state.update(self.allocator, &self.inner);
     }
 
-    pub fn isDirty(self: *Terminal) bool {
-        // Check terminal-level dirty flags
-        const term_dirty: @typeInfo(ghostty.Terminal.Dirty).@"struct".backing_integer.? = @bitCast(self.inner.flags.dirty);
-        if (term_dirty > 0) return true;
-
-        // Check screen-level dirty flags
-        const screen = self.inner.screens.active;
-        const screen_dirty: @typeInfo(ghostty.Screen.Dirty).@"struct".backing_integer.? = @bitCast(screen.dirty);
-        if (screen_dirty > 0) return true;
-
-        return false;
-    }
 };
