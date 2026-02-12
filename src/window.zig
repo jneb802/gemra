@@ -72,6 +72,10 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
         } else if (char_val == ']') {
             buf[0] = 0x1d;
             len = 1;
+        } else if (char_val < 32) {
+            // macOS already translated the control combo (e.g. Ctrl+C → 0x03)
+            buf[0] = @as(u8, @intCast(char_val));
+            len = 1;
         }
     } else {
         switch (char_val) {
