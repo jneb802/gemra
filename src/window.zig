@@ -28,9 +28,30 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
 
     const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
     const ctrl = (flags & (1 << 18)) != 0;
+    const cmd = (flags & (1 << 20)) != 0;
     const key_code = objc.msgSend(u16, event, objc.sel("keyCode"), .{});
 
     const char_val = objc.msgSend(u16, chars, objc.sel("characterAtIndex:"), .{@as(u64, 0)});
+
+    // Cmd+V: paste from clipboard
+    if (cmd and (char_val == 'v' or char_val == 'V')) {
+        const NSPasteboard = @as(objc.id, @ptrCast(objc.getClass("NSPasteboard")));
+        const pb = objc.msgSend(objc.id, NSPasteboard, objc.sel("generalPasteboard"), .{});
+        const NSString = @as(objc.id, @ptrCast(objc.getClass("NSString")));
+        const str = objc.msgSend(objc.id, pb, objc.sel("stringForType:"), .{NSString});
+        if (str != null) {
+            const utf8 = objc.msgSend(?[*:0]const u8, str, objc.sel("UTF8String"), .{});
+            if (utf8) |s| {
+                var i: usize = 0;
+                while (s[i] != 0) : (i += 1) {}
+                _ = ctx.pty.write(s[0..i]) catch {};
+            }
+        }
+        return;
+    }
+
+    // Ignore other Cmd+ shortcuts (let system handle them)
+    if (cmd) return;
 
     var buf: [8]u8 = undefined;
     var len: usize = 0;
