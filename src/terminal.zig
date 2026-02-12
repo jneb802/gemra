@@ -76,9 +76,23 @@ pub const Grid = struct {
     param_count: u8 = 0,
     intermediate: u8 = 0,
 
+    // Scroll region (DECSTBM)
+    scroll_top: u16 = 0,
+    scroll_bottom: u16 = 0, // initialized in init() to rows-1
+
+    // Cursor visibility
+    cursor_visible: bool = true,
+
     // Saved cursor position (for DECSC/DECRC)
     saved_cursor_col: u16 = 0,
     saved_cursor_row: u16 = 0,
+
+    // UTF-8 decoder state
+    utf8_remaining: u3 = 0,
+    utf8_codepoint: u21 = 0,
+
+    // PTY fd for write-back (DSR responses)
+    pty_master_fd: std.posix.fd_t = -1,
 
     allocator: std.mem.Allocator,
 
@@ -90,6 +104,7 @@ pub const Grid = struct {
             .cells = cells,
             .cols = cols,
             .rows = rows,
+            .scroll_bottom = rows - 1,
             .allocator = allocator,
         };
     }
@@ -102,23 +117,34 @@ pub const Grid = struct {
         return &self.cells[@as(usize, row) * @as(usize, self.cols) + @as(usize, col)];
     }
 
-    fn scrollUp(self: *Grid) void {
+    fn scrollUpInRegion(self: *Grid, top: u16, bottom: u16) void {
         const stride = @as(usize, self.cols);
-        const total = stride * @as(usize, self.rows);
-        // Move all rows up by one
-        std.mem.copyForwards(Cell, self.cells[0 .. total - stride], self.cells[stride..total]);
-        // Clear last row
-        @memset(self.cells[total - stride .. total], Cell{});
+        const region_start = @as(usize, top) * stride;
+        const region_end = (@as(usize, bottom) + 1) * stride;
+        // Move rows up by one within the region
+        std.mem.copyForwards(Cell, self.cells[region_start .. region_end - stride], self.cells[region_start + stride .. region_end]);
+        // Clear last row of region
+        @memset(self.cells[region_end - stride .. region_end], Cell{});
+    }
+
+    fn scrollDownInRegion(self: *Grid, top: u16, bottom: u16) void {
+        const stride = @as(usize, self.cols);
+        const region_start = @as(usize, top) * stride;
+        const region_end = (@as(usize, bottom) + 1) * stride;
+        // Move rows down by one within the region
+        std.mem.copyBackwards(Cell, self.cells[region_start + stride .. region_end], self.cells[region_start .. region_end - stride]);
+        // Clear first row of region
+        @memset(self.cells[region_start .. region_start + stride], Cell{});
     }
 
     fn putChar(self: *Grid, char: u21) void {
         if (self.cursor_col >= self.cols) {
             // Auto-wrap
             self.cursor_col = 0;
-            self.cursor_row += 1;
-            if (self.cursor_row >= self.rows) {
-                self.scrollUp();
-                self.cursor_row = self.rows - 1;
+            if (self.cursor_row == self.scroll_bottom) {
+                self.scrollUpInRegion(self.scroll_top, self.scroll_bottom);
+            } else if (self.cursor_row < self.rows - 1) {
+                self.cursor_row += 1;
             }
         }
 
@@ -133,10 +159,10 @@ pub const Grid = struct {
     }
 
     fn newline(self: *Grid) void {
-        self.cursor_row += 1;
-        if (self.cursor_row >= self.rows) {
-            self.scrollUp();
-            self.cursor_row = self.rows - 1;
+        if (self.cursor_row == self.scroll_bottom) {
+            self.scrollUpInRegion(self.scroll_top, self.scroll_bottom);
+        } else if (self.cursor_row < self.rows - 1) {
+            self.cursor_row += 1;
         }
         self.dirty = true;
     }
@@ -209,10 +235,8 @@ pub const Grid = struct {
                 }
                 self.eraseInLine(1);
             },
-            2, 3 => { // Erase entire display
+            2, 3 => { // Erase entire display (cursor stays)
                 @memset(self.cells, Cell{});
-                self.cursor_col = 0;
-                self.cursor_row = 0;
             },
             else => {},
         }
@@ -233,10 +257,12 @@ pub const Grid = struct {
     }
 
     fn insertLines(self: *Grid, count: u16) void {
-        const n = @min(count, self.rows - self.cursor_row);
+        const bottom = self.scroll_bottom;
+        if (self.cursor_row > bottom) return;
+        const n = @min(count, bottom - self.cursor_row + 1);
         const stride = @as(usize, self.cols);
 
-        var row: u16 = self.rows - 1;
+        var row: u16 = bottom;
         while (row >= self.cursor_row + n) : (row -= 1) {
             const dst = @as(usize, row) * stride;
             const src = @as(usize, row - n) * stride;
@@ -253,17 +279,19 @@ pub const Grid = struct {
     }
 
     fn deleteLines(self: *Grid, count: u16) void {
-        const n = @min(count, self.rows - self.cursor_row);
+        const bottom = self.scroll_bottom;
+        if (self.cursor_row > bottom) return;
+        const n = @min(count, bottom - self.cursor_row + 1);
         const stride = @as(usize, self.cols);
 
         var row = self.cursor_row;
-        while (row + n < self.rows) : (row += 1) {
+        while (row + n <= bottom) : (row += 1) {
             const dst = @as(usize, row) * stride;
             const src = @as(usize, row + n) * stride;
             @memcpy(self.cells[dst .. dst + stride], self.cells[src .. src + stride]);
         }
 
-        while (row < self.rows) : (row += 1) {
+        while (row <= bottom) : (row += 1) {
             const start = @as(usize, row) * stride;
             @memset(self.cells[start .. start + stride], Cell{});
         }
@@ -286,10 +314,28 @@ pub const Grid = struct {
 
     fn parseExtendedColor(params: []const u16) ExtendedColorResult {
         if (params.len >= 2 and params[0] == 5) {
-            // 5;n — 256-color (only first 16 supported for MVP)
+            // 5;n — 256-color
             const idx = params[1];
+            const color: ?Color = if (idx < 16)
+                ansi_colors[idx]
+            else if (idx < 232) blk: {
+                // 6x6x6 color cube (indices 16-231)
+                const ci = idx - 16;
+                const ri = ci / 36;
+                const gi = (ci % 36) / 6;
+                const bi = ci % 6;
+                break :blk Color{
+                    .r = if (ri == 0) 0 else @as(u8, @intCast(55 + 40 * ri)),
+                    .g = if (gi == 0) 0 else @as(u8, @intCast(55 + 40 * gi)),
+                    .b = if (bi == 0) 0 else @as(u8, @intCast(55 + 40 * bi)),
+                };
+            } else if (idx <= 255) blk: {
+                // Grayscale ramp (indices 232-255)
+                const v: u8 = @intCast(8 + 10 * (idx - 232));
+                break :blk Color{ .r = v, .g = v, .b = v };
+            } else null;
             return .{
-                .color = if (idx < 16) ansi_colors[idx] else null,
+                .color = color,
                 .params_consumed = 2,
             };
         } else if (params.len >= 4 and params[0] == 2) {
@@ -364,13 +410,16 @@ pub const Grid = struct {
             switch (final_byte) {
                 'h' => { // DECSET
                     switch (p0) {
-                        25 => {}, // Show cursor - we always show it
+                        25 => self.cursor_visible = true,
                         1049 => { // Alternate screen buffer
                             self.saved_cursor_col = self.cursor_col;
                             self.saved_cursor_row = self.cursor_row;
                             @memset(self.cells, Cell{});
                             self.cursor_col = 0;
                             self.cursor_row = 0;
+                            self.scroll_top = 0;
+                            self.scroll_bottom = self.rows - 1;
+                            self.cursor_visible = true;
                             self.dirty = true;
                         },
                         else => {},
@@ -378,11 +427,14 @@ pub const Grid = struct {
                 },
                 'l' => { // DECRST
                     switch (p0) {
-                        25 => {}, // Hide cursor
+                        25 => self.cursor_visible = false,
                         1049 => { // Restore from alternate screen
                             @memset(self.cells, Cell{});
                             self.cursor_col = self.saved_cursor_col;
                             self.cursor_row = self.saved_cursor_row;
+                            self.scroll_top = 0;
+                            self.scroll_bottom = self.rows - 1;
+                            self.cursor_visible = true;
                             self.dirty = true;
                         },
                         else => {},
@@ -450,7 +502,32 @@ pub const Grid = struct {
                 self.dirty = true;
             },
             'm' => self.handleSGR(),
-            'r' => { // DECSTBM - Set scrolling region (ignored for MVP)
+            'r' => { // DECSTBM - Set scrolling region
+                const top: u16 = if (p0 == 0) 1 else p0;
+                const bot: u16 = if (p1 == 0) self.rows else p1;
+                if (top < bot and bot <= self.rows) {
+                    self.scroll_top = top - 1;
+                    self.scroll_bottom = bot - 1;
+                }
+                self.cursor_col = 0;
+                self.cursor_row = 0;
+                self.dirty = true;
+            },
+            'S' => { // Scroll Up (SU)
+                const n: u16 = if (p0 == 0) 1 else p0;
+                var i: u16 = 0;
+                while (i < n) : (i += 1) {
+                    self.scrollUpInRegion(self.scroll_top, self.scroll_bottom);
+                }
+                self.dirty = true;
+            },
+            'T' => { // Scroll Down (SD)
+                const n: u16 = if (p0 == 0) 1 else p0;
+                var i: u16 = 0;
+                while (i < n) : (i += 1) {
+                    self.scrollDownInRegion(self.scroll_top, self.scroll_bottom);
+                }
+                self.dirty = true;
             },
             's' => { // Save cursor position
                 self.saved_cursor_col = self.cursor_col;
@@ -461,7 +538,16 @@ pub const Grid = struct {
                 self.cursor_row = self.saved_cursor_row;
                 self.dirty = true;
             },
-            'n' => { // Device Status Report - ignored, would need PTY write-back
+            'n' => { // Device Status Report
+                if (p0 == 6 and self.pty_master_fd >= 0) {
+                    // CPR: respond with ESC[row;colR (1-based)
+                    var buf: [32]u8 = undefined;
+                    const response = std.fmt.bufPrint(&buf, "\x1b[{d};{d}R", .{
+                        @as(u32, self.cursor_row) + 1,
+                        @as(u32, self.cursor_col) + 1,
+                    }) catch return;
+                    _ = std.posix.write(self.pty_master_fd, response) catch {};
+                }
             },
             'h', 'l' => { // Set/Reset Mode (non-DEC)
             },
@@ -493,6 +579,7 @@ pub const Grid = struct {
         csi,
         osc,
         osc_string,
+        str_passthrough, // DCS, APC, PM, SOS — consume until ST
     };
 
     pub fn feed(self: *Grid, data: []const u8) void {
@@ -501,23 +588,57 @@ pub const Grid = struct {
         }
     }
 
+
     fn feedByte(self: *Grid, byte: u8) void {
         switch (self.state) {
             .ground => {
+                // Handle UTF-8 continuation bytes first
+                if (self.utf8_remaining > 0) {
+                    if (byte & 0xC0 == 0x80) {
+                        // Valid continuation byte
+                        self.utf8_codepoint = (self.utf8_codepoint << 6) | @as(u21, byte & 0x3F);
+                        self.utf8_remaining -= 1;
+                        if (self.utf8_remaining == 0) {
+                            self.putChar(self.utf8_codepoint);
+                        }
+                        return;
+                    } else {
+                        // Invalid continuation — reset and re-process byte
+                        self.utf8_remaining = 0;
+                        self.utf8_codepoint = 0;
+                    }
+                }
+
                 switch (byte) {
                     0x1b => { // ESC
                         self.state = .escape;
                         self.param_count = 0;
                         self.params = [_]u16{0} ** 16;
                         self.intermediate = 0;
+                        self.utf8_remaining = 0;
                     },
                     '\r' => self.carriageReturn(),
                     '\n', 0x0b, 0x0c => self.newline(),
                     0x08 => self.backspace(),
                     '\t' => self.tab(),
                     0x07 => {}, // Bell - ignore
-                    0x00...0x06, 0x0e...0x1a, 0x1c...0x1f => {}, // Other C0 controls
-                    else => self.putChar(@as(u21, byte)),
+                    0x00...0x06, 0x0e...0x1a, 0x1c...0x1f => {
+                        self.utf8_remaining = 0;
+                    },
+                    0x20...0x7F => self.putChar(@as(u21, byte)),
+                    0xC0...0xDF => { // 2-byte UTF-8 start
+                        self.utf8_codepoint = @as(u21, byte & 0x1F);
+                        self.utf8_remaining = 1;
+                    },
+                    0xE0...0xEF => { // 3-byte UTF-8 start
+                        self.utf8_codepoint = @as(u21, byte & 0x0F);
+                        self.utf8_remaining = 2;
+                    },
+                    0xF0...0xF7 => { // 4-byte UTF-8 start
+                        self.utf8_codepoint = @as(u21, byte & 0x07);
+                        self.utf8_remaining = 3;
+                    },
+                    else => {}, // Invalid lead bytes (0x80-0xBF, 0xF8+)
                 }
             },
             .escape => {
@@ -542,17 +663,16 @@ pub const Grid = struct {
                         self.state = .ground;
                     },
                     'M' => { // Reverse Index (scroll down)
-                        if (self.cursor_row == 0) {
-                            // Scroll down: insert blank line at top
-                            const stride = @as(usize, self.cols);
-                            const total = stride * @as(usize, self.rows);
-                            std.mem.copyBackwards(Cell, self.cells[stride..total], self.cells[0 .. total - stride]);
-                            @memset(self.cells[0..stride], Cell{});
-                        } else {
+                        if (self.cursor_row == self.scroll_top) {
+                            self.scrollDownInRegion(self.scroll_top, self.scroll_bottom);
+                        } else if (self.cursor_row > 0) {
                             self.cursor_row -= 1;
                         }
                         self.dirty = true;
                         self.state = .ground;
+                    },
+                    'P', 'X', '^', '_' => { // DCS, SOS, PM, APC — string sequences
+                        self.state = .str_passthrough;
                     },
                     'c' => { // Full Reset
                         @memset(self.cells, Cell{});
@@ -561,6 +681,9 @@ pub const Grid = struct {
                         self.current_fg = default_fg;
                         self.current_bg = default_bg;
                         self.current_attrs = .{};
+                        self.cursor_visible = true;
+                        self.scroll_top = 0;
+                        self.scroll_bottom = self.rows - 1;
                         self.dirty = true;
                         self.state = .ground;
                     },
@@ -571,11 +694,16 @@ pub const Grid = struct {
                 if (byte >= '0' and byte <= '9') {
                     if (self.param_count == 0) self.param_count = 1;
                     self.params[self.param_count - 1] = self.params[self.param_count - 1] *| 10 +| (byte - '0');
-                } else if (byte == ';') {
+                } else if (byte == ';' or byte == ':') {
+                    // Parameter separator (';' standard, ':' sub-parameter)
                     if (self.param_count < self.params.len) {
                         self.param_count += 1;
                     }
-                } else if (byte == '?' or byte == '>' or byte == '!') {
+                } else if (byte >= 0x20 and byte <= 0x2F) {
+                    // Intermediate bytes (space, !, ", #, $, etc.)
+                    self.intermediate = byte;
+                } else if (byte >= 0x3C and byte <= 0x3F) {
+                    // Parameter prefix bytes (< = > ?)
                     self.intermediate = byte;
                 } else if (byte >= 0x40 and byte <= 0x7e) {
                     // Final byte
@@ -609,10 +737,17 @@ pub const Grid = struct {
                 if (byte == 0x07) { // BEL terminates
                     self.state = .ground;
                 } else if (byte == 0x1b) {
-                    // Might be ESC \ (ST)
-                    self.state = .ground;
+                    self.state = .escape; // ESC \ (ST) terminates via escape handler
                 }
                 // Otherwise consume and ignore the string
+            },
+            .str_passthrough => {
+                if (byte == 0x1b) {
+                    self.state = .escape; // ESC \ (ST) terminates via escape handler
+                } else if (byte == 0x07) {
+                    self.state = .ground; // Some implementations accept BEL
+                }
+                // Otherwise consume and ignore
             },
         }
     }

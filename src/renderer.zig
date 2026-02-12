@@ -170,7 +170,7 @@ pub const Renderer = struct {
         });
 
         // Create atlas at Retina scale
-        const atlas = try Atlas.init(device, 14.0, scale);
+        const atlas = try Atlas.init(allocator, device, 14.0, scale);
 
         return Renderer{
             .device = device,
@@ -289,7 +289,7 @@ pub const Renderer = struct {
         }
 
         // Cursor
-        {
+        if (grid.cursor_visible) {
             const cx = @as(f32, @floatFromInt(grid.cursor_col)) * cell_w + pad_x;
             const cy = @as(f32, @floatFromInt(grid.cursor_row)) * cell_h + pad_y;
             const cursor_color = [4]f32{ 0.8, 0.8, 0.8, 0.5 };

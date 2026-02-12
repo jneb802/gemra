@@ -21,6 +21,9 @@ pub fn main() !void {
     var pty = try Pty.spawn(COLS, ROWS);
     defer pty.close();
 
+    // Wire PTY fd for DSR write-back
+    grid.pty_master_fd = pty.master_fd;
+
     // Create Metal device
     const MTLCreateSystemDefaultDevice = @extern(*const fn () callconv(.C) objc.id, .{
         .name = "MTLCreateSystemDefaultDevice",
@@ -43,6 +46,7 @@ pub fn main() !void {
     const phys_width = 800.0 * scale_factor;
     const phys_height = 600.0 * scale_factor;
     var renderer = try Renderer.init(allocator, device, phys_width, phys_height, scale_factor);
+    defer renderer.atlas.deinit();
 
     // Shared state
     var mutex = std.Thread.Mutex{};
