@@ -269,6 +269,10 @@ pub const Renderer = struct {
         const buf_ptr = objc.msgSend([*]Vertex, self.vertex_buffer, objc.sel("contents"), .{});
         var idx: u32 = 0;
 
+        // Selection highlight colors
+        const sel_bg = [4]f32{ 0.26, 0.47, 0.73, 1.0 }; // blue highlight
+        const sel_fg = [4]f32{ 1.0, 1.0, 1.0, 1.0 }; // white text
+
         const default_style = terminal.Style{};
         const row_slice = rs.row_data.slice();
         const cells_list = row_slice.items(.cells);
@@ -282,16 +286,28 @@ pub const Renderer = struct {
             for (raw_cells, 0..) |raw_cell, x| {
                 if (raw_cell.wide == .spacer_tail) continue;
 
-                const style = if (raw_cell.hasStyling()) styles[x] else default_style;
-                const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse continue;
+                const is_selected = if (term.selection) |sel|
+                    sel.contains(@intCast(x), @intCast(y))
+                else
+                    false;
 
-                // Skip if same as default background
-                if (bg_rgb.r == terminal.default_bg.r and bg_rgb.g == terminal.default_bg.g and bg_rgb.b == terminal.default_bg.b) continue;
+                if (is_selected) {
+                    const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                    const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                    const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                    writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, sel_bg, 1.0);
+                } else {
+                    const style = if (raw_cell.hasStyling()) styles[x] else default_style;
+                    const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse continue;
 
-                const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
-                const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
-                const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
-                writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(bg_rgb), 1.0);
+                    // Skip if same as default background
+                    if (bg_rgb.r == terminal.default_bg.r and bg_rgb.g == terminal.default_bg.g and bg_rgb.b == terminal.default_bg.b) continue;
+
+                    const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                    const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                    const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                    writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(bg_rgb), 1.0);
+                }
             }
         }
 
@@ -307,16 +323,23 @@ pub const Renderer = struct {
                 const cp = raw_cell.codepoint();
                 if (cp <= ' ' or cp == 127) continue;
 
-                const style = if (raw_cell.hasStyling()) styles[x] else default_style;
-                const fg_rgb = style.fg(.{
-                    .default = rs.colors.foreground,
-                    .palette = &rs.colors.palette,
-                });
+                const is_selected = if (term.selection) |sel|
+                    sel.contains(@intCast(x), @intCast(y))
+                else
+                    false;
+
+                const fg = if (is_selected) sel_fg else blk: {
+                    const style = if (raw_cell.hasStyling()) styles[x] else default_style;
+                    break :blk rgbToFloat4(style.fg(.{
+                        .default = rs.colors.foreground,
+                        .palette = &rs.colors.palette,
+                    }));
+                };
 
                 const glyph = self.atlas.getGlyph(cp);
                 const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
                 const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, xf, yf, xf + glyph.width, yf + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, rgbToFloat4(fg_rgb), zero4, 0.0);
+                writeQuad(buf_ptr, &idx, xf, yf, xf + glyph.width, yf + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, fg, zero4, 0.0);
             }
         }
 

@@ -21,9 +21,9 @@ const GemraHandler = struct {
     inner: ReadonlyHandler,
     pty_fd: posix.fd_t,
 
-    fn init(terminal: *ghostty.Terminal, pty_fd: posix.fd_t) GemraHandler {
+    fn init(terminal_inner: *ghostty.Terminal, pty_fd: posix.fd_t) GemraHandler {
         return .{
-            .inner = .init(terminal),
+            .inner = .init(terminal_inner),
             .pty_fd = pty_fd,
         };
     }
@@ -71,12 +71,116 @@ const GemraHandler = struct {
 
 const GemraStream = ghostty.Stream(GemraHandler);
 
+pub const Selection = struct {
+    anchor: GridPoint,
+    endpoint: GridPoint,
+    active: bool = false,
+    mode: Mode = .normal,
+    rectangle: bool = false,
+
+    pub const GridPoint = struct {
+        col: u16,
+        row: u16,
+    };
+
+    pub const Mode = enum { normal, word, line };
+
+    pub fn ordered(self: Selection) struct { start: GridPoint, end: GridPoint } {
+        if (self.anchor.row < self.endpoint.row or
+            (self.anchor.row == self.endpoint.row and self.anchor.col <= self.endpoint.col))
+        {
+            return .{ .start = self.anchor, .end = self.endpoint };
+        }
+        return .{ .start = self.endpoint, .end = self.anchor };
+    }
+
+    pub fn contains(self: Selection, col: u16, row: u16) bool {
+        if (!self.active) return false;
+        const sel = self.ordered();
+        if (self.rectangle) {
+            const min_col = @min(self.anchor.col, self.endpoint.col);
+            const max_col = @max(self.anchor.col, self.endpoint.col);
+            return row >= sel.start.row and row <= sel.end.row and
+                col >= min_col and col <= max_col;
+        }
+        if (row < sel.start.row or row > sel.end.row) return false;
+        if (row == sel.start.row and row == sel.end.row) {
+            return col >= sel.start.col and col <= sel.end.col;
+        }
+        if (row == sel.start.row) return col >= sel.start.col;
+        if (row == sel.end.row) return col <= sel.end.col;
+        return true;
+    }
+
+    pub fn extractText(self: Selection, rs: *const RenderState, allocator: std.mem.Allocator) ![]u8 {
+        const sel = self.ordered();
+        var result: std.ArrayListUnmanaged(u8) = .{};
+        errdefer result.deinit(allocator);
+
+        const row_slice = rs.row_data.slice();
+        const cells_list = row_slice.items(.cells);
+        const rs_rows: u16 = @intCast(cells_list.len);
+
+        var row = sel.start.row;
+        while (row <= sel.end.row and row < rs_rows) : (row += 1) {
+            const raw_cells = cells_list[row].slice().items(.raw);
+            const cols_count: u16 = @intCast(raw_cells.len);
+
+            const start_col = if (row == sel.start.row) sel.start.col else 0;
+            const end_col = if (row == sel.end.row) @min(sel.end.col, cols_count -| 1) else cols_count -| 1;
+
+            const actual_start = if (self.rectangle) @min(self.anchor.col, self.endpoint.col) else start_col;
+            const actual_end = if (self.rectangle) @min(@max(self.anchor.col, self.endpoint.col), cols_count -| 1) else end_col;
+
+            // Find last non-space character to trim trailing whitespace
+            var last_content = actual_start;
+            var has_content = false;
+            {
+                var col = actual_start;
+                while (col <= actual_end and col < cols_count) : (col += 1) {
+                    const cp = raw_cells[col].codepoint();
+                    if (cp > ' ' and cp != 127) {
+                        last_content = col;
+                        has_content = true;
+                    }
+                }
+            }
+
+            if (has_content) {
+                var col = actual_start;
+                while (col <= last_content) : (col += 1) {
+                    const cp = raw_cells[col].codepoint();
+                    var buf: [4]u8 = undefined;
+                    const len = std.unicode.utf8Encode(cp, &buf) catch continue;
+                    try result.appendSlice(allocator, buf[0..len]);
+                }
+            }
+
+            if (row < sel.end.row) {
+                try result.append(allocator, '\n');
+            }
+        }
+
+        return try result.toOwnedSlice(allocator);
+    }
+};
+
+fn isWordCodepoint(cp: u21) bool {
+    if (cp <= ' ' or cp == 127) return false;
+    const word_delimiters = " \t!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~";
+    for (word_delimiters) |d| {
+        if (cp == d) return false;
+    }
+    return true;
+}
+
 pub const Terminal = struct {
     inner: ghostty.Terminal,
     stream: ?GemraStream,
     render_state: RenderState,
     allocator: std.mem.Allocator,
     pty_fd: posix.fd_t,
+    selection: ?Selection = null,
 
     pub fn init(alloc: std.mem.Allocator, cols: u16, rows: u16, pty_fd: posix.fd_t) !Terminal {
         const inner: ghostty.Terminal = try .init(alloc, .{
@@ -123,4 +227,30 @@ pub const Terminal = struct {
         try self.render_state.update(self.allocator, &self.inner);
     }
 
+    pub fn wordBounds(self: *const Terminal, col: u16, row: u16) struct { start: u16, end: u16 } {
+        const rs = &self.render_state;
+        const row_slice = rs.row_data.slice();
+        const cells_list = row_slice.items(.cells);
+
+        if (row >= cells_list.len) return .{ .start = col, .end = col };
+
+        const raw_cells = cells_list[row].slice().items(.raw);
+        const cols_count: u16 = @intCast(raw_cells.len);
+
+        if (col >= cols_count) return .{ .start = col, .end = col };
+
+        if (!isWordCodepoint(raw_cells[col].codepoint())) {
+            return .{ .start = col, .end = col };
+        }
+
+        var start = col;
+        var end = col;
+        while (start > 0 and isWordCodepoint(raw_cells[start - 1].codepoint())) {
+            start -= 1;
+        }
+        while (end < cols_count - 1 and isWordCodepoint(raw_cells[end + 1].codepoint())) {
+            end += 1;
+        }
+        return .{ .start = start, .end = end };
+    }
 };

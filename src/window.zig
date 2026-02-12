@@ -14,6 +14,13 @@ pub const AppContext = struct {
 
 var global_app_context: ?*AppContext = null;
 
+// Click tracking for double/triple click detection
+var last_click_time: i128 = 0;
+var last_click_col: u16 = 0;
+var last_click_row: u16 = 0;
+var click_count: u8 = 0;
+const multi_click_threshold_ns: i128 = 400 * std.time.ns_per_ms;
+
 pub fn sharedApp() objc.id {
     return objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
 }
@@ -50,6 +57,27 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
                 while (s[i] != 0) : (i += 1) {}
                 _ = ctx.pty.write(s[0..i]) catch {};
             }
+        }
+        return;
+    }
+
+    // Cmd+C: copy selection to clipboard (or fall through if no selection)
+    if (cmd and (char_val == 'c' or char_val == 'C')) {
+        ctx.mutex.lock();
+        const sel_text = if (ctx.term.selection) |sel| blk: {
+            if (!sel.active) break :blk null;
+            break :blk sel.extractText(&ctx.term.render_state, std.heap.page_allocator) catch null;
+        } else null;
+        ctx.mutex.unlock();
+
+        if (sel_text) |text| {
+            defer std.heap.page_allocator.free(text);
+            copyToClipboard(text);
+            // Clear selection after copy
+            ctx.mutex.lock();
+            ctx.term.selection = null;
+            ctx.mutex.unlock();
+            ctx.needs_render.store(true, .release);
         }
         return;
     }
@@ -163,6 +191,190 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
 
 fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {}
 
+fn pixelToGrid(self_view: objc.id, event: objc.id, ctx: *AppContext) terminal.Selection.GridPoint {
+    const location = objc.msgSend(objc.CGPoint, event, objc.sel("locationInWindow"), .{});
+    const view_loc = objc.msgSend(objc.CGPoint, self_view, objc.sel("convertPoint:fromView:"), .{
+        location, @as(objc.id, null),
+    });
+
+    // Get view bounds to flip Y (AppKit is bottom-up, terminal is top-down)
+    const view_bounds = objc.msgSend(objc.CGRect, self_view, objc.sel("bounds"), .{});
+    const flipped_y = view_bounds.size.height - view_loc.y;
+
+    // Get scale factor
+    const win = objc.msgSend(objc.id, self_view, objc.sel("window"), .{});
+    const scale: f32 = if (win != null)
+        @floatCast(objc.msgSend(objc.CGFloat, win, objc.sel("backingScaleFactor"), .{}))
+    else
+        1.0;
+
+    // Convert to physical pixels, then to grid coordinates
+    const pad_x = Renderer.padding_x * scale;
+    const pad_y = Renderer.padding_y * scale;
+    const cell_w = ctx.renderer.atlas.cell_width;
+    const cell_h = ctx.renderer.atlas.cell_height;
+
+    const px: f32 = @as(f32, @floatCast(view_loc.x)) * scale;
+    const py: f32 = @as(f32, @floatCast(flipped_y)) * scale;
+
+    const col_f = (px - pad_x) / cell_w;
+    const row_f = (py - pad_y) / cell_h;
+
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+    const term_rows: u16 = @intCast(ctx.term.inner.rows);
+
+    const col: u16 = if (col_f < 0) 0 else @min(@as(u16, @intFromFloat(col_f)), term_cols -| 1);
+    const row: u16 = if (row_f < 0) 0 else @min(@as(u16, @intFromFloat(row_f)), term_rows -| 1);
+
+    return .{ .col = col, .row = row };
+}
+
+fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+    const point = pixelToGrid(self_view, event, ctx);
+
+    // Detect double/triple click
+    const now = std.time.nanoTimestamp();
+    if (now - last_click_time < multi_click_threshold_ns and
+        point.col == last_click_col and point.row == last_click_row)
+    {
+        click_count = if (click_count >= 3) 1 else click_count + 1;
+    } else {
+        click_count = 1;
+    }
+    last_click_time = now;
+    last_click_col = point.col;
+    last_click_row = point.row;
+
+    // Check for Alt key (block selection)
+    const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+    const alt = (flags & (1 << 19)) != 0;
+
+    ctx.mutex.lock();
+    defer ctx.mutex.unlock();
+
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+
+    switch (click_count) {
+        2 => {
+            // Word selection
+            const bounds = ctx.term.wordBounds(point.col, point.row);
+            ctx.term.selection = terminal.Selection{
+                .anchor = .{ .col = bounds.start, .row = point.row },
+                .endpoint = .{ .col = bounds.end, .row = point.row },
+                .active = true,
+                .mode = .word,
+                .rectangle = false,
+            };
+        },
+        3 => {
+            // Line selection
+            ctx.term.selection = terminal.Selection{
+                .anchor = .{ .col = 0, .row = point.row },
+                .endpoint = .{ .col = term_cols -| 1, .row = point.row },
+                .active = true,
+                .mode = .line,
+                .rectangle = false,
+            };
+        },
+        else => {
+            // Single click — start new selection
+            ctx.term.selection = terminal.Selection{
+                .anchor = point,
+                .endpoint = point,
+                .active = true,
+                .mode = .normal,
+                .rectangle = alt,
+            };
+        },
+    }
+
+    ctx.needs_render.store(true, .release);
+}
+
+fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+    const point = pixelToGrid(self_view, event, ctx);
+
+    ctx.mutex.lock();
+    defer ctx.mutex.unlock();
+
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+
+    if (ctx.term.selection) |*sel| {
+        switch (sel.mode) {
+            .word => {
+                // Expand selection to word boundaries in the drag direction
+                const bounds = ctx.term.wordBounds(point.col, point.row);
+                const anchor_bounds = ctx.term.wordBounds(sel.anchor.col, sel.anchor.row);
+                if (point.row < sel.anchor.row or
+                    (point.row == sel.anchor.row and point.col < sel.anchor.col))
+                {
+                    sel.anchor = .{ .col = anchor_bounds.end, .row = sel.anchor.row };
+                    sel.endpoint = .{ .col = bounds.start, .row = point.row };
+                } else {
+                    sel.anchor = .{ .col = anchor_bounds.start, .row = sel.anchor.row };
+                    sel.endpoint = .{ .col = bounds.end, .row = point.row };
+                }
+            },
+            .line => {
+                // Expand selection to full lines
+                if (point.row < sel.anchor.row) {
+                    sel.endpoint = .{ .col = 0, .row = point.row };
+                    sel.anchor = .{ .col = term_cols -| 1, .row = last_click_row };
+                } else {
+                    sel.anchor = .{ .col = 0, .row = last_click_row };
+                    sel.endpoint = .{ .col = term_cols -| 1, .row = point.row };
+                }
+            },
+            .normal => {
+                sel.endpoint = point;
+            },
+        }
+
+        ctx.needs_render.store(true, .release);
+    }
+}
+
+fn viewMouseUp(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    defer ctx.mutex.unlock();
+
+    // If selection is a single cell with no movement, clear it (it was just a click)
+    if (ctx.term.selection) |sel| {
+        if (sel.anchor.col == sel.endpoint.col and sel.anchor.row == sel.endpoint.row and sel.mode == .normal) {
+            ctx.term.selection = null;
+            ctx.needs_render.store(true, .release);
+        }
+    }
+}
+
+fn copyToClipboard(text: []const u8) void {
+    // Need null-terminated copy
+    const alloc = std.heap.page_allocator;
+    const z_text = alloc.alloc(u8, text.len + 1) catch return;
+    defer alloc.free(z_text);
+    @memcpy(z_text[0..text.len], text);
+    z_text[text.len] = 0;
+
+    const NSPasteboard = @as(objc.id, @ptrCast(objc.getClass("NSPasteboard")));
+    const pb = objc.msgSend(objc.id, NSPasteboard, objc.sel("generalPasteboard"), .{});
+
+    _ = objc.msgSend(objc.NSInteger, pb, objc.sel("clearContents"), .{});
+
+    const NSString = @as(objc.id, @ptrCast(objc.getClass("NSString")));
+    const ns_str = objc.msgSend(objc.id, NSString, objc.sel("stringWithUTF8String:"), .{
+        @as([*:0]const u8, @ptrCast(z_text.ptr)),
+    });
+
+    const pb_type = objc.msgSend(objc.id, NSString, objc.sel("stringWithUTF8String:"), .{
+        @as([*:0]const u8, "public.utf8-plain-text"),
+    });
+    _ = objc.msgSend(objc.BOOL, pb, objc.sel("setString:forType:"), .{ ns_str, pb_type });
+}
+
 fn viewAcceptsFirstResponder(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
@@ -263,6 +475,9 @@ pub fn createViewClass() objc.Class {
 
     objc.addMethod(cls, objc.sel("keyDown:"), @ptrCast(&viewKeyDown), "v@:@");
     objc.addMethod(cls, objc.sel("flagsChanged:"), @ptrCast(&viewFlagsChanged), "v@:@");
+    objc.addMethod(cls, objc.sel("mouseDown:"), @ptrCast(&viewMouseDown), "v@:@");
+    objc.addMethod(cls, objc.sel("mouseDragged:"), @ptrCast(&viewMouseDragged), "v@:@");
+    objc.addMethod(cls, objc.sel("mouseUp:"), @ptrCast(&viewMouseUp), "v@:@");
     objc.addMethod(cls, objc.sel("acceptsFirstResponder"), @ptrCast(&viewAcceptsFirstResponder), "B@:");
     objc.addMethod(cls, objc.sel("wantsLayer"), @ptrCast(&viewWantsLayer), "B@:");
     objc.addMethod(cls, objc.sel("isOpaque"), @ptrCast(&viewIsOpaque), "B@:");
