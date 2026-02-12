@@ -2,6 +2,9 @@ const std = @import("std");
 const objc = @import("objc.zig");
 const terminal = @import("terminal.zig");
 const Renderer = @import("renderer.zig").Renderer;
+const input = @import("input.zig");
+const ghostty = @import("ghostty-vt");
+const posix = std.posix;
 
 pub const AppContext = struct {
     pty: *@import("pty.zig").Pty,
@@ -29,163 +32,182 @@ pub fn sharedApp() objc.id {
 fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
-    const chars = objc.msgSend(objc.id, event, objc.sel("characters"), .{});
-    if (chars == null) return;
-
-    const length = objc.msgSend(u64, chars, objc.sel("length"), .{});
-    if (length == 0) return;
-
     const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
-    const ctrl = (flags & (1 << 18)) != 0;
     const cmd = (flags & (1 << 20)) != 0;
     const key_code = objc.msgSend(u16, event, objc.sel("keyCode"), .{});
 
-    const char_val = objc.msgSend(u16, chars, objc.sel("characterAtIndex:"), .{@as(u64, 0)});
+    const chars = objc.msgSend(objc.id, event, objc.sel("characters"), .{});
+    const char_val: u16 = if (chars != null and objc.msgSend(u64, chars, objc.sel("length"), .{}) > 0)
+        objc.msgSend(u16, chars, objc.sel("characterAtIndex:"), .{@as(u64, 0)})
+    else
+        0;
 
     // Cmd+V: paste from clipboard
     if (cmd and (char_val == 'v' or char_val == 'V')) {
-        const NSPasteboard = @as(objc.id, @ptrCast(objc.getClass("NSPasteboard")));
-        const pb = objc.msgSend(objc.id, NSPasteboard, objc.sel("generalPasteboard"), .{});
-        const pb_type = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSString"))), objc.sel("stringWithUTF8String:"), .{
-            @as([*:0]const u8, "public.utf8-plain-text"),
-        });
-        const str = objc.msgSend(objc.id, pb, objc.sel("stringForType:"), .{pb_type});
-        if (str != null) {
-            const utf8 = objc.msgSend(?[*:0]const u8, str, objc.sel("UTF8String"), .{});
-            if (utf8) |s| {
-                var i: usize = 0;
-                while (s[i] != 0) : (i += 1) {}
-                _ = ctx.pty.write(s[0..i]) catch {};
-            }
-        }
+        handlePaste(ctx);
         return;
     }
 
-    // Cmd+C: copy selection to clipboard (or fall through if no selection)
+    // Cmd+C: copy selection to clipboard
     if (cmd and (char_val == 'c' or char_val == 'C')) {
-        ctx.mutex.lock();
-        const sel_text = if (ctx.term.selection) |sel| blk: {
-            if (!sel.active) break :blk null;
-            break :blk sel.extractText(&ctx.term.render_state, std.heap.page_allocator) catch null;
-        } else null;
-        ctx.mutex.unlock();
-
-        if (sel_text) |text| {
-            defer std.heap.page_allocator.free(text);
-            copyToClipboard(text);
-            // Clear selection after copy
-            ctx.mutex.lock();
-            ctx.term.selection = null;
-            ctx.mutex.unlock();
-            ctx.needs_render.store(true, .release);
-        }
+        handleCopy(ctx);
         return;
     }
 
     // Ignore other Cmd+ shortcuts (let system handle them)
     if (cmd) return;
 
-    var buf: [8]u8 = undefined;
-    var len: usize = 0;
+    // Map macOS keycode to ghostty Key
+    const key = input.keyFromMacKeycode(key_code);
 
-    if (ctrl) {
-        if (char_val >= 'a' and char_val <= 'z') {
-            buf[0] = @as(u8, @intCast(char_val - 'a' + 1));
-            len = 1;
-        } else if (char_val >= 'A' and char_val <= 'Z') {
-            buf[0] = @as(u8, @intCast(char_val - 'A' + 1));
-            len = 1;
-        } else if (char_val == '[') {
-            buf[0] = 0x1b;
-            len = 1;
-        } else if (char_val == '\\') {
-            buf[0] = 0x1c;
-            len = 1;
-        } else if (char_val == ']') {
-            buf[0] = 0x1d;
-            len = 1;
-        } else if (char_val < 32) {
-            // macOS already translated the control combo (e.g. Ctrl+C → 0x03)
-            buf[0] = @as(u8, @intCast(char_val));
-            len = 1;
-        }
-    } else {
-        switch (char_val) {
-            0xF700 => {
-                @memcpy(buf[0..3], "\x1b[A");
-                len = 3;
-            },
-            0xF701 => {
-                @memcpy(buf[0..3], "\x1b[B");
-                len = 3;
-            },
-            0xF702 => {
-                @memcpy(buf[0..3], "\x1b[D");
-                len = 3;
-            },
-            0xF703 => {
-                @memcpy(buf[0..3], "\x1b[C");
-                len = 3;
-            },
-            0xF728 => {
-                @memcpy(buf[0..4], "\x1b[3~");
-                len = 4;
-            },
-            0xF729 => {
-                @memcpy(buf[0..3], "\x1b[H");
-                len = 3;
-            },
-            0xF72B => {
-                @memcpy(buf[0..3], "\x1b[F");
-                len = 3;
-            },
-            0xF72C => {
-                @memcpy(buf[0..4], "\x1b[5~");
-                len = 4;
-            },
-            0xF72D => {
-                @memcpy(buf[0..4], "\x1b[6~");
-                len = 4;
-            },
-            '\r', '\n' => {
-                buf[0] = '\r';
-                len = 1;
-            },
-            0x7f, 0x08 => {
-                buf[0] = 0x7f;
-                len = 1;
-            },
-            '\t' => {
-                buf[0] = '\t';
-                len = 1;
-            },
-            0x19 => {
-                @memcpy(buf[0..3], "\x1b[Z");
-                len = 3;
-            },
-            else => {
-                if (key_code == 53) {
-                    buf[0] = 0x1b;
-                    len = 1;
-                } else if (char_val < 128) {
-                    buf[0] = @intCast(char_val);
-                    len = 1;
+    // Get UTF-8 text from the event, filtering Apple private-use codepoints
+    var utf8_buf: [32]u8 = undefined;
+    var utf8_len: usize = 0;
+    if (chars != null) {
+        const raw_utf8 = objc.msgSend(?[*:0]const u8, chars, objc.sel("UTF8String"), .{});
+        if (raw_utf8) |s| {
+            // Copy UTF-8, but skip Apple private-use area (0xF700-0xF8FF encoded in UTF-8)
+            var i: usize = 0;
+            while (s[i] != 0 and utf8_len < utf8_buf.len) {
+                const byte = s[i];
+                if (byte < 0x80) {
+                    utf8_buf[utf8_len] = byte;
+                    utf8_len += 1;
+                    i += 1;
                 } else {
-                    const utf8 = objc.msgSend(?[*:0]const u8, chars, objc.sel("UTF8String"), .{});
-                    if (utf8) |s| {
-                        var i: usize = 0;
-                        while (s[i] != 0 and i < buf.len) : (i += 1) {
-                            buf[i] = s[i];
-                        }
-                        len = i;
+                    // Decode UTF-8 to check for private-use codepoints
+                    const seq_len = std.unicode.utf8ByteSequenceLength(byte) catch {
+                        i += 1;
+                        continue;
+                    };
+                    if (i + seq_len > std.mem.len(s)) break;
+                    var seq: [4]u8 = undefined;
+                    for (0..seq_len) |j| seq[j] = s[i + j];
+                    const cp = std.unicode.utf8Decode(seq[0..seq_len]) catch {
+                        i += seq_len;
+                        continue;
+                    };
+                    if (cp >= 0xF700 and cp <= 0xF8FF) {
+                        // Skip Apple private-use codepoint
+                        i += seq_len;
+                        continue;
                     }
+                    // Copy the valid UTF-8 sequence
+                    if (utf8_len + seq_len <= utf8_buf.len) {
+                        for (0..seq_len) |j| utf8_buf[utf8_len + j] = s[i + j];
+                        utf8_len += seq_len;
+                    }
+                    i += seq_len;
                 }
-            },
+            }
         }
     }
 
-    if (len > 0) {
-        _ = ctx.pty.write(buf[0..len]) catch {};
+    // Get unshifted codepoint from charactersIgnoringModifiers
+    var unshifted_codepoint: u21 = 0;
+    const unmod_chars = objc.msgSend(objc.id, event, objc.sel("charactersIgnoringModifiers"), .{});
+    if (unmod_chars != null and objc.msgSend(u64, unmod_chars, objc.sel("length"), .{}) > 0) {
+        const uc = objc.msgSend(u16, unmod_chars, objc.sel("characterAtIndex:"), .{@as(u64, 0)});
+        // Only use if not in Apple private-use area
+        if (uc < 0xF700 or uc > 0xF8FF) {
+            unshifted_codepoint = @intCast(uc);
+        }
+    }
+
+    // Build mods
+    const mods = input.modsFromNSEventFlags(flags);
+
+    // Build consumed_mods: shift is consumed if it produced different text
+    var consumed_mods: input.KeyMods = .{};
+    if (mods.shift and utf8_len > 0) {
+        consumed_mods.shift = true;
+    }
+
+    // Build KeyEvent
+    const key_event: input.KeyEvent = .{
+        .key = key,
+        .mods = mods,
+        .consumed_mods = consumed_mods,
+        .utf8 = utf8_buf[0..utf8_len],
+        .unshifted_codepoint = unshifted_codepoint,
+        .action = .press,
+    };
+
+    // Get encoding options from terminal state
+    ctx.mutex.lock();
+    const opts = input.KeyEncodeOptions.fromTerminal(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    // Encode the key
+    var enc_buf: [128]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&enc_buf);
+    input.encodeKey(&writer, key_event, opts) catch return;
+    const encoded = writer.buffered();
+
+    if (encoded.len > 0) {
+        _ = ctx.pty.write(encoded) catch {};
+    }
+}
+
+fn handlePaste(ctx: *AppContext) void {
+    const NSPasteboard = @as(objc.id, @ptrCast(objc.getClass("NSPasteboard")));
+    const pb = objc.msgSend(objc.id, NSPasteboard, objc.sel("generalPasteboard"), .{});
+    const pb_type = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSString"))), objc.sel("stringWithUTF8String:"), .{
+        @as([*:0]const u8, "public.utf8-plain-text"),
+    });
+    const str = objc.msgSend(objc.id, pb, objc.sel("stringForType:"), .{pb_type});
+    if (str == null) return;
+
+    const raw_utf8 = objc.msgSend(?[*:0]const u8, str, objc.sel("UTF8String"), .{}) orelse return;
+
+    // Find length
+    var data_len: usize = 0;
+    while (raw_utf8[data_len] != 0) : (data_len += 1) {}
+    if (data_len == 0) return;
+
+    const data: []const u8 = raw_utf8[0..data_len];
+
+    // Get paste options from terminal state
+    ctx.mutex.lock();
+    const opts = input.PasteOptions.fromTerminal(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    // Try encoding as const first
+    const result = input.encodePaste(data, opts) catch |err| switch (err) {
+        error.MutableRequired => {
+            // Need mutable copy to replace \n with \r
+            const alloc = std.heap.page_allocator;
+            const mutable_data = alloc.dupe(u8, data) catch return;
+            defer alloc.free(mutable_data);
+            const mutable_result = input.encodePaste(mutable_data, opts);
+            if (mutable_result[0].len > 0) _ = ctx.pty.write(mutable_result[0]) catch {};
+            if (mutable_result[1].len > 0) _ = ctx.pty.write(mutable_result[1]) catch {};
+            if (mutable_result[2].len > 0) _ = ctx.pty.write(mutable_result[2]) catch {};
+            return;
+        },
+    };
+
+    if (result[0].len > 0) _ = ctx.pty.write(result[0]) catch {};
+    if (result[1].len > 0) _ = ctx.pty.write(result[1]) catch {};
+    if (result[2].len > 0) _ = ctx.pty.write(result[2]) catch {};
+}
+
+fn handleCopy(ctx: *AppContext) void {
+    ctx.mutex.lock();
+    const sel_text = if (ctx.term.selection) |sel| blk: {
+        if (!sel.active) break :blk null;
+        break :blk sel.extractText(&ctx.term.render_state, std.heap.page_allocator) catch null;
+    } else null;
+    ctx.mutex.unlock();
+
+    if (sel_text) |text| {
+        defer std.heap.page_allocator.free(text);
+        copyToClipboard(text);
+        // Clear selection after copy
+        ctx.mutex.lock();
+        ctx.term.selection = null;
+        ctx.mutex.unlock();
+        ctx.needs_render.store(true, .release);
     }
 }
 
@@ -232,8 +254,21 @@ fn pixelToGrid(self_view: objc.id, event: objc.id, ctx: *AppContext) terminal.Se
 fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
     const point = pixelToGrid(self_view, event, ctx);
+    const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+    const mods = input.modsFromNSEventFlags(flags);
 
-    // Detect double/triple click
+    // Check if mouse reporting is active
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode != .none) {
+        // Report mouse press to terminal
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, 0, point.col, point.row, false, false, mods);
+        return;
+    }
+
+    // Selection handling (unchanged)
     const now = std.time.nanoTimestamp();
     if (now - last_click_time < multi_click_threshold_ns and
         point.col == last_click_col and point.row == last_click_row)
@@ -246,8 +281,6 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) v
     last_click_col = point.col;
     last_click_row = point.row;
 
-    // Check for Alt key (block selection)
-    const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
     const alt = (flags & (1 << 19)) != 0;
 
     ctx.mutex.lock();
@@ -257,7 +290,6 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) v
 
     switch (click_count) {
         2 => {
-            // Word selection
             const bounds = ctx.term.wordBounds(point.col, point.row);
             ctx.term.selection = terminal.Selection{
                 .anchor = .{ .col = bounds.start, .row = point.row },
@@ -268,7 +300,6 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) v
             };
         },
         3 => {
-            // Line selection
             ctx.term.selection = terminal.Selection{
                 .anchor = .{ .col = 0, .row = point.row },
                 .endpoint = .{ .col = term_cols -| 1, .row = point.row },
@@ -278,7 +309,6 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) v
             };
         },
         else => {
-            // Single click — start new selection
             ctx.term.selection = terminal.Selection{
                 .anchor = point,
                 .endpoint = point,
@@ -295,7 +325,21 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) v
 fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
     const point = pixelToGrid(self_view, event, ctx);
+    const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+    const mods = input.modsFromNSEventFlags(flags);
 
+    // Check if mouse reporting is active
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode == .button or mode == .any) {
+        // Report mouse drag (button 0 + motion flag)
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, 0, point.col, point.row, false, true, mods);
+        return;
+    }
+
+    // Selection handling (unchanged)
     ctx.mutex.lock();
     defer ctx.mutex.unlock();
 
@@ -304,7 +348,6 @@ fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c
     if (ctx.term.selection) |*sel| {
         switch (sel.mode) {
             .word => {
-                // Expand selection to word boundaries in the drag direction
                 const bounds = ctx.term.wordBounds(point.col, point.row);
                 const anchor_bounds = ctx.term.wordBounds(sel.anchor.col, sel.anchor.row);
                 if (point.row < sel.anchor.row or
@@ -318,7 +361,6 @@ fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c
                 }
             },
             .line => {
-                // Expand selection to full lines
                 if (point.row < sel.anchor.row) {
                     sel.endpoint = .{ .col = 0, .row = point.row };
                     sel.anchor = .{ .col = term_cols -| 1, .row = last_click_row };
@@ -336,18 +378,88 @@ fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c
     }
 }
 
-fn viewMouseUp(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
+fn viewMouseUp(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
+    // Check if mouse reporting is active
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode != .none and mode != .x10) {
+        const point = pixelToGrid(self_view, event, ctx);
+        const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+        const mods = input.modsFromNSEventFlags(flags);
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, 0, point.col, point.row, true, false, mods);
+        return;
+    }
+
+    // Selection handling (unchanged)
     ctx.mutex.lock();
     defer ctx.mutex.unlock();
 
-    // If selection is a single cell with no movement, clear it (it was just a click)
     if (ctx.term.selection) |sel| {
         if (sel.anchor.col == sel.endpoint.col and sel.anchor.row == sel.endpoint.row and sel.mode == .normal) {
             ctx.term.selection = null;
             ctx.needs_render.store(true, .release);
         }
+    }
+}
+
+fn viewRightMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode != .none) {
+        const point = pixelToGrid(self_view, event, ctx);
+        const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+        const mods = input.modsFromNSEventFlags(flags);
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, 2, point.col, point.row, false, false, mods);
+    }
+}
+
+fn viewRightMouseUp(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode != .none and mode != .x10) {
+        const point = pixelToGrid(self_view, event, ctx);
+        const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+        const mods = input.modsFromNSEventFlags(flags);
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, 2, point.col, point.row, true, false, mods);
+    }
+}
+
+fn viewScrollWheel(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    const mode = input.mouseMode(&ctx.term.inner);
+    ctx.mutex.unlock();
+
+    if (mode == .none) return;
+
+    const delta_y = objc.msgSend(objc.CGFloat, event, objc.sel("scrollingDeltaY"), .{});
+
+    // Determine scroll direction
+    if (delta_y == 0.0) return;
+    const base_button: u8 = if (delta_y > 0.0) 64 else 65; // 64=scroll up, 65=scroll down
+
+    const point = pixelToGrid(self_view, event, ctx);
+    const flags = objc.msgSend(u64, event, objc.sel("modifierFlags"), .{});
+    const mods = input.modsFromNSEventFlags(flags);
+
+    // Send multiple scroll events for larger deltas
+    const abs_delta = @abs(delta_y);
+    const count: usize = @max(1, @as(usize, @intFromFloat(@min(abs_delta, 5.0))));
+    for (0..count) |_| {
+        input.writeMouseEvent(ctx.pty.master_fd, &ctx.term.inner, base_button, point.col, point.row, false, false, mods);
     }
 }
 
@@ -454,6 +566,30 @@ fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) 
     objc.msgSendVoid(sharedApp(), objc.sel("activateIgnoringOtherApps:"), .{objc.YES});
 }
 
+fn delegateWindowDidBecomeKey(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    const focus_mode = ctx.term.inner.modes.get(.focus_event);
+    ctx.mutex.unlock();
+
+    if (focus_mode) {
+        _ = ctx.pty.write("\x1b[I") catch {};
+    }
+}
+
+fn delegateWindowDidResignKey(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
+    const ctx = global_app_context orelse return;
+
+    ctx.mutex.lock();
+    const focus_mode = ctx.term.inner.modes.get(.focus_event);
+    ctx.mutex.unlock();
+
+    if (focus_mode) {
+        _ = ctx.pty.write("\x1b[O") catch {};
+    }
+}
+
 fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
@@ -478,6 +614,9 @@ pub fn createViewClass() objc.Class {
     objc.addMethod(cls, objc.sel("mouseDown:"), @ptrCast(&viewMouseDown), "v@:@");
     objc.addMethod(cls, objc.sel("mouseDragged:"), @ptrCast(&viewMouseDragged), "v@:@");
     objc.addMethod(cls, objc.sel("mouseUp:"), @ptrCast(&viewMouseUp), "v@:@");
+    objc.addMethod(cls, objc.sel("rightMouseDown:"), @ptrCast(&viewRightMouseDown), "v@:@");
+    objc.addMethod(cls, objc.sel("rightMouseUp:"), @ptrCast(&viewRightMouseUp), "v@:@");
+    objc.addMethod(cls, objc.sel("scrollWheel:"), @ptrCast(&viewScrollWheel), "v@:@");
     objc.addMethod(cls, objc.sel("acceptsFirstResponder"), @ptrCast(&viewAcceptsFirstResponder), "B@:");
     objc.addMethod(cls, objc.sel("wantsLayer"), @ptrCast(&viewWantsLayer), "B@:");
     objc.addMethod(cls, objc.sel("isOpaque"), @ptrCast(&viewIsOpaque), "B@:");
@@ -495,6 +634,8 @@ pub fn createDelegateClass() objc.Class {
     objc.addMethod(cls, objc.sel("applicationShouldTerminateAfterLastWindowClosed:"), @ptrCast(&delegateShouldTerminate), "B@:@");
     objc.addMethod(cls, objc.sel("applicationDidFinishLaunching:"), @ptrCast(&delegateDidFinishLaunching), "v@:@");
     objc.addMethod(cls, objc.sel("timerFired:"), @ptrCast(&delegateTimerFired), "v@:@");
+    objc.addMethod(cls, objc.sel("windowDidBecomeKey:"), @ptrCast(&delegateWindowDidBecomeKey), "v@:@");
+    objc.addMethod(cls, objc.sel("windowDidResignKey:"), @ptrCast(&delegateWindowDidResignKey), "v@:@");
 
     objc.registerClassPair(cls);
     return cls;
@@ -559,6 +700,9 @@ pub fn setup(ctx: *AppContext) !void {
 
     objc.msgSendVoid(win, objc.sel("setContentView:"), .{view});
     objc.msgSendVoid(win, objc.sel("makeFirstResponder:"), .{view});
+
+    // Set delegate as window delegate for focus events
+    objc.msgSendVoid(win, objc.sel("setDelegate:"), .{delegate_obj});
 
     objc.msgSendVoid(win, objc.sel("makeKeyAndOrderFront:"), .{@as(objc.id, null)});
     objc.msgSendVoid(win, objc.sel("center"), .{});
