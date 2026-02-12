@@ -17,7 +17,7 @@ pub const NO: BOOL = false;
 pub const NSUInteger = u64;
 pub const NSInteger = i64;
 pub const CGFloat = f64;
-pub const IMP = *const fn () callconv(.C) void;
+pub const IMP = *const fn () callconv(.c) void;
 
 pub const CGRect = extern struct {
     origin: CGPoint,

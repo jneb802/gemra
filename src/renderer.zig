@@ -185,14 +185,14 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn render(self: *Renderer, grid: *terminal.Grid, layer: objc.id) void {
+    pub fn render(self: *Renderer, term: *terminal.Terminal, layer: objc.id) void {
         const drawable = objc.msgSend(objc.id, layer, objc.sel("nextDrawable"), .{});
         if (drawable == null) return;
 
         const texture = objc.msgSend(objc.id, drawable, objc.sel("texture"), .{});
 
         // Build vertex data
-        self.buildVertices(grid);
+        self.buildVertices(term);
 
         // Set up render pass (shared between empty and non-empty frames)
         const cmd_buf = objc.msgSend(objc.id, self.command_queue, objc.sel("commandBuffer"), .{});
@@ -241,16 +241,22 @@ pub const Renderer = struct {
         }
     }
 
-    fn buildVertices(self: *Renderer, grid: *terminal.Grid) void {
+    fn buildVertices(self: *Renderer, term: *terminal.Terminal) void {
+        const rs = &term.render_state;
         const cell_w = self.atlas.cell_width;
         const cell_h = self.atlas.cell_height;
         const pad_x = padding_x * self.atlas.scale;
         const pad_y = padding_y * self.atlas.scale;
-        const cols = grid.cols;
-        const rows = grid.rows;
+        const cols: usize = rs.cols;
+        const rows: usize = rs.rows;
+
+        if (rows == 0 or cols == 0) {
+            self.vertex_count = 0;
+            return;
+        }
 
         // Each cell needs 2 quads (bg + fg) = 12 vertices, plus cursor = 6
-        const max_vertices = @as(usize, cols) * @as(usize, rows) * 12 + 6;
+        const max_vertices = cols * rows * 12 + 6;
         const buf_size = max_vertices * @sizeOf(Vertex);
 
         if (self.vertex_buffer == null) {
@@ -263,40 +269,77 @@ pub const Renderer = struct {
         const buf_ptr = objc.msgSend([*]Vertex, self.vertex_buffer, objc.sel("contents"), .{});
         var idx: u32 = 0;
 
-        // Background pass
-        for (0..rows) |row| {
-            for (0..cols) |col| {
-                const cell = grid.cells[row * @as(usize, cols) + col];
-                if (cell.bg.eql(terminal.default_bg)) continue;
+        const default_style = terminal.Style{};
+        const row_slice = rs.row_data.slice();
+        const cells_list = row_slice.items(.cells);
 
-                const x0 = @as(f32, @floatFromInt(col)) * cell_w + pad_x;
-                const y0 = @as(f32, @floatFromInt(row)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, x0, y0, x0 + cell_w, y0 + cell_h, zero2, zero2, zero4, cell.bg.toFloat4(), 1.0);
+        // Background pass
+        for (cells_list, 0..) |cells, y| {
+            const cell_slice = cells.slice();
+            const raw_cells = cell_slice.items(.raw);
+            const styles = cell_slice.items(.style);
+
+            for (raw_cells, 0..) |raw_cell, x| {
+                if (raw_cell.wide == .spacer_tail) continue;
+
+                const style = if (raw_cell.hasStyling()) styles[x] else default_style;
+                const bg_rgb = style.bg(&raw_cell, &rs.colors.palette) orelse continue;
+
+                // Skip if same as default background
+                if (bg_rgb.r == terminal.default_bg.r and bg_rgb.g == terminal.default_bg.g and bg_rgb.b == terminal.default_bg.b) continue;
+
+                const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                const w = if (raw_cell.wide == .wide) cell_w * 2 else cell_w;
+                writeQuad(buf_ptr, &idx, xf, yf, xf + w, yf + cell_h, zero2, zero2, zero4, rgbToFloat4(bg_rgb), 1.0);
             }
         }
 
         // Foreground (glyph) pass
-        for (0..rows) |row| {
-            for (0..cols) |col| {
-                const cell = grid.cells[row * @as(usize, cols) + col];
-                if (cell.char <= ' ' or cell.char == 127) continue;
+        for (cells_list, 0..) |cells, y| {
+            const cell_slice = cells.slice();
+            const raw_cells = cell_slice.items(.raw);
+            const styles = cell_slice.items(.style);
 
-                const glyph = self.atlas.getGlyph(cell.char);
-                const x0 = @as(f32, @floatFromInt(col)) * cell_w + pad_x;
-                const y0 = @as(f32, @floatFromInt(row)) * cell_h + pad_y;
-                writeQuad(buf_ptr, &idx, x0, y0, x0 + glyph.width, y0 + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, cell.fg.toFloat4(), zero4, 0.0);
+            for (raw_cells, 0..) |raw_cell, x| {
+                if (raw_cell.wide == .spacer_tail) continue;
+
+                const cp = raw_cell.codepoint();
+                if (cp <= ' ' or cp == 127) continue;
+
+                const style = if (raw_cell.hasStyling()) styles[x] else default_style;
+                const fg_rgb = style.fg(.{
+                    .default = rs.colors.foreground,
+                    .palette = &rs.colors.palette,
+                });
+
+                const glyph = self.atlas.getGlyph(cp);
+                const xf = @as(f32, @floatFromInt(x)) * cell_w + pad_x;
+                const yf = @as(f32, @floatFromInt(y)) * cell_h + pad_y;
+                writeQuad(buf_ptr, &idx, xf, yf, xf + glyph.width, yf + glyph.height, .{ glyph.u0, glyph.v0 }, .{ glyph.u1, glyph.v1 }, rgbToFloat4(fg_rgb), zero4, 0.0);
             }
         }
 
         // Cursor
-        if (grid.cursor_visible) {
-            const cx = @as(f32, @floatFromInt(grid.cursor_col)) * cell_w + pad_x;
-            const cy = @as(f32, @floatFromInt(grid.cursor_row)) * cell_h + pad_y;
-            const cursor_color = [4]f32{ 0.8, 0.8, 0.8, 0.5 };
-            writeQuad(buf_ptr, &idx, cx, cy, cx + cell_w, cy + cell_h, zero2, zero2, zero4, cursor_color, 1.0);
+        if (rs.cursor.visible) {
+            if (rs.cursor.viewport) |vp| {
+                const cx = @as(f32, @floatFromInt(vp.x)) * cell_w + pad_x;
+                const cy = @as(f32, @floatFromInt(vp.y)) * cell_h + pad_y;
+                const cursor_color = [4]f32{ 0.8, 0.8, 0.8, 0.5 };
+                writeQuad(buf_ptr, &idx, cx, cy, cx + cell_w, cy + cell_h, zero2, zero2, zero4, cursor_color, 1.0);
+            }
         }
 
         self.vertex_count = idx;
+    }
+
+    fn rgbToFloat4(c: terminal.Color) [4]f32 {
+        return .{
+            @as(f32, @floatFromInt(c.r)) / 255.0,
+            @as(f32, @floatFromInt(c.g)) / 255.0,
+            @as(f32, @floatFromInt(c.b)) / 255.0,
+            1.0,
+        };
     }
 
     pub fn updateViewport(self: *Renderer, width: f32, height: f32) void {

@@ -4,14 +4,21 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
+    // Add ghostty-vt dependency
+    if (b.lazyDependency("ghostty", .{})) |dep| {
+        exe_mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
+    }
+
     const exe = b.addExecutable(.{
         .name = "gemra",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
+        .root_module = exe_mod,
     });
 
     exe.linkFramework("AppKit");
@@ -33,13 +40,19 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run gemra");
     run_step.dependOn(&run_cmd.step);
 
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
+    if (b.lazyDependency("ghostty", .{})) |dep| {
+        test_mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
+    }
+
     const exe_unit_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
+        .root_module = test_mod,
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

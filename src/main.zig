@@ -13,19 +13,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Initialize terminal grid
-    var grid = try terminal.Grid.init(allocator, COLS, ROWS);
-    defer grid.deinit();
+    // Initialize terminal
+    var term = try terminal.Terminal.init(allocator, COLS, ROWS);
+    defer term.deinit();
 
     // Spawn PTY
     var pty = try Pty.spawn(COLS, ROWS);
     defer pty.close();
 
-    // Wire PTY fd for DSR write-back
-    grid.pty_master_fd = pty.master_fd;
-
     // Create Metal device
-    const MTLCreateSystemDefaultDevice = @extern(*const fn () callconv(.C) objc.id, .{
+    const MTLCreateSystemDefaultDevice = @extern(*const fn () callconv(.c) objc.id, .{
         .name = "MTLCreateSystemDefaultDevice",
     });
     const device = MTLCreateSystemDefaultDevice();
@@ -54,7 +51,7 @@ pub fn main() !void {
 
     var app_ctx = window.AppContext{
         .pty = &pty,
-        .grid = &grid,
+        .term = &term,
         .renderer = &renderer,
         .mutex = &mutex,
         .layer = null,
@@ -65,14 +62,14 @@ pub fn main() !void {
     try window.setup(&app_ctx);
 
     // Start I/O thread for PTY reading
-    const io_thread = try std.Thread.spawn(.{}, ioLoop, .{ &pty, &grid, &mutex, &needs_render });
+    const io_thread = try std.Thread.spawn(.{}, ioLoop, .{ &pty, &term, &mutex, &needs_render });
     defer io_thread.join();
 
     // Run AppKit main loop (blocks until app exits)
     window.runApp();
 }
 
-fn ioLoop(pty: *Pty, grid: *terminal.Grid, mutex: *std.Thread.Mutex, needs_render: *std.atomic.Value(bool)) void {
+fn ioLoop(pty: *Pty, term: *terminal.Terminal, mutex: *std.Thread.Mutex, needs_render: *std.atomic.Value(bool)) void {
     var buf: [8192]u8 = undefined;
 
     while (true) {
@@ -80,7 +77,7 @@ fn ioLoop(pty: *Pty, grid: *terminal.Grid, mutex: *std.Thread.Mutex, needs_rende
             switch (err) {
                 error.NotOpenForReading, error.InputOutput => return,
                 else => {
-                    std.time.sleep(10 * std.time.ns_per_ms);
+                    std.Thread.sleep(10 * std.time.ns_per_ms);
                     continue;
                 },
             }
@@ -91,15 +88,15 @@ fn ioLoop(pty: *Pty, grid: *terminal.Grid, mutex: *std.Thread.Mutex, needs_rende
                 objc.msgSendVoid(window.sharedApp(), objc.sel("terminate:"), .{@as(objc.id, null)});
                 return;
             }
-            std.time.sleep(1 * std.time.ns_per_ms);
+            std.Thread.sleep(1 * std.time.ns_per_ms);
             continue;
         }
 
         mutex.lock();
         defer mutex.unlock();
-        grid.feed(buf[0..n]);
+        term.feed(buf[0..n]);
 
-        if (grid.dirty) {
+        if (term.isDirty()) {
             needs_render.store(true, .release);
         }
     }

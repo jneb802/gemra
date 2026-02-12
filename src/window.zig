@@ -1,11 +1,12 @@
 const std = @import("std");
 const objc = @import("objc.zig");
+const terminal = @import("terminal.zig");
 const Renderer = @import("renderer.zig").Renderer;
 
 pub const AppContext = struct {
     pty: *@import("pty.zig").Pty,
-    grid: *@import("terminal.zig").Grid,
-    renderer: *@import("renderer.zig").Renderer,
+    term: *terminal.Terminal,
+    renderer: *Renderer,
     mutex: *std.Thread.Mutex,
     layer: objc.id,
     needs_render: *std.atomic.Value(bool),
@@ -18,7 +19,7 @@ pub fn sharedApp() objc.id {
 }
 
 // Objective-C class method implementations for GemraView
-fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
+fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
     const chars = objc.msgSend(objc.id, event, objc.sel("characters"), .{});
@@ -160,25 +161,25 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
     }
 }
 
-fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {}
+fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {}
 
-fn viewAcceptsFirstResponder(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewAcceptsFirstResponder(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewWantsLayer(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewWantsLayer(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewIsOpaque(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewIsOpaque(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewCanBecomeKeyView(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewCanBecomeKeyView(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) callconv(.C) void {
+fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) callconv(.c) void {
     // Call super's setFrameSize:
     const super = objc.Super{
         .receiver = self_view,
@@ -216,11 +217,11 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
     const new_rows: u16 = @intFromFloat(@floor(usable_h / cell_h));
     if (new_cols < 1 or new_rows < 1) return;
 
-    if (new_cols != ctx.grid.cols or new_rows != ctx.grid.rows) {
+    if (new_cols != ctx.term.inner.cols or new_rows != ctx.term.inner.rows) {
         ctx.mutex.lock();
         defer ctx.mutex.unlock();
 
-        ctx.grid.resize(new_cols, new_rows);
+        ctx.term.resize(new_cols, new_rows) catch {};
         ctx.pty.setSize(new_cols, new_rows);
 
         // Invalidate vertex buffer (size changed)
@@ -233,25 +234,26 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
     ctx.needs_render.store(true, .release);
 }
 
-fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) objc.BOOL {
+fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
+fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     objc.msgSendVoid(sharedApp(), objc.sel("activateIgnoringOtherApps:"), .{objc.YES});
 }
 
-fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
+fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
-    // Always render if grid is dirty OR on first frame
     if (ctx.needs_render.load(.acquire)) {
         ctx.mutex.lock();
         defer ctx.mutex.unlock();
 
-        ctx.renderer.render(ctx.grid, ctx.layer);
+        // Update render state from terminal (handles dirty tracking)
+        ctx.term.updateRenderState() catch {};
+
+        ctx.renderer.render(ctx.term, ctx.layer);
         ctx.needs_render.store(false, .release);
-        ctx.grid.dirty = false;
     }
 }
 
