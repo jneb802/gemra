@@ -13,13 +13,13 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Initialize terminal
-    var term = try terminal.Terminal.init(allocator, COLS, ROWS);
-    defer term.deinit();
-
     // Spawn PTY
     var pty = try Pty.spawn(COLS, ROWS);
     defer pty.close();
+
+    // Initialize terminal (needs PTY fd for query responses)
+    var term = try terminal.Terminal.init(allocator, COLS, ROWS, pty.master_fd);
+    defer term.deinit();
 
     // Create Metal device
     const MTLCreateSystemDefaultDevice = @extern(*const fn () callconv(.c) objc.id, .{
