@@ -76,6 +76,16 @@ pub const Atlas = struct {
         defer std.heap.page_allocator.free(atlas_pixels);
         @memset(atlas_pixels, 0);
 
+        // Allocate glyph bitmap buffer once, reuse for each glyph
+        const bmp_w = glyph_w;
+        const bmp_h = glyph_h;
+        const row_bytes = bmp_w * 4;
+        const bmp_buf = try std.heap.page_allocator.alloc(u8, @as(usize, row_bytes) * @as(usize, bmp_h));
+        defer std.heap.page_allocator.free(bmp_buf);
+
+        const color_space = ct.CGColorSpaceCreateDeviceRGB();
+        defer ct.CGColorSpaceRelease(color_space);
+
         // Rasterize each ASCII glyph
         for (32..127) |i| {
             const char_code: u8 = @intCast(i);
@@ -98,16 +108,7 @@ pub const Atlas = struct {
             const atlas_x = @as(u32, @intCast(idx % glyphs_per_row)) * glyph_w;
             const atlas_y = @as(u32, @intCast(idx / glyphs_per_row)) * glyph_h;
 
-            // Create a small bitmap context for this glyph
-            const bmp_w = glyph_w;
-            const bmp_h = glyph_h;
-            const row_bytes = bmp_w * 4;
-            const bmp_buf = try std.heap.page_allocator.alloc(u8, @as(usize, row_bytes) * @as(usize, bmp_h));
-            defer std.heap.page_allocator.free(bmp_buf);
             @memset(bmp_buf, 0);
-
-            const color_space = ct.CGColorSpaceCreateDeviceRGB();
-            defer ct.CGColorSpaceRelease(color_space);
 
             const ctx = ct.CGBitmapContextCreate(
                 bmp_buf.ptr,

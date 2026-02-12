@@ -74,13 +74,6 @@ pub fn msgSend(comptime ReturnType: type, target: id, selector: SEL, args: anyty
     return @call(.auto, func, .{ target, selector } ++ args);
 }
 
-// msgSend variant for methods returning structs (uses objc_msgSend_stret on some archs).
-// On arm64, structs are returned in registers via regular objc_msgSend, so this is the same.
-pub fn msgSendStret(comptime ReturnType: type, target: id, selector: SEL, args: anytype) ReturnType {
-    // On arm64 macOS, objc_msgSend handles struct returns directly
-    return msgSend(ReturnType, target, selector, args);
-}
-
 // Convenience for sending messages that return void.
 pub fn msgSendVoid(target: id, selector: SEL, args: anytype) void {
     _ = msgSend(void, target, selector, args);

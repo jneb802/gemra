@@ -8,6 +8,15 @@ pub const Color = struct {
     pub fn eql(a: Color, b: Color) bool {
         return a.r == b.r and a.g == b.g and a.b == b.b;
     }
+
+    pub fn toFloat4(self: Color) [4]f32 {
+        return .{
+            @as(f32, @floatFromInt(self.r)) / 255.0,
+            @as(f32, @floatFromInt(self.g)) / 255.0,
+            @as(f32, @floatFromInt(self.b)) / 255.0,
+            1.0,
+        };
+    }
 };
 
 // Standard 16-color ANSI palette
@@ -270,6 +279,33 @@ pub const Grid = struct {
         self.dirty = true;
     }
 
+    const ExtendedColorResult = struct {
+        color: ?Color,
+        params_consumed: u8,
+    };
+
+    fn parseExtendedColor(params: []const u16) ExtendedColorResult {
+        if (params.len >= 2 and params[0] == 5) {
+            // 5;n — 256-color (only first 16 supported for MVP)
+            const idx = params[1];
+            return .{
+                .color = if (idx < 16) ansi_colors[idx] else null,
+                .params_consumed = 2,
+            };
+        } else if (params.len >= 4 and params[0] == 2) {
+            // 2;r;g;b — truecolor
+            return .{
+                .color = .{
+                    .r = @truncate(params[1]),
+                    .g = @truncate(params[2]),
+                    .b = @truncate(params[3]),
+                },
+                .params_consumed = 4,
+            };
+        }
+        return .{ .color = null, .params_consumed = 0 };
+    }
+
     fn handleSGR(self: *Grid) void {
         if (self.param_count == 0) {
             // ESC[m with no params = reset
@@ -298,48 +334,18 @@ pub const Grid = struct {
                 27 => self.current_attrs.inverse = false,
                 30...37 => self.current_fg = ansi_colors[p - 30],
                 38 => {
-                    // Extended color: 38;5;n (256 color) or 38;2;r;g;b (truecolor)
-                    if (i + 1 < self.param_count and self.params[i + 1] == 5) {
-                        if (i + 2 < self.param_count) {
-                            const idx = self.params[i + 2];
-                            if (idx < 16) {
-                                self.current_fg = ansi_colors[idx];
-                            }
-                            // Skip 256-color values beyond 16 for MVP
-                            i += 2;
-                        }
-                    } else if (i + 1 < self.param_count and self.params[i + 1] == 2) {
-                        if (i + 4 < self.param_count) {
-                            self.current_fg = .{
-                                .r = @truncate(self.params[i + 2]),
-                                .g = @truncate(self.params[i + 3]),
-                                .b = @truncate(self.params[i + 4]),
-                            };
-                            i += 4;
-                        }
-                    }
+                    const remaining = self.params[i + 1 .. self.param_count];
+                    const result = parseExtendedColor(remaining);
+                    if (result.color) |c| self.current_fg = c;
+                    i += result.params_consumed;
                 },
                 39 => self.current_fg = default_fg,
                 40...47 => self.current_bg = ansi_colors[p - 40],
                 48 => {
-                    if (i + 1 < self.param_count and self.params[i + 1] == 5) {
-                        if (i + 2 < self.param_count) {
-                            const idx = self.params[i + 2];
-                            if (idx < 16) {
-                                self.current_bg = ansi_colors[idx];
-                            }
-                            i += 2;
-                        }
-                    } else if (i + 1 < self.param_count and self.params[i + 1] == 2) {
-                        if (i + 4 < self.param_count) {
-                            self.current_bg = .{
-                                .r = @truncate(self.params[i + 2]),
-                                .g = @truncate(self.params[i + 3]),
-                                .b = @truncate(self.params[i + 4]),
-                            };
-                            i += 4;
-                        }
-                    }
+                    const remaining = self.params[i + 1 .. self.param_count];
+                    const result = parseExtendedColor(remaining);
+                    if (result.color) |c| self.current_bg = c;
+                    i += result.params_consumed;
                 },
                 49 => self.current_bg = default_bg,
                 90...97 => self.current_fg = ansi_colors[p - 90 + 8],

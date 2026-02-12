@@ -84,8 +84,7 @@ fn ioLoop(pty: *Pty, grid: *terminal.Grid, mutex: *std.Thread.Mutex, needs_rende
 
         if (n == 0) {
             if (!pty.isAlive()) {
-                const app = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
-                objc.msgSendVoid(app, objc.sel("terminate:"), .{@as(objc.id, null)});
+                objc.msgSendVoid(window.sharedApp(), objc.sel("terminate:"), .{@as(objc.id, null)});
                 return;
             }
             std.time.sleep(1 * std.time.ns_per_ms);
@@ -93,8 +92,8 @@ fn ioLoop(pty: *Pty, grid: *terminal.Grid, mutex: *std.Thread.Mutex, needs_rende
         }
 
         mutex.lock();
+        defer mutex.unlock();
         grid.feed(buf[0..n]);
-        mutex.unlock();
 
         if (grid.dirty) {
             needs_render.store(true, .release);

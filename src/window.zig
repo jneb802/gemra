@@ -12,6 +12,10 @@ pub const AppContext = struct {
 
 var global_app_context: ?*AppContext = null;
 
+pub fn sharedApp() objc.id {
+    return objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
+}
+
 // Objective-C class method implementations for GemraView
 fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
     const ctx = global_app_context orelse return;
@@ -151,8 +155,7 @@ fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) obj
 }
 
 fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
-    const app = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
-    objc.msgSendVoid(app, objc.sel("activateIgnoringOtherApps:"), .{objc.YES});
+    objc.msgSendVoid(sharedApp(), objc.sel("activateIgnoringOtherApps:"), .{objc.YES});
 }
 
 fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
@@ -199,9 +202,7 @@ pub fn createDelegateClass() objc.Class {
 pub fn setup(ctx: *AppContext) !void {
     global_app_context = ctx;
 
-    const NSApplication = objc.getClass("NSApplication");
-    const app = objc.msgSend(objc.id, @as(objc.id, @ptrCast(NSApplication)), objc.sel("sharedApplication"), .{});
-
+    const app = sharedApp();
     objc.msgSendVoid(app, objc.sel("setActivationPolicy:"), .{@as(i64, 0)});
 
     const delegate_cls = createDelegateClass();
@@ -235,7 +236,7 @@ pub fn setup(ctx: *AppContext) !void {
 
     const device = ctx.renderer.device;
     objc.msgSendVoid(layer, objc.sel("setDevice:"), .{device});
-    objc.msgSendVoid(layer, objc.sel("setPixelFormat:"), .{@as(u64, 80)}); // BGRA8Unorm
+    objc.msgSendVoid(layer, objc.sel("setPixelFormat:"), .{@as(u64, 80)}); // MTLPixelFormatBGRA8Unorm
     objc.msgSendVoid(layer, objc.sel("setFramebufferOnly:"), .{objc.YES});
 
     // Account for Retina scaling
@@ -272,6 +273,5 @@ pub fn setup(ctx: *AppContext) !void {
 }
 
 pub fn runApp() void {
-    const app = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
-    objc.msgSendVoid(app, objc.sel("run"), .{});
+    objc.msgSendVoid(sharedApp(), objc.sel("run"), .{});
 }
