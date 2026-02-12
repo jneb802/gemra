@@ -1,4 +1,13 @@
 const std = @import("std");
+
+// Suppress noisy "invalid C0 character" warnings from ghostty-vt stream parser.
+// These fire for harmless control chars (e.g. ACK 0x6) in pasted text and are safely ignored.
+pub const std_options: std.Options = .{
+    .log_scope_levels = &.{
+        .{ .scope = .stream, .level = .err },
+    },
+};
+
 const objc = @import("objc.zig");
 const Pty = @import("pty.zig").Pty;
 const terminal = @import("terminal.zig");
