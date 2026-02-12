@@ -5,7 +5,7 @@ const Renderer = @import("renderer.zig").Renderer;
 
 pub const AppContext = struct {
     pty: *@import("pty.zig").Pty,
-    grid: *terminal.Grid,
+    term: *terminal.Terminal,
     renderer: *Renderer,
     mutex: *std.Thread.Mutex,
     layer: objc.id,
@@ -26,7 +26,7 @@ pub fn sharedApp() objc.id {
 }
 
 // Objective-C class method implementations for GemraView
-fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
+fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
     const chars = objc.msgSend(objc.id, event, objc.sel("characters"), .{});
@@ -61,12 +61,12 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
         return;
     }
 
-    // Cmd+C: copy selection to clipboard (or send interrupt if no selection)
+    // Cmd+C: copy selection to clipboard (or fall through if no selection)
     if (cmd and (char_val == 'c' or char_val == 'C')) {
         ctx.mutex.lock();
-        const sel_text = if (ctx.grid.selection) |sel| blk: {
+        const sel_text = if (ctx.term.selection) |sel| blk: {
             if (!sel.active) break :blk null;
-            break :blk sel.extractText(ctx.grid, std.heap.page_allocator) catch null;
+            break :blk sel.extractText(&ctx.term.render_state, std.heap.page_allocator) catch null;
         } else null;
         ctx.mutex.unlock();
 
@@ -75,8 +75,7 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
             copyToClipboard(text);
             // Clear selection after copy
             ctx.mutex.lock();
-            ctx.grid.selection = null;
-            ctx.grid.dirty = true;
+            ctx.term.selection = null;
             ctx.mutex.unlock();
             ctx.needs_render.store(true, .release);
         }
@@ -190,7 +189,7 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
     }
 }
 
-fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {}
+fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {}
 
 fn pixelToGrid(self_view: objc.id, event: objc.id, ctx: *AppContext) terminal.Selection.GridPoint {
     const location = objc.msgSend(objc.CGPoint, event, objc.sel("locationInWindow"), .{});
@@ -221,13 +220,16 @@ fn pixelToGrid(self_view: objc.id, event: objc.id, ctx: *AppContext) terminal.Se
     const col_f = (px - pad_x) / cell_w;
     const row_f = (py - pad_y) / cell_h;
 
-    const col: u16 = if (col_f < 0) 0 else @min(@as(u16, @intFromFloat(col_f)), ctx.grid.cols -| 1);
-    const row: u16 = if (row_f < 0) 0 else @min(@as(u16, @intFromFloat(row_f)), ctx.grid.rows -| 1);
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+    const term_rows: u16 = @intCast(ctx.term.inner.rows);
+
+    const col: u16 = if (col_f < 0) 0 else @min(@as(u16, @intFromFloat(col_f)), term_cols -| 1);
+    const row: u16 = if (row_f < 0) 0 else @min(@as(u16, @intFromFloat(row_f)), term_rows -| 1);
 
     return .{ .col = col, .row = row };
 }
 
-fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
+fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
     const point = pixelToGrid(self_view, event, ctx);
 
@@ -251,11 +253,13 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) v
     ctx.mutex.lock();
     defer ctx.mutex.unlock();
 
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+
     switch (click_count) {
         2 => {
             // Word selection
-            const bounds = ctx.grid.wordBounds(point.col, point.row);
-            ctx.grid.selection = terminal.Selection{
+            const bounds = ctx.term.wordBounds(point.col, point.row);
+            ctx.term.selection = terminal.Selection{
                 .anchor = .{ .col = bounds.start, .row = point.row },
                 .endpoint = .{ .col = bounds.end, .row = point.row },
                 .active = true,
@@ -265,9 +269,9 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) v
         },
         3 => {
             // Line selection
-            ctx.grid.selection = terminal.Selection{
+            ctx.term.selection = terminal.Selection{
                 .anchor = .{ .col = 0, .row = point.row },
-                .endpoint = .{ .col = ctx.grid.cols - 1, .row = point.row },
+                .endpoint = .{ .col = term_cols -| 1, .row = point.row },
                 .active = true,
                 .mode = .line,
                 .rectangle = false,
@@ -275,7 +279,7 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) v
         },
         else => {
             // Single click — start new selection
-            ctx.grid.selection = terminal.Selection{
+            ctx.term.selection = terminal.Selection{
                 .anchor = point,
                 .endpoint = point,
                 .active = true,
@@ -285,23 +289,24 @@ fn viewMouseDown(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) v
         },
     }
 
-    ctx.grid.dirty = true;
     ctx.needs_render.store(true, .release);
 }
 
-fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C) void {
+fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
     const point = pixelToGrid(self_view, event, ctx);
 
     ctx.mutex.lock();
     defer ctx.mutex.unlock();
 
-    if (ctx.grid.selection) |*sel| {
+    const term_cols: u16 = @intCast(ctx.term.inner.cols);
+
+    if (ctx.term.selection) |*sel| {
         switch (sel.mode) {
             .word => {
                 // Expand selection to word boundaries in the drag direction
-                const bounds = ctx.grid.wordBounds(point.col, point.row);
-                const anchor_bounds = ctx.grid.wordBounds(sel.anchor.col, sel.anchor.row);
+                const bounds = ctx.term.wordBounds(point.col, point.row);
+                const anchor_bounds = ctx.term.wordBounds(sel.anchor.col, sel.anchor.row);
                 if (point.row < sel.anchor.row or
                     (point.row == sel.anchor.row and point.col < sel.anchor.col))
                 {
@@ -316,10 +321,10 @@ fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C
                 // Expand selection to full lines
                 if (point.row < sel.anchor.row) {
                     sel.endpoint = .{ .col = 0, .row = point.row };
-                    sel.anchor = .{ .col = ctx.grid.cols - 1, .row = last_click_row };
+                    sel.anchor = .{ .col = term_cols -| 1, .row = last_click_row };
                 } else {
                     sel.anchor = .{ .col = 0, .row = last_click_row };
-                    sel.endpoint = .{ .col = ctx.grid.cols - 1, .row = point.row };
+                    sel.endpoint = .{ .col = term_cols -| 1, .row = point.row };
                 }
             },
             .normal => {
@@ -327,22 +332,20 @@ fn viewMouseDragged(self_view: objc.id, _: objc.SEL, event: objc.id) callconv(.C
             },
         }
 
-        ctx.grid.dirty = true;
         ctx.needs_render.store(true, .release);
     }
 }
 
-fn viewMouseUp(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
+fn viewMouseUp(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
     ctx.mutex.lock();
     defer ctx.mutex.unlock();
 
     // If selection is a single cell with no movement, clear it (it was just a click)
-    if (ctx.grid.selection) |sel| {
+    if (ctx.term.selection) |sel| {
         if (sel.anchor.col == sel.endpoint.col and sel.anchor.row == sel.endpoint.row and sel.mode == .normal) {
-            ctx.grid.selection = null;
-            ctx.grid.dirty = true;
+            ctx.term.selection = null;
             ctx.needs_render.store(true, .release);
         }
     }
@@ -372,23 +375,23 @@ fn copyToClipboard(text: []const u8) void {
     _ = objc.msgSend(objc.BOOL, pb, objc.sel("setString:forType:"), .{ ns_str, pb_type });
 }
 
-fn viewAcceptsFirstResponder(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewAcceptsFirstResponder(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewWantsLayer(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewWantsLayer(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewIsOpaque(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewIsOpaque(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewCanBecomeKeyView(_: objc.id, _: objc.SEL) callconv(.C) objc.BOOL {
+fn viewCanBecomeKeyView(_: objc.id, _: objc.SEL) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) callconv(.C) void {
+fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) callconv(.c) void {
     // Call super's setFrameSize:
     const super = objc.Super{
         .receiver = self_view,
@@ -426,11 +429,11 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
     const new_rows: u16 = @intFromFloat(@floor(usable_h / cell_h));
     if (new_cols < 1 or new_rows < 1) return;
 
-    if (new_cols != ctx.grid.cols or new_rows != ctx.grid.rows) {
+    if (new_cols != ctx.term.inner.cols or new_rows != ctx.term.inner.rows) {
         ctx.mutex.lock();
         defer ctx.mutex.unlock();
 
-        ctx.grid.resize(new_cols, new_rows);
+        ctx.term.resize(new_cols, new_rows) catch {};
         ctx.pty.setSize(new_cols, new_rows);
 
         // Invalidate vertex buffer (size changed)
@@ -443,25 +446,26 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
     ctx.needs_render.store(true, .release);
 }
 
-fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) objc.BOOL {
+fn delegateShouldTerminate(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) objc.BOOL {
     return objc.YES;
 }
 
-fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
+fn delegateDidFinishLaunching(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     objc.msgSendVoid(sharedApp(), objc.sel("activateIgnoringOtherApps:"), .{objc.YES});
 }
 
-fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.C) void {
+fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     const ctx = global_app_context orelse return;
 
-    // Always render if grid is dirty OR on first frame
     if (ctx.needs_render.load(.acquire)) {
         ctx.mutex.lock();
         defer ctx.mutex.unlock();
 
-        ctx.renderer.render(ctx.grid, ctx.layer);
+        // Update render state from terminal (handles dirty tracking)
+        ctx.term.updateRenderState() catch {};
+
+        ctx.renderer.render(ctx.term, ctx.layer);
         ctx.needs_render.store(false, .release);
-        ctx.grid.dirty = false;
     }
 }
 
