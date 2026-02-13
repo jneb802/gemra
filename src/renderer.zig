@@ -87,11 +87,11 @@ pub const Renderer = struct {
         const vertex_desc = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("MTLVertexDescriptor"))), objc.sel("vertexDescriptor"), .{});
 
         // Configure vertex attributes using helper function
-        setupVertexAttribute(vertex_desc, 0, MTLVertexFormatFloat2, @offsetOf(Vertex, "position"), 0);
-        setupVertexAttribute(vertex_desc, 1, MTLVertexFormatFloat2, @offsetOf(Vertex, "texcoord"), 0);
-        setupVertexAttribute(vertex_desc, 2, MTLVertexFormatFloat4, @offsetOf(Vertex, "fg_color"), 0);
-        setupVertexAttribute(vertex_desc, 3, MTLVertexFormatFloat4, @offsetOf(Vertex, "bg_color"), 0);
-        setupVertexAttribute(vertex_desc, 4, MTLVertexFormatFloat, @offsetOf(Vertex, "is_bg"), 0);
+        objc.setupVertexAttribute(vertex_desc, 0, MTLVertexFormatFloat2, @offsetOf(Vertex, "position"), 0);
+        objc.setupVertexAttribute(vertex_desc, 1, MTLVertexFormatFloat2, @offsetOf(Vertex, "texcoord"), 0);
+        objc.setupVertexAttribute(vertex_desc, 2, MTLVertexFormatFloat4, @offsetOf(Vertex, "fg_color"), 0);
+        objc.setupVertexAttribute(vertex_desc, 3, MTLVertexFormatFloat4, @offsetOf(Vertex, "bg_color"), 0);
+        objc.setupVertexAttribute(vertex_desc, 4, MTLVertexFormatFloat, @offsetOf(Vertex, "is_bg"), 0);
 
         // Layout
         const layouts = objc.msgSend(objc.id, vertex_desc, objc.sel("layouts"), .{});

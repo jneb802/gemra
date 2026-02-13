@@ -192,7 +192,6 @@ pub fn setPipelineProperty(
 /// Creates Objective-C objects with consistent error handling
 pub fn createObjCObject(
     comptime name: [*:0]const u8,
-    allocator: std.mem.Allocator,
 ) !id {
     const cls = getClass(name);
     const obj = alloc(cls);
