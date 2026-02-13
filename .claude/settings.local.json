@@ -46,7 +46,10 @@
       "Skill(keybindings-help)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:duckduckgo.com)",
-      "Bash(zig build)"
+      "Bash(zig build)",
+      "Bash(zig test src/main.zig)",
+      "Bash(./zig-out/bin/gemra --help)",
+      "Bash(./zig-out/bin/gemra)"
     ]
   }
 }
