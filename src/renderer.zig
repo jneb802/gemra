@@ -86,38 +86,12 @@ pub const Renderer = struct {
         // Vertex descriptor
         const vertex_desc = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("MTLVertexDescriptor"))), objc.sel("vertexDescriptor"), .{});
 
-        // Configure vertex attributes
-        const attributes = objc.msgSend(objc.id, vertex_desc, objc.sel("attributes"), .{});
-
-        // position: float2 at offset 0
-        const attr0 = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 0)});
-        objc.msgSendVoid(attr0, objc.sel("setFormat:"), .{MTLVertexFormatFloat2});
-        objc.msgSendVoid(attr0, objc.sel("setOffset:"), .{@as(u64, @offsetOf(Vertex, "position"))});
-        objc.msgSendVoid(attr0, objc.sel("setBufferIndex:"), .{@as(u64, 0)});
-
-        // texcoord: float2 at offset 8
-        const attr1 = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 1)});
-        objc.msgSendVoid(attr1, objc.sel("setFormat:"), .{MTLVertexFormatFloat2});
-        objc.msgSendVoid(attr1, objc.sel("setOffset:"), .{@as(u64, @offsetOf(Vertex, "texcoord"))});
-        objc.msgSendVoid(attr1, objc.sel("setBufferIndex:"), .{@as(u64, 0)});
-
-        // fg_color: float4 at offset 16
-        const attr2 = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 2)});
-        objc.msgSendVoid(attr2, objc.sel("setFormat:"), .{MTLVertexFormatFloat4});
-        objc.msgSendVoid(attr2, objc.sel("setOffset:"), .{@as(u64, @offsetOf(Vertex, "fg_color"))});
-        objc.msgSendVoid(attr2, objc.sel("setBufferIndex:"), .{@as(u64, 0)});
-
-        // bg_color: float4 at offset 32
-        const attr3 = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 3)});
-        objc.msgSendVoid(attr3, objc.sel("setFormat:"), .{MTLVertexFormatFloat4});
-        objc.msgSendVoid(attr3, objc.sel("setOffset:"), .{@as(u64, @offsetOf(Vertex, "bg_color"))});
-        objc.msgSendVoid(attr3, objc.sel("setBufferIndex:"), .{@as(u64, 0)});
-
-        // is_bg: float at offset 48
-        const attr4 = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 4)});
-        objc.msgSendVoid(attr4, objc.sel("setFormat:"), .{MTLVertexFormatFloat});
-        objc.msgSendVoid(attr4, objc.sel("setOffset:"), .{@as(u64, @offsetOf(Vertex, "is_bg"))});
-        objc.msgSendVoid(attr4, objc.sel("setBufferIndex:"), .{@as(u64, 0)});
+        // Configure vertex attributes using helper function
+        setupVertexAttribute(vertex_desc, 0, MTLVertexFormatFloat2, @offsetOf(Vertex, "position"), 0);
+        setupVertexAttribute(vertex_desc, 1, MTLVertexFormatFloat2, @offsetOf(Vertex, "texcoord"), 0);
+        setupVertexAttribute(vertex_desc, 2, MTLVertexFormatFloat4, @offsetOf(Vertex, "fg_color"), 0);
+        setupVertexAttribute(vertex_desc, 3, MTLVertexFormatFloat4, @offsetOf(Vertex, "bg_color"), 0);
+        setupVertexAttribute(vertex_desc, 4, MTLVertexFormatFloat, @offsetOf(Vertex, "is_bg"), 0);
 
         // Layout
         const layouts = objc.msgSend(objc.id, vertex_desc, objc.sel("layouts"), .{});
@@ -127,21 +101,21 @@ pub const Renderer = struct {
 
         // Pipeline descriptor
         const pipeline_desc = objc.allocInit("MTLRenderPipelineDescriptor");
-        objc.msgSendVoid(pipeline_desc, objc.sel("setVertexFunction:"), .{vertex_fn});
-        objc.msgSendVoid(pipeline_desc, objc.sel("setFragmentFunction:"), .{fragment_fn});
-        objc.msgSendVoid(pipeline_desc, objc.sel("setVertexDescriptor:"), .{vertex_desc});
+        setPipelineProperty(pipeline_desc, "setVertexFunction:", vertex_fn);
+        setPipelineProperty(pipeline_desc, "setFragmentFunction:", fragment_fn);
+        setPipelineProperty(pipeline_desc, "setVertexDescriptor:", vertex_desc);
 
         // Color attachment
         const color_attachments = objc.msgSend(objc.id, pipeline_desc, objc.sel("colorAttachments"), .{});
         const color_attachment0 = objc.msgSend(objc.id, color_attachments, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 0)});
-        objc.msgSendVoid(color_attachment0, objc.sel("setPixelFormat:"), .{MTLPixelFormatBGRA8Unorm});
+        setPipelineProperty(color_attachment0, "setPixelFormat:", MTLPixelFormatBGRA8Unorm);
 
         // Enable alpha blending
-        objc.msgSendVoid(color_attachment0, objc.sel("setBlendingEnabled:"), .{objc.YES});
-        objc.msgSendVoid(color_attachment0, objc.sel("setSourceRGBBlendFactor:"), .{MTLBlendFactorOne});
-        objc.msgSendVoid(color_attachment0, objc.sel("setDestinationRGBBlendFactor:"), .{MTLBlendFactorOneMinusSourceAlpha});
-        objc.msgSendVoid(color_attachment0, objc.sel("setSourceAlphaBlendFactor:"), .{MTLBlendFactorOne});
-        objc.msgSendVoid(color_attachment0, objc.sel("setDestinationAlphaBlendFactor:"), .{MTLBlendFactorOneMinusSourceAlpha});
+        setPipelineProperty(color_attachment0, "setBlendingEnabled:", objc.YES);
+        setPipelineProperty(color_attachment0, "setSourceRGBBlendFactor:", MTLBlendFactorOne);
+        setPipelineProperty(color_attachment0, "setDestinationRGBBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
+        setPipelineProperty(color_attachment0, "setSourceAlphaBlendFactor:", MTLBlendFactorOne);
+        setPipelineProperty(color_attachment0, "setDestinationAlphaBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
 
         var pipeline_error: objc.id = null;
         const pipeline_state = objc.msgSend(objc.id, device, objc.sel("newRenderPipelineStateWithDescriptor:error:"), .{

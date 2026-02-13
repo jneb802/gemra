@@ -45,7 +45,8 @@
       "Bash(gh pr create --title \"Wire ghostty-vt input encoding for terminal protocol support\" --body \"$\\(cat <<''EOF''\n## Summary\n- **Key encoding**: Replace hardcoded escape sequences with ghostty''s `encodeKey\\(\\)` — automatically handles DECCKM \\(app cursor mode\\), kitty keyboard protocol, alt-esc prefix, and modifyOtherKeys based on current terminal state\n- **Bracketed paste**: Use ghostty''s `encodePaste\\(\\)` to wrap pasted text in `ESC[200~/201~` fenceposts when mode 2004 is active, with `\\\\n`→`\\\\r` replacement when not bracketed\n- **Mouse reporting**: Check terminal mouse mode on click/drag/scroll — send SGR or X10 encoded events to PTY when programs request mouse input, fall back to text selection when not\n- **Focus events**: Send `ESC[I`/`ESC[O` on window focus/blur when mode 1004 is active\n- **New file `src/input.zig`**: macOS keycode→ghostty Key mapping \\(~80 keycodes\\), NSEvent modifier flags translation, mouse mode/format queries, SGR and X10 mouse encoding\n\n## Test plan\n- [ ] Basic shell: type, backspace, tab complete, Ctrl+C/D\n- [ ] `vim` arrow keys: open vim, navigate with arrows \\(DECCKM test\\)\n- [ ] `tmux`: start tmux, switch panes with arrows\n- [ ] Bracketed paste: in vim, Cmd+V multiline text — should paste cleanly\n- [ ] `htop` mouse: click on processes\n- [ ] Scroll in `less`: scroll trackpad on a long file\n- [ ] Focus events: `printf ''\\\\x1b[?1004h'' && cat` → switch away and back → see `^[[I`/`^[[O`\n- [ ] `fzf`: arrow keys and mouse should work\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
       "Skill(keybindings-help)",
       "WebFetch(domain:api.github.com)",
-      "WebFetch(domain:duckduckgo.com)"
+      "WebFetch(domain:duckduckgo.com)",
+      "Bash(zig build)"
     ]
   }
 }
