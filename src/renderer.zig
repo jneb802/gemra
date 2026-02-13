@@ -218,7 +218,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn buildVertices(self: *Renderer, term: *terminal.Terminal) void {
+    pub fn buildVertices(self: *Renderer, term: *terminal.Terminal) void {
         const rs = &term.render_state;
         const cell_w = self.atlas.cell_width;
         const cell_h = self.atlas.cell_height;
@@ -432,5 +432,33 @@ pub const Renderer = struct {
         const uniforms = Uniforms{ .viewport_size = .{ width, height } };
         const ptr = objc.msgSend(*Uniforms, self.uniform_buffer, objc.sel("contents"), .{});
         ptr.* = uniforms;
+    }
+
+    /// Helper for rendering a single text glyph (used by file tree view)
+    pub fn renderTextGlyph(
+        self: *Renderer,
+        buf: [*]Vertex,
+        idx: *u32,
+        x: f32,
+        y: f32,
+        codepoint: u21,
+        color: [4]f32,
+        variant: FontVariant,
+    ) void {
+        const glyph = self.atlas.getGlyph(codepoint, variant);
+        const bg_transparent = [4]f32{ 0, 0, 0, 0 };
+        writeQuad(
+            buf,
+            idx,
+            x,
+            y,
+            x + glyph.width,
+            y + glyph.height,
+            .{ glyph.u0, glyph.v0 },
+            .{ glyph.u1, glyph.v1 },
+            color,
+            bg_transparent,
+            0.0,
+        );
     }
 };

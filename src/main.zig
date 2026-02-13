@@ -61,10 +61,28 @@ pub fn main() !void {
     var mutex = std.Thread.Mutex{};
     var needs_render = std.atomic.Value(bool).init(true);
 
+    // Create layout manager (reuse existing phys_width/phys_height from renderer)
+    var layout = try @import("layout.zig").LayoutManager.init(allocator, .{
+        .x = 0,
+        .y = 0,
+        .width = phys_width,
+        .height = phys_height,
+    });
+    defer layout.deinit();
+
+    // Wrap terminal in a view
+    var term_view = try @import("views/terminal_view.zig").TerminalView.init(
+        allocator,
+        &term,
+        &pty,
+    );
+    _ = try layout.addPane(&term_view.view);
+
     var app_ctx = window.AppContext{
         .pty = &pty,
         .term = &term,
         .renderer = &renderer,
+        .layout = &layout,
         .mutex = &mutex,
         .layer = null,
         .needs_render = &needs_render,

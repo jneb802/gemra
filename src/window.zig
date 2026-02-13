@@ -10,6 +10,7 @@ pub const AppContext = struct {
     pty: *@import("pty.zig").Pty,
     term: *terminal.Terminal,
     renderer: *Renderer,
+    layout: ?*@import("layout.zig").LayoutManager, // NEW: optional layout manager
     mutex: *std.Thread.Mutex,
     layer: objc.id,
     needs_render: *std.atomic.Value(bool),
@@ -51,6 +52,12 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     // Cmd+C: copy selection to clipboard
     if (cmd and (char_val == 'c' or char_val == 'C')) {
         handleCopy(ctx);
+        return;
+    }
+
+    // Cmd+B: toggle file browser
+    if (cmd and (char_val == 'b' or char_val == 'B')) {
+        handleFileBrowserToggle(ctx);
         return;
     }
 
@@ -227,6 +234,72 @@ fn handleCopy(ctx: *AppContext) void {
         ctx.mutex.unlock();
         ctx.needs_render.store(true, .release);
     }
+}
+
+fn handleFileBrowserToggle(ctx: *AppContext) void {
+    if (ctx.layout == null) {
+        std.debug.print("Layout manager not initialized\n", .{});
+        return;
+    }
+
+    ctx.mutex.lock();
+    defer ctx.mutex.unlock();
+
+    const layout = ctx.layout.?;
+
+    if (layout.panes.items.len == 1) {
+        // Open file browser - get current working directory
+        const cwd = std.fs.cwd().realpathAlloc(
+            std.heap.page_allocator,
+            ".",
+        ) catch {
+            std.debug.print("Failed to get current directory\n", .{});
+            return;
+        };
+        defer std.heap.page_allocator.free(cwd);
+
+        // Get cell dimensions from renderer
+        const cell_width = ctx.renderer.atlas.cell_width;
+        const cell_height = ctx.renderer.atlas.cell_height;
+
+        // Create file tree view
+        const tree_view = @import("views/file_tree_view.zig").FileTreeView.init(
+            std.heap.page_allocator,
+            cwd,
+            cell_width,
+            cell_height,
+        ) catch {
+            std.debug.print("Failed to create file tree view\n", .{});
+            return;
+        };
+
+        // Add the file tree pane
+        const tree_pane_id = layout.addPane(&tree_view.view) catch {
+            std.debug.print("Failed to add file tree pane\n", .{});
+            return;
+        };
+
+        // Split: file tree gets 25% on the left, terminal gets 75% on the right
+        layout.splitVertical(tree_pane_id, 0.25) catch {
+            std.debug.print("Failed to split panes\n", .{});
+            return;
+        };
+
+        // Focus file tree
+        layout.setActivePane(0);
+
+        std.debug.print("File browser opened\n", .{});
+    } else {
+        // Close file browser - remove the first pane (file tree)
+        if (layout.panes.items.len > 0) {
+            const first_pane_id = layout.panes.items[0].id;
+            layout.closePane(first_pane_id);
+            layout.setActivePane(0); // Focus terminal
+            std.debug.print("File browser closed\n", .{});
+        }
+    }
+
+    ctx.needs_render.store(true, .release);
 }
 
 fn viewFlagsChanged(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {}
@@ -618,10 +691,115 @@ fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
         // Update render state from terminal (handles dirty tracking)
         ctx.term.updateRenderState() catch {};
 
-        ctx.renderer.render(ctx.term, ctx.layer);
+        // Use layout rendering if available, otherwise use direct terminal rendering
+        if (ctx.layout) |layout| {
+            renderLayout(ctx, layout);
+        } else {
+            ctx.renderer.render(ctx.term, ctx.layer);
+        }
+
         ctx.needs_render.store(false, .release);
     }
 }
+
+fn renderLayout(ctx: *AppContext, layout: *@import("layout.zig").LayoutManager) void {
+    // Get drawable from layer
+    const drawable = objc.msgSend(objc.id, ctx.layer, objc.sel("nextDrawable"), .{});
+    if (drawable == null) return;
+
+    const texture = objc.msgSend(objc.id, drawable, objc.sel("texture"), .{});
+
+    // Create command buffer
+    const cmd_buf = objc.msgSend(objc.id, ctx.renderer.command_queue, objc.sel("commandBuffer"), .{});
+
+    // Set up render pass descriptor
+    const desc_class = objc.getClass("MTLRenderPassDescriptor");
+    const render_pass_desc = objc.msgSend(objc.id, desc_class, objc.sel("renderPassDescriptor"), .{});
+
+    const color_attachments = objc.msgSend(objc.id, render_pass_desc, objc.sel("colorAttachments"), .{});
+    const attachment0 = objc.msgSend(objc.id, color_attachments, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 0)});
+
+    objc.msgSendVoid(attachment0, objc.sel("setTexture:"), .{texture});
+    objc.msgSendVoid(attachment0, objc.sel("setLoadAction:"), .{@as(u64, 2)}); // MTLLoadActionClear
+    objc.msgSendVoid(attachment0, objc.sel("setClearColor:"), .{background_clear_color});
+    objc.msgSendVoid(attachment0, objc.sel("setStoreAction:"), .{@as(u64, 1)}); // MTLStoreActionStore
+
+    // Create encoder
+    const encoder = objc.msgSend(objc.id, cmd_buf, objc.sel("renderCommandEncoderWithDescriptor:"), .{render_pass_desc});
+
+    // Render each pane
+    for (layout.panes.items) |*pane| {
+        // Set scissor rect for this pane
+        const scissor = MTLScissorRect{
+            .x = @intFromFloat(pane.rect.x),
+            .y = @intFromFloat(pane.rect.y),
+            .width = @intFromFloat(pane.rect.width),
+            .height = @intFromFloat(pane.rect.height),
+        };
+        objc.msgSendVoid(encoder, objc.sel("setScissorRect:"), .{scissor});
+
+        // Render the view
+        pane.view.render(ctx.renderer, pane.rect);
+
+        // Draw if vertices were generated
+        if (ctx.renderer.vertex_count > 0) {
+            // Set pipeline state
+            objc.msgSendVoid(encoder, objc.sel("setRenderPipelineState:"), .{ctx.renderer.pipeline_state});
+
+            // Bind vertex buffer
+            objc.msgSendVoid(encoder, objc.sel("setVertexBuffer:offset:atIndex:"), .{
+                ctx.renderer.vertex_buffer,
+                @as(u64, 0),
+                @as(u64, 0),
+            });
+
+            // Bind uniform buffer
+            objc.msgSendVoid(encoder, objc.sel("setVertexBuffer:offset:atIndex:"), .{
+                ctx.renderer.uniform_buffer,
+                @as(u64, 0),
+                @as(u64, 1),
+            });
+
+            // Bind texture
+            objc.msgSendVoid(encoder, objc.sel("setFragmentTexture:atIndex:"), .{
+                ctx.renderer.atlas.texture,
+                @as(u64, 0),
+            });
+
+            // Bind sampler
+            objc.msgSendVoid(encoder, objc.sel("setFragmentSamplerState:atIndex:"), .{
+                ctx.renderer.sampler_state,
+                @as(u64, 0),
+            });
+
+            // Draw
+            objc.msgSendVoid(encoder, objc.sel("drawPrimitives:vertexStart:vertexCount:"), .{
+                @as(u64, 3), // MTLPrimitiveTypeTriangle
+                @as(u64, 0),
+                @as(u64, ctx.renderer.vertex_count),
+            });
+
+            // Reset vertex count for next pane
+            ctx.renderer.vertex_count = 0;
+        }
+    }
+
+    // End encoding
+    objc.msgSendVoid(encoder, objc.sel("endEncoding"), .{});
+
+    // Present drawable
+    objc.msgSendVoid(cmd_buf, objc.sel("presentDrawable:"), .{drawable});
+    objc.msgSendVoid(cmd_buf, objc.sel("commit"), .{});
+}
+
+const MTLScissorRect = extern struct {
+    x: u64,
+    y: u64,
+    width: u64,
+    height: u64,
+};
+
+const background_clear_color = extern struct { r: f64, g: f64, b: f64, a: f64 }{ .r = 0.118, .g = 0.118, .b = 0.118, .a = 1.0 };
 
 pub fn createViewClass() objc.Class {
     const nsview = objc.getClass("NSView");
