@@ -10,7 +10,6 @@ const Pty = @import("../pty.zig").Pty;
 pub const TerminalView = struct {
     view: View,
     term: *terminal.Terminal,
-    pty: *Pty,
     allocator: std.mem.Allocator,
 
     const vtable = View.VTable{
@@ -20,12 +19,11 @@ pub const TerminalView = struct {
         .deinit = deinit,
     };
 
-    pub fn init(allocator: std.mem.Allocator, term: *terminal.Terminal, pty: *Pty) !*TerminalView {
+    pub fn init(allocator: std.mem.Allocator, term: *terminal.Terminal) !*TerminalView {
         const self = try allocator.create(TerminalView);
         self.* = .{
             .view = .{ .vtable = &vtable },
             .term = term,
-            .pty = pty,
             .allocator = allocator,
         };
         return self;

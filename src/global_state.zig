@@ -128,7 +128,7 @@ pub const GlobalState = struct {
         // Resize is safe if we lock the tab's mutex.
         var i: usize = 0;
         while (i < self.tab_manager.tabs.items.len) : (i += 1) {
-            const tab = &self.tab_manager.tabs.items[i];
+            const tab = self.tab_manager.tabs.items[i];
             tab.mutex.lock();
             defer tab.mutex.unlock();
             tab.term.resize(cols, rows) catch {};
@@ -176,7 +176,7 @@ pub const GlobalState = struct {
 
         // Wrap terminal in a TerminalView
         const TerminalView = @import("views/terminal_view.zig").TerminalView;
-        const term_view = try TerminalView.init(allocator, tab.term, &tab.pty);
+        const term_view = try TerminalView.init(allocator, tab.term);
         _ = try layout.addPane(&term_view.view);
 
         tab.layout = layout;

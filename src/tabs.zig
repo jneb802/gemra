@@ -39,13 +39,13 @@ pub const Tab = struct {
         if (self.title.len > 0) {
             allocator.free(self.title);
         }
-        // Note: Tab struct itself is freed by TabManager's ArrayList
+        // Note: Caller must destroy the Tab struct itself after calling deinit
     }
 };
 
 /// Manages a list of tabs and tracks which one is active.
 pub const TabManager = struct {
-    tabs: std.ArrayList(Tab),
+    tabs: std.ArrayList(*Tab),
     active_index: usize,
     allocator: std.mem.Allocator,
 
@@ -53,7 +53,7 @@ pub const TabManager = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .tabs = std.ArrayList(Tab){ .items = &[_]Tab{}, .capacity = 0 },
+            .tabs = std.ArrayList(*Tab){ .items = &[_]*Tab{}, .capacity = 0 },
             .active_index = 0,
             .allocator = allocator,
         };
@@ -84,7 +84,9 @@ pub const TabManager = struct {
         term.* = try terminal.Terminal.init(self.allocator, cols, rows, pty.master_fd);
         errdefer term.deinit();
 
-        const tab = try self.tabs.addOne(self.allocator);
+        // Allocate tab on heap
+        const tab = try self.allocator.create(Tab);
+        errdefer self.allocator.destroy(tab);
         tab.* = Tab{
             .id = tab_id,
             .title = try self.allocator.dupe(u8, "Terminal"),
@@ -94,6 +96,9 @@ pub const TabManager = struct {
             .io_thread_running = std.atomic.Value(bool).init(true),
             .mutex = std.Thread.Mutex{},
         };
+
+        // Add pointer to list
+        try self.tabs.append(self.allocator, tab);
 
         return tab;
     }
@@ -121,9 +126,10 @@ pub const TabManager = struct {
 
         const was_active = (index == self.active_index);
 
-        // Deinit the tab (thread join and cleanup)
-        var tab = self.tabs.orderedRemove(index);
+        // Deinit the tab (thread join and cleanup) and free it
+        const tab = self.tabs.orderedRemove(index);
         tab.deinit(self.allocator);
+        self.allocator.destroy(tab);
 
         // Update active_index
         if (self.tabs.items.len == 0) {
@@ -167,7 +173,7 @@ pub const TabManager = struct {
     /// Returns the active tab, or null if no tabs.
     pub fn getActive(self: *const Self) ?*Tab {
         if (self.active_index >= self.tabs.items.len) return null;
-        return &self.tabs.items[self.active_index];
+        return self.tabs.items[self.active_index];
     }
 
     /// Returns the number of tabs.

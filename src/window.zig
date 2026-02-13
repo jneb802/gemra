@@ -800,7 +800,7 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
         .height = @floatCast(scaled_h - tab_bar_height),
     };
 
-    for (ctx.tab_manager.tabs.items) |*tab| {
+    for (ctx.tab_manager.tabs.items) |tab| {
         if (tab.layout) |layout| {
             layout.updateViewport(new_viewport);
         }
