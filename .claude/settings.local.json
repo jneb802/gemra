@@ -49,7 +49,12 @@
       "Bash(zig build)",
       "Bash(zig test src/main.zig)",
       "Bash(./zig-out/bin/gemra --help)",
-      "Bash(./zig-out/bin/gemra)"
+      "Bash(./zig-out/bin/gemra)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(zig build:*)"
     ]
   }
 }
