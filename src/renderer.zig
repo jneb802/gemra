@@ -47,6 +47,8 @@ pub const Renderer = struct {
     viewport_width: f32,
     viewport_height: f32,
     allocator: std.mem.Allocator,
+    // buffer capacity in vertices (for reuse)
+    vertex_buffer_capacity: u32 = 0,
 
     pub fn init(allocator: std.mem.Allocator, device: objc.id, viewport_width: f32, viewport_height: f32, scale: f32, font_config: FontConfig) !Renderer {
         const command_queue = objc.msgSend(objc.id, device, objc.sel("newCommandQueue"), .{});
@@ -168,10 +170,7 @@ pub const Renderer = struct {
 
         const texture = objc.msgSend(objc.id, drawable, objc.sel("texture"), .{});
 
-        // Build vertex data
-        self.buildVertices(term);
-
-        // Set up render pass (shared between empty and non-empty frames)
+        // Set up render pass
         const cmd_buf = objc.msgSend(objc.id, self.command_queue, objc.sel("commandBuffer"), .{});
         const render_pass_desc = objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("MTLRenderPassDescriptor"))), objc.sel("renderPassDescriptor"), .{});
 
@@ -183,6 +182,9 @@ pub const Renderer = struct {
         objc.msgSendVoid(rp_color0, objc.sel("setClearColor:"), .{background_clear_color});
 
         const encoder = objc.msgSend(objc.id, cmd_buf, objc.sel("renderCommandEncoderWithDescriptor:"), .{render_pass_desc});
+
+        // Build terminal vertex data and draw
+        self.buildVertices(term);
 
         if (self.vertex_count > 0) {
             objc.msgSendVoid(encoder, objc.sel("setRenderPipelineState:"), .{self.pipeline_state});
