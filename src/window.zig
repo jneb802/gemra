@@ -15,6 +15,16 @@ var last_click_row: u16 = 0;
 var click_count: u8 = 0;
 const multi_click_threshold_ns: i128 = 400 * std.time.ns_per_ms;
 
+const MTLScissorRect = extern struct {
+    x: u64,
+    y: u64,
+    width: u64,
+    height: u64,
+};
+
+const ClearColor = extern struct { r: f64, g: f64, b: f64, a: f64 };
+const background_clear_color = ClearColor{ .r = 0.118, .g = 0.118, .b = 0.118, .a = 1.0 };
+
 pub fn sharedApp() objc.id {
     return objc.msgSend(objc.id, @as(objc.id, @ptrCast(objc.getClass("NSApplication"))), objc.sel("sharedApplication"), .{});
 }
@@ -133,6 +143,118 @@ fn copyToClipboard(text: []const u8) void {
     _ = objc.msgSend(objc.BOOL, pb, objc.sel("setString:forType:"), .{ ns_str, pb_type });
 }
 
+fn renderLayout(ctx: *GlobalState, layout: *@import("layout.zig").LayoutManager) void {
+    const drawable = objc.msgSend(objc.id, ctx.layer, objc.sel("nextDrawable"), .{});
+    if (drawable == null) return;
+    const texture = objc.msgSend(objc.id, drawable, objc.sel("texture"), .{});
+
+    const cmd_buf = objc.msgSend(objc.id, ctx.renderer.command_queue, objc.sel("commandBuffer"), .{});
+    const desc_class = objc.getClass("MTLRenderPassDescriptor");
+    const render_pass_desc = objc.msgSend(objc.id, desc_class, objc.sel("renderPassDescriptor"), .{});
+    const color_attachments = objc.msgSend(objc.id, render_pass_desc, objc.sel("colorAttachments"), .{});
+    const attachment0 = objc.msgSend(objc.id, color_attachments, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 0)});
+
+    objc.msgSendVoid(attachment0, objc.sel("setTexture:"), .{texture});
+    objc.msgSendVoid(attachment0, objc.sel("setLoadAction:"), .{@as(u64, 2)}); // Clear
+    objc.msgSendVoid(attachment0, objc.sel("setClearColor:"), .{background_clear_color});
+    objc.msgSendVoid(attachment0, objc.sel("setStoreAction:"), .{@as(u64, 1)}); // Store
+
+    const encoder = objc.msgSend(objc.id, cmd_buf, objc.sel("renderCommandEncoderWithDescriptor:"), .{render_pass_desc});
+
+    // Render each pane with scissor rect clipping
+    for (layout.panes.items) |*pane| {
+        const scissor = MTLScissorRect{
+            .x = @intFromFloat(@max(0, pane.rect.x)),
+            .y = @intFromFloat(@max(0, pane.rect.y)),
+            .width = @intFromFloat(@max(1, pane.rect.width)),
+            .height = @intFromFloat(@max(1, pane.rect.height)),
+        };
+        objc.msgSendVoid(encoder, objc.sel("setScissorRect:"), .{scissor});
+
+        ctx.renderer.vertex_count = 0;
+        pane.view.render(ctx.renderer, pane.rect);
+
+        if (ctx.renderer.vertex_count > 0) {
+            objc.msgSendVoid(encoder, objc.sel("setRenderPipelineState:"), .{ctx.renderer.pipeline_state});
+            objc.msgSendVoid(encoder, objc.sel("setVertexBuffer:offset:atIndex:"), .{
+                ctx.renderer.vertex_buffer, @as(u64, 0), @as(u64, 0),
+            });
+            objc.msgSendVoid(encoder, objc.sel("setVertexBuffer:offset:atIndex:"), .{
+                ctx.renderer.uniform_buffer, @as(u64, 0), @as(u64, 1),
+            });
+            objc.msgSendVoid(encoder, objc.sel("setFragmentTexture:atIndex:"), .{
+                ctx.renderer.atlas.texture, @as(u64, 0),
+            });
+            objc.msgSendVoid(encoder, objc.sel("setFragmentSamplerState:atIndex:"), .{
+                ctx.renderer.sampler_state, @as(u64, 0),
+            });
+            objc.msgSendVoid(encoder, objc.sel("drawPrimitives:vertexStart:vertexCount:"), .{
+                @as(u64, 3), @as(u64, 0), @as(u64, ctx.renderer.vertex_count),
+            });
+        }
+    }
+
+    objc.msgSendVoid(encoder, objc.sel("endEncoding"), .{});
+    objc.msgSendVoid(cmd_buf, objc.sel("presentDrawable:"), .{drawable});
+    objc.msgSendVoid(cmd_buf, objc.sel("commit"), .{});
+}
+
+fn handleFileBrowserToggle(ctx: *GlobalState) void {
+    // Note: Caller must already hold global_mutex lock
+    const active_tab = ctx.getActiveTab() orelse return;
+
+    if (active_tab.layout == null) {
+        // No layout yet - create one and open file browser
+        ctx.initLayoutForActiveTab(std.heap.page_allocator) catch {
+            std.debug.print("Failed to initialize layout\n", .{});
+            return;
+        };
+
+        const layout = active_tab.layout.?;
+
+        // Get current directory
+        const cwd = std.fs.cwd().realpathAlloc(
+            std.heap.page_allocator,
+            ".",
+        ) catch {
+            std.debug.print("Failed to get current directory\n", .{});
+            return;
+        };
+        defer std.heap.page_allocator.free(cwd);
+
+        // Create file tree view
+        const FileTreeView = @import("views/file_tree_view.zig").FileTreeView;
+        const tree_view = FileTreeView.init(
+            std.heap.page_allocator,
+            cwd,
+            ctx.renderer.atlas.cell_width,
+            ctx.renderer.atlas.cell_height,
+        ) catch {
+            std.debug.print("Failed to create file tree view\n", .{});
+            return;
+        };
+
+        // Add file tree pane and split
+        const tree_pane_id = layout.addPane(&tree_view.view) catch {
+            std.debug.print("Failed to add file tree pane\n", .{});
+            return;
+        };
+
+        layout.splitVertical(tree_pane_id, 0.25) catch {
+            std.debug.print("Failed to split panes\n", .{});
+            return;
+        };
+
+        std.debug.print("File browser opened\n", .{});
+    } else {
+        // Layout exists - close it entirely and return to direct rendering
+        ctx.closeLayoutForActiveTab();
+        std.debug.print("File browser closed\n", .{});
+    }
+
+    ctx.render_needed.store(true, .release);
+}
+
 fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
     const ctx = global_state orelse return;
     ctx.global_mutex.lock();
@@ -157,6 +279,12 @@ fn viewKeyDown(_: objc.id, _: objc.SEL, event: objc.id) callconv(.c) void {
 
     if (cmd and (char_val == 'c' or char_val == 'C')) {
         handleCopy(ctx);
+        return;
+    }
+
+    // Cmd+B: toggle file browser
+    if (cmd and (char_val == 'b' or char_val == 'B')) {
+        handleFileBrowserToggle(ctx);
         return;
     }
 
@@ -659,6 +787,25 @@ fn viewSetFrameSize(self_view: objc.id, _sel: objc.SEL, new_size: objc.CGSize) c
     ctx.updateViewport(@floatCast(scaled_w), @floatCast(scaled_h));
     ctx.updateScale(@floatCast(scale));
 
+    // Update layout viewports for all tabs
+    ctx.global_mutex.lock();
+    defer ctx.global_mutex.unlock();
+
+    const Rect = @import("view.zig").Rect;
+    const tab_bar_height = ctx.tab_height * scale;
+    const new_viewport = Rect{
+        .x = 0,
+        .y = @floatCast(tab_bar_height),
+        .width = @floatCast(scaled_w),
+        .height = @floatCast(scaled_h - tab_bar_height),
+    };
+
+    for (ctx.tab_manager.tabs.items) |*tab| {
+        if (tab.layout) |layout| {
+            layout.updateViewport(new_viewport);
+        }
+    }
+
     ctx.render_needed.store(true, .release);
 }
 
@@ -735,8 +882,14 @@ fn delegateTimerFired(_: objc.id, _: objc.SEL, _: objc.id) callconv(.c) void {
     // Render tab bar first, then terminal
     renderTabBar(ctx);
 
-    // Render terminal content
-    ctx.renderer.render(active_tab.term, ctx.layer);
+    // Check if active tab has layout manager
+    if (active_tab.layout) |layout| {
+        renderLayout(ctx, layout);
+    } else {
+        // Render terminal content directly
+        ctx.renderer.render(active_tab.term, ctx.layer);
+    }
+
     ctx.render_needed.store(false, .release);
 }
 

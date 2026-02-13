@@ -13,6 +13,9 @@ pub const Tab = struct {
     mutex: std.Thread.Mutex,
     // Tab state that might be used by renderer or UI
     scroll_offset: u16 = 0,
+    // Optional layout manager for pane splitting (file browser)
+    layout: ?*@import("layout.zig").LayoutManager = null,
+    layout_allocator: ?std.mem.Allocator = null,
 
     const Self = @This();
 
@@ -20,6 +23,14 @@ pub const Tab = struct {
         // Signal I/O thread to stop
         self.io_thread_running.store(false, .release);
         self.io_thread.join();
+
+        // Clean up layout if exists
+        if (self.layout) |layout| {
+            layout.deinit();
+            if (self.layout_allocator) |la| {
+                la.destroy(layout);
+            }
+        }
 
         // Clean up resources
         self.pty.close();

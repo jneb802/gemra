@@ -148,4 +148,52 @@ pub const GlobalState = struct {
     pub fn updateScale(self: *Self, scale: f32) void {
         self.scale = scale;
     }
+
+    /// Gets the active tab's layout manager, if it exists
+    pub fn getActiveLayout(self: *const Self) ?*@import("layout.zig").LayoutManager {
+        const tab = self.getActiveTab() orelse return null;
+        return tab.layout;
+    }
+
+    /// Initializes layout for the active tab (terminal-only initially)
+    pub fn initLayoutForActiveTab(self: *Self, allocator: std.mem.Allocator) !void {
+        const tab = self.getActiveTab() orelse return error.NoActiveTab;
+        if (tab.layout != null) return; // Already has layout
+
+        const Rect = @import("view.zig").Rect;
+        const tab_bar_height = self.tab_height * self.scale;
+        const viewport = Rect{
+            .x = 0,
+            .y = tab_bar_height,
+            .width = self.view_width,
+            .height = self.view_height - tab_bar_height,
+        };
+
+        const LayoutManager = @import("layout.zig").LayoutManager;
+        const layout = try allocator.create(LayoutManager);
+        errdefer allocator.destroy(layout);
+        layout.* = try LayoutManager.init(allocator, viewport);
+
+        // Wrap terminal in a TerminalView
+        const TerminalView = @import("views/terminal_view.zig").TerminalView;
+        const term_view = try TerminalView.init(allocator, tab.term, &tab.pty);
+        _ = try layout.addPane(&term_view.view);
+
+        tab.layout = layout;
+        tab.layout_allocator = allocator;
+    }
+
+    /// Closes layout for active tab, returning to direct rendering
+    pub fn closeLayoutForActiveTab(self: *Self) void {
+        const tab = self.getActiveTab() orelse return;
+        if (tab.layout) |layout| {
+            layout.deinit();
+            if (tab.layout_allocator) |alloc| {
+                alloc.destroy(layout);
+            }
+            tab.layout = null;
+            tab.layout_allocator = null;
+        }
+        self.render_needed.store(true, .release);
+    }
 };

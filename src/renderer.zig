@@ -220,7 +220,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn buildVertices(self: *Renderer, term: *terminal.Terminal) void {
+    pub fn buildVertices(self: *Renderer, term: *terminal.Terminal) void {
         const rs = &term.render_state;
         const cell_w = self.atlas.cell_width;
         const cell_h = self.atlas.cell_height;
@@ -434,5 +434,67 @@ pub const Renderer = struct {
         const uniforms = Uniforms{ .viewport_size = .{ width, height } };
         const ptr = objc.msgSend(*Uniforms, self.uniform_buffer, objc.sel("contents"), .{});
         ptr.* = uniforms;
+    }
+
+    /// Public helper for rendering text glyphs (used by file tree view)
+    pub fn renderTextGlyphPublic(
+        self: *Renderer,
+        x: f32,
+        y: f32,
+        codepoint: u21,
+        color: [4]f32,
+    ) void {
+        if (self.vertex_buffer == null) return;
+
+        const buf: [*]Vertex = @ptrCast(@alignCast(
+            objc.msgSend(?*anyopaque, self.vertex_buffer, objc.sel("contents"), .{}) orelse return
+        ));
+
+        const glyph = self.atlas.getGlyph(codepoint, .regular);
+        const idx = &self.vertex_count;
+        writeQuad(
+            buf,
+            idx,
+            x,
+            y,
+            x + glyph.width,
+            y + glyph.height,
+            .{ glyph.u0, glyph.v0 },
+            .{ glyph.u1, glyph.v1 },
+            color,
+            zero4,
+            0.0,
+        );
+    }
+
+    /// Public helper for rendering colored quads (used by file tree view)
+    pub fn renderQuadPublic(
+        self: *Renderer,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: [4]f32,
+    ) void {
+        if (self.vertex_buffer == null) return;
+
+        const buf: [*]Vertex = @ptrCast(@alignCast(
+            objc.msgSend(?*anyopaque, self.vertex_buffer, objc.sel("contents"), .{}) orelse return
+        ));
+
+        const idx = &self.vertex_count;
+        writeQuad(
+            buf,
+            idx,
+            x,
+            y,
+            x + width,
+            y + height,
+            zero2,
+            zero2,
+            color,
+            zero4,
+            1.0,
+        );
     }
 };
