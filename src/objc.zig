@@ -161,31 +161,31 @@ pub fn getIvarValue(comptime T: type, obj: id, ivar_name: [*:0]const u8, cls: Cl
 
 /// Configures all properties of a vertex attribute in a single call
 pub fn setupVertexAttribute(
-    desc: objc.id,
+    desc: id,
     index: u64,
     format: u64,
     offset: usize,
     bufferIndex: u64,
 ) void {
-    const attributes = objc.msgSend(objc.id, desc, objc.sel("attributes"), .{});
-    const attr = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{index});
+    const attributes = msgSend(id, desc, sel("attributes"), .{});
+    const attr = msgSend(id, attributes, sel("objectAtIndexedSubscript:"), .{index});
 
-    objc.msgSendVoid(attr, objc.sel("setFormat:"), .{format});
-    objc.msgSendVoid(attr, objc.sel("setOffset:"), .{offset});
-    objc.msgSendVoid(attr, objc.sel("setBufferIndex:"), .{bufferIndex});
+    msgSendVoid(attr, sel("setFormat:"), .{format});
+    msgSendVoid(attr, sel("setOffset:"), .{offset});
+    msgSendVoid(attr, sel("setBufferIndex:"), .{bufferIndex});
 }
 
 /// Standardizes setting pipeline properties with proper error handling
 pub fn setPipelineProperty(
-    desc: objc.id,
+    desc: id,
     property: [*:0]const u8,
     value: anytype,
 ) void {
-    const selector = objc.sel(property);
+    const selector = sel(property);
     if (comptime @TypeOf(value) == void) {
-        objc.msgSendVoid(desc, selector, .{});
+        msgSendVoid(desc, selector, .{});
     } else {
-        objc.msgSendVoid(desc, selector, .{value});
+        msgSendVoid(desc, selector, .{value});
     }
 }
 
@@ -193,10 +193,10 @@ pub fn setPipelineProperty(
 pub fn createObjCObject(
     comptime name: [*:0]const u8,
     allocator: std.mem.Allocator,
-) !objc.id {
-    const cls = objc.getClass(name);
-    const obj = objc.alloc(cls);
-    const result = objc.msgSend(objc.id, obj, objc.sel("init"), .{});
+) !id {
+    const cls = getClass(name);
+    const obj = alloc(cls);
+    const result = msgSend(id, obj, sel("init"), .{});
 
     if (result == null) {
         return error.ObjCObjectCreationFailed;
