@@ -1,0 +1,27 @@
+services:
+  claude:
+    build:
+      context: .
+      dockerfile: Dockerfile.claude
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      # Mount this project
+      - .:/workspace
+      # Persist Claude config
+      - claude-config:/home/node/.claude
+      # Persist Zig cache
+      - zig-cache:/home/node/.cache/zig
+    environment:
+      # LiteLLM connection
+      - ANTHROPIC_BASE_URL=http://host.docker.internal:4000
+      - ANTHROPIC_API_KEY=sk-dummy
+      - TERM=xterm-256color
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: bash
+
+volumes:
+  claude-config:
+  zig-cache:
