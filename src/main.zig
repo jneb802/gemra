@@ -1,7 +1,6 @@
 const std = @import("std");
 
 // Suppress noisy "invalid C0 character" warnings from ghostty-vt stream parser.
-// These fire for harmless control chars (e.g. ACK 0x6) in pasted text and are safely ignored.
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         .{ .scope = .stream, .level = .err },
@@ -9,11 +8,10 @@ pub const std_options: std.Options = .{
 };
 
 const objc = @import("objc.zig");
-const Pty = @import("pty.zig").Pty;
-const terminal = @import("terminal.zig");
-const renderer_mod = @import("renderer.zig");
-const Renderer = renderer_mod.Renderer;
-const FontConfig = renderer_mod.FontConfig;
+const Terminal = @import("terminal.zig").Terminal;
+const Renderer = @import("renderer.zig").Renderer;
+const FontConfig = @import("renderer.zig").FontConfig;
+const GlobalState = @import("global_state.zig").GlobalState;
 const window = @import("window.zig");
 
 const COLS: u16 = 80;
@@ -23,14 +21,6 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-
-    // Spawn PTY
-    var pty = try Pty.spawn(COLS, ROWS);
-    defer pty.close();
-
-    // Initialize terminal (needs PTY fd for query responses)
-    var term = try terminal.Terminal.init(allocator, COLS, ROWS, pty.master_fd);
-    defer term.deinit();
 
     // Create Metal device
     const MTLCreateSystemDefaultDevice = @extern(*const fn () callconv(.c) objc.id, .{
@@ -57,76 +47,25 @@ pub fn main() !void {
     var renderer = try Renderer.init(allocator, device, phys_width, phys_height, scale_factor, font_config);
     defer renderer.atlas.deinit();
 
-    // Shared state
-    var mutex = std.Thread.Mutex{};
-    var needs_render = std.atomic.Value(bool).init(true);
+    // Shared render_needed atomic
+    var render_needed = std.atomic.Value(bool).init(true);
 
-    // Create layout manager (reuse existing phys_width/phys_height from renderer)
-    var layout = try @import("layout.zig").LayoutManager.init(allocator, .{
-        .x = 0,
-        .y = 0,
-        .width = phys_width,
-        .height = phys_height,
-    });
-    defer layout.deinit();
-
-    // Wrap terminal in a view
-    var term_view = try @import("views/terminal_view.zig").TerminalView.init(
+    // Create GlobalState (includes TabManager with initial tab)
+    const global_state = try GlobalState.init(
         allocator,
-        &term,
-        &pty,
+        &renderer,
+        device,
+        COLS,
+        ROWS,
+        scale_factor,
+        null, // layer will be set during window.setup
+        &render_needed,
     );
-    _ = try layout.addPane(&term_view.view);
-
-    var app_ctx = window.AppContext{
-        .pty = &pty,
-        .term = &term,
-        .renderer = &renderer,
-        .layout = &layout,
-        .mutex = &mutex,
-        .layer = null,
-        .needs_render = &needs_render,
-    };
+    defer global_state.deinit(allocator);
 
     // Set up window (must be on main thread)
-    try window.setup(&app_ctx);
-
-    // Start I/O thread for PTY reading
-    const io_thread = try std.Thread.spawn(.{}, ioLoop, .{ &pty, &term, &mutex, &needs_render });
-    defer io_thread.join();
+    try window.setup(global_state);
 
     // Run AppKit main loop (blocks until app exits)
     window.runApp();
-}
-
-fn ioLoop(pty: *Pty, term: *terminal.Terminal, mutex: *std.Thread.Mutex, needs_render: *std.atomic.Value(bool)) void {
-    var buf: [8192]u8 = undefined;
-
-    while (true) {
-        const n = pty.read(&buf) catch |err| {
-            switch (err) {
-                error.NotOpenForReading, error.InputOutput => return,
-                else => {
-                    std.Thread.sleep(10 * std.time.ns_per_ms);
-                    continue;
-                },
-            }
-        };
-
-        if (n == 0) {
-            if (!pty.isAlive()) {
-                objc.msgSendVoid(window.sharedApp(), objc.sel("terminate:"), .{@as(objc.id, null)});
-                return;
-            }
-            std.Thread.sleep(1 * std.time.ns_per_ms);
-            continue;
-        }
-
-        mutex.lock();
-        defer mutex.unlock();
-        term.feed(buf[0..n]);
-
-        // Always render after receiving PTY data
-        needs_render.store(true, .release);
-    }
 }
