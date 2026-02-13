@@ -158,3 +158,48 @@ pub fn getIvarValue(comptime T: type, obj: id, ivar_name: [*:0]const u8, cls: Cl
     const slot: *const T = @ptrCast(@alignCast(base + @as(usize, @intCast(offset))));
     return slot.*;
 }
+
+/// Configures all properties of a vertex attribute in a single call
+pub fn setupVertexAttribute(
+    desc: objc.id,
+    index: u64,
+    format: u64,
+    offset: usize,
+    bufferIndex: u64,
+) void {
+    const attributes = objc.msgSend(objc.id, desc, objc.sel("attributes"), .{});
+    const attr = objc.msgSend(objc.id, attributes, objc.sel("objectAtIndexedSubscript:"), .{index});
+
+    objc.msgSendVoid(attr, objc.sel("setFormat:"), .{format});
+    objc.msgSendVoid(attr, objc.sel("setOffset:"), .{offset});
+    objc.msgSendVoid(attr, objc.sel("setBufferIndex:"), .{bufferIndex});
+}
+
+/// Standardizes setting pipeline properties with proper error handling
+pub fn setPipelineProperty(
+    desc: objc.id,
+    property: [*:0]const u8,
+    value: anytype,
+) void {
+    const selector = objc.sel(property);
+    if (comptime @TypeOf(value) == void) {
+        objc.msgSendVoid(desc, selector, .{});
+    } else {
+        objc.msgSendVoid(desc, selector, .{value});
+    }
+}
+
+/// Creates Objective-C objects with consistent error handling
+pub fn createObjCObject(
+    comptime name: [*:0]const u8,
+    allocator: std.mem.Allocator,
+) !objc.id {
+    const cls = objc.getClass(name);
+    const obj = objc.alloc(cls);
+    const result = objc.msgSend(objc.id, obj, objc.sel("init"), .{});
+
+    if (result == null) {
+        return error.ObjCObjectCreationFailed;
+    }
+    return result;
+}
