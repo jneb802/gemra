@@ -101,21 +101,21 @@ pub const Renderer = struct {
 
         // Pipeline descriptor
         const pipeline_desc = objc.allocInit("MTLRenderPipelineDescriptor");
-        setPipelineProperty(pipeline_desc, "setVertexFunction:", vertex_fn);
-        setPipelineProperty(pipeline_desc, "setFragmentFunction:", fragment_fn);
-        setPipelineProperty(pipeline_desc, "setVertexDescriptor:", vertex_desc);
+        objc.setPipelineProperty(pipeline_desc, "setVertexFunction:", vertex_fn);
+        objc.setPipelineProperty(pipeline_desc, "setFragmentFunction:", fragment_fn);
+        objc.setPipelineProperty(pipeline_desc, "setVertexDescriptor:", vertex_desc);
 
         // Color attachment
         const color_attachments = objc.msgSend(objc.id, pipeline_desc, objc.sel("colorAttachments"), .{});
         const color_attachment0 = objc.msgSend(objc.id, color_attachments, objc.sel("objectAtIndexedSubscript:"), .{@as(u64, 0)});
-        setPipelineProperty(color_attachment0, "setPixelFormat:", MTLPixelFormatBGRA8Unorm);
+        objc.setPipelineProperty(color_attachment0, "setPixelFormat:", MTLPixelFormatBGRA8Unorm);
 
         // Enable alpha blending
-        setPipelineProperty(color_attachment0, "setBlendingEnabled:", objc.YES);
-        setPipelineProperty(color_attachment0, "setSourceRGBBlendFactor:", MTLBlendFactorOne);
-        setPipelineProperty(color_attachment0, "setDestinationRGBBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
-        setPipelineProperty(color_attachment0, "setSourceAlphaBlendFactor:", MTLBlendFactorOne);
-        setPipelineProperty(color_attachment0, "setDestinationAlphaBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
+        objc.setPipelineProperty(color_attachment0, "setBlendingEnabled:", objc.YES);
+        objc.setPipelineProperty(color_attachment0, "setSourceRGBBlendFactor:", MTLBlendFactorOne);
+        objc.setPipelineProperty(color_attachment0, "setDestinationRGBBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
+        objc.setPipelineProperty(color_attachment0, "setSourceAlphaBlendFactor:", MTLBlendFactorOne);
+        objc.setPipelineProperty(color_attachment0, "setDestinationAlphaBlendFactor:", MTLBlendFactorOneMinusSourceAlpha);
 
         var pipeline_error: objc.id = null;
         const pipeline_state = objc.msgSend(objc.id, device, objc.sel("newRenderPipelineStateWithDescriptor:error:"), .{
