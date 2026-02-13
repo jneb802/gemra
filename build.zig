@@ -16,6 +16,10 @@ pub fn build(b: *std.Build) void {
         exe_mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
     }
 
+    if (b.lazyDependency("zvterm", .{})) |dep| {
+        exe_mod.addImport("zvterm", dep.module("zvterm"));
+    }
+
     const exe = b.addExecutable(.{
         .name = "gemra",
         .root_module = exe_mod,
@@ -49,6 +53,10 @@ pub fn build(b: *std.Build) void {
 
     if (b.lazyDependency("ghostty", .{})) |dep| {
         test_mod.addImport("ghostty-vt", dep.module("ghostty-vt"));
+    }
+
+    if (b.lazyDependency("zvterm", .{})) |dep| {
+        test_mod.addImport("zvterm", dep.module("zvterm"));
     }
 
     const exe_unit_tests = b.addTest(.{

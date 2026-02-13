@@ -40,6 +40,10 @@
             .url = "https://github.com/ghostty-org/ghostty/archive/20c07be4512a372e40ac93baecdef1056774cf46.tar.gz",
             .hash = "ghostty-1.3.0-dev-5UdBC1EvTQQbB4dIEMxnNBsbr5X9dPqaQwFqlcuJQGOH",
         },
+        .zvterm = .{
+            .url = "git+https://github.com/ringtailsoftware/zvterm.git#05cee2f1d00c7b4cec0eb9f7beef0b48918b748b",
+            .hash = "zvterm-0.0.1-VuAjA4JnAwAqsAyUTtgA60fx5WNSOnnO68VHq2kCdl0s",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.
