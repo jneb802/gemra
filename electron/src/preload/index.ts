@@ -32,18 +32,6 @@ contextBridge.exposeInMainWorld('electron', {
     },
   },
 
-  // File browser operations
-  fileBrowser: {
-    readDir: (dirPath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.FILE_READ_DIR, dirPath),
-
-    stat: (filePath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.FILE_STAT, filePath),
-
-    open: (filePath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN, filePath),
-  },
-
   // Menu event listeners
   onMenuEvent: (channel: string, callback: () => void) => {
     const subscription = () => callback()
@@ -53,16 +41,49 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Platform info
   platform: process.platform,
+
+  // Claude Code operations
+  claude: {
+    start: (workingDir: string) =>
+      ipcRenderer.invoke('claude:start', workingDir),
+
+    send: (agentId: string, prompt: string) =>
+      ipcRenderer.invoke('claude:send', agentId, prompt),
+
+    stop: (agentId: string) =>
+      ipcRenderer.invoke('claude:stop', agentId),
+
+    onText: (callback: (data: { agentId: string; text: string }) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; text: string }) =>
+        callback(data)
+      ipcRenderer.on('claude:text', subscription)
+      return () => ipcRenderer.removeListener('claude:text', subscription)
+    },
+
+    onStatus: (callback: (data: { agentId: string; status: string }) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; status: string }) =>
+        callback(data)
+      ipcRenderer.on('claude:status', subscription)
+      return () => ipcRenderer.removeListener('claude:status', subscription)
+    },
+
+    onError: (callback: (data: { agentId: string; error: string }) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; error: string }) =>
+        callback(data)
+      ipcRenderer.on('claude:error', subscription)
+      return () => ipcRenderer.removeListener('claude:error', subscription)
+    },
+
+    onExit: (callback: (data: { agentId: string; info: any }) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; info: any }) =>
+        callback(data)
+      ipcRenderer.on('claude:exit', subscription)
+      return () => ipcRenderer.removeListener('claude:exit', subscription)
+    },
+  },
 })
 
 // Type definitions for TypeScript
-export interface FileInfo {
-  name: string
-  path: string
-  isDirectory: boolean
-  isHidden: boolean
-}
-
 export interface ElectronAPI {
   pty: {
     spawn: (id: string, options: PtyOptions) => Promise<{ success: boolean; pid?: number; error?: string }>
@@ -72,13 +93,17 @@ export interface ElectronAPI {
     onData: (callback: (data: PtyData) => void) => () => void
     onExit: (callback: (data: { terminalId: string; exitCode: number }) => void) => () => void
   }
-  fileBrowser: {
-    readDir: (dirPath: string) => Promise<{ success: boolean; files: FileInfo[]; path: string; error?: string }>
-    stat: (filePath: string) => Promise<{ success: boolean; isDirectory?: boolean; isFile?: boolean; size?: number; modified?: Date; error?: string }>
-    open: (filePath: string) => Promise<{ success: boolean; error?: string }>
-  }
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string
+  claude: {
+    start: (workingDir: string) => Promise<{ success: boolean; agentId?: string; error?: string }>
+    send: (agentId: string, prompt: string) => Promise<{ success: boolean; error?: string }>
+    stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
+    onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
+    onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
+    onError: (callback: (data: { agentId: string; error: string }) => void) => () => void
+    onExit: (callback: (data: { agentId: string; info: any }) => void) => () => void
+  }
 }
 
 declare global {

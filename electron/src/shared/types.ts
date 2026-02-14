@@ -39,11 +39,6 @@ export const IPC_CHANNELS = {
   TERMINAL_CLOSE: 'terminal:close',
   TERMINAL_LIST: 'terminal:list',
 
-  // File browser operations
-  FILE_READ_DIR: 'file:readDir',
-  FILE_STAT: 'file:stat',
-  FILE_OPEN: 'file:open',
-
   // Window operations
   WINDOW_CLOSE: 'window:close',
   WINDOW_MINIMIZE: 'window:minimize',
@@ -51,3 +46,28 @@ export const IPC_CHANNELS = {
 } as const
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
+
+// Claude Agent types
+export interface ClaudeMessage {
+  role: 'user' | 'assistant'
+  content: string
+  id: string
+}
+
+export interface ClaudeAgentInfo {
+  agentId: string
+  workingDir: string
+  status: 'idle' | 'working' | 'error'
+}
+
+export interface ACPMessage {
+  jsonrpc: '2.0'
+  id?: string | number
+  method?: string
+  params?: any
+  result?: any
+  error?: {
+    code: number
+    message: string
+  }
+}

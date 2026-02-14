@@ -1,96 +1,64 @@
 import { useEffect, useCallback, useState } from 'react'
 import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
-import { SplitLayout } from './components/SplitPane/SplitLayout'
-import { FileBrowserPanel } from './components/FileBrowser/FileBrowserPanel'
+import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { useTabStore } from './stores/tabStore'
-import { useLayoutStore } from './stores/layoutStore'
-import { useFileBrowserStore } from './stores/fileBrowserStore'
 
 function App() {
   const tabs = useTabStore((state) => state.tabs)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const createTab = useTabStore((state) => state.createTab)
+  const createClaudeTab = useTabStore((state) => state.createClaudeTab)
   const closeTab = useTabStore((state) => state.closeTab)
   const setActiveTab = useTabStore((state) => state.setActiveTab)
   const getTabByIndex = useTabStore((state) => state.getTabByIndex)
 
-  const getLayout = useLayoutStore((state) => state.getLayout)
-  const getActivePaneId = useLayoutStore((state) => state.getActivePaneId)
-  const setActivePaneId = useLayoutStore((state) => state.setActivePaneId)
-  const splitPane = useLayoutStore((state) => state.splitPane)
-  const closePane = useLayoutStore((state) => state.closePane)
-  const focusNextPane = useLayoutStore((state) => state.focusNextPane)
-  const focusPreviousPane = useLayoutStore((state) => state.focusPreviousPane)
-
-  const toggleFileBrowser = useFileBrowserStore((state) => state.toggleVisibility)
 
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
+
+  // Handler for creating Claude chat tabs
+  const handleNewClaudeTab = useCallback(async () => {
+    // Start a new Claude agent (use home directory as default)
+    const workingDir = '/Users/benjmarston/Develop/gemra'
+    const result = await window.electron.claude.start(workingDir)
+
+    if (result.success && result.agentId) {
+      createClaudeTab(result.agentId, workingDir)
+    } else {
+      console.error('Failed to start Claude agent:', result.error)
+      // Show error to user (TODO: proper error handling)
+      alert(`Failed to start Claude agent: ${result.error}`)
+    }
+  }, [createClaudeTab])
+
+  const handleNewTab = useCallback(() => {
+    createTab('terminal')
+  }, [createTab])
 
   // Create initial tab on mount
   useEffect(() => {
     if (tabs.length === 0) {
-      createTab()
+      createTab('terminal')
     }
-  }, [])
+  }, [tabs.length, createTab])
 
   // Handle menu events
   useEffect(() => {
     const unsubscribers: (() => void)[] = []
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:new-tab', () => createTab())
+      window.electron.onMenuEvent('menu:new-tab', () => createTab('terminal'))
+    )
+
+    unsubscribers.push(
+      window.electron.onMenuEvent('menu:new-claude-chat', () => handleNewClaudeTab())
     )
 
     unsubscribers.push(
       window.electron.onMenuEvent('menu:close-tab', () => {
         if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-          if (layout && activePaneId) {
-            closePane(activeTabId, activePaneId)
-            const updatedLayout = getLayout(activeTabId)
-            if (!updatedLayout) closeTab(activeTabId)
-          } else {
-            closeTab(activeTabId)
-          }
-        }
-      })
-    )
-
-    unsubscribers.push(
-      window.electron.onMenuEvent('menu:split-horizontal', () => {
-        if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-          if (!layout || !activePaneId) {
-            const newTabId = createTab()
-            splitPane(activeTabId, activeTabId, 'horizontal', newTabId)
-            closeTab(newTabId)
-          } else {
-            const newTabId = createTab()
-            splitPane(activeTabId, activePaneId, 'horizontal', newTabId)
-            closeTab(newTabId)
-          }
-        }
-      })
-    )
-
-    unsubscribers.push(
-      window.electron.onMenuEvent('menu:split-vertical', () => {
-        if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-          if (!layout || !activePaneId) {
-            const newTabId = createTab()
-            splitPane(activeTabId, activeTabId, 'vertical', newTabId)
-            closeTab(newTabId)
-          } else {
-            const newTabId = createTab()
-            splitPane(activeTabId, activePaneId, 'vertical', newTabId)
-            closeTab(newTabId)
-          }
+          closeTab(activeTabId)
         }
       })
     )
@@ -110,10 +78,6 @@ function App() {
     )
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:toggle-file-browser', () => toggleFileBrowser())
-    )
-
-    unsubscribers.push(
       window.electron.onMenuEvent('menu:preferences', () => setIsPreferencesOpen(true))
     )
 
@@ -126,11 +90,7 @@ function App() {
     createTab,
     closeTab,
     setActiveTab,
-    getLayout,
-    getActivePaneId,
-    splitPane,
-    closePane,
-    toggleFileBrowser,
+    handleNewClaudeTab,
   ])
 
   // Handle keyboard shortcuts
@@ -141,32 +101,23 @@ function App() {
 
       if (!cmdOrCtrl) return
 
-      // Cmd/Ctrl+T - New tab
-      if (e.key === 't') {
+      // Cmd/Ctrl+T - New terminal tab
+      if (e.key === 't' && !e.shiftKey) {
         e.preventDefault()
-        createTab()
+        createTab('terminal')
       }
 
-      // Cmd/Ctrl+W - Close tab or pane
+      // Cmd/Ctrl+Shift+T - New Claude chat tab
+      if (e.key === 'T' && e.shiftKey) {
+        e.preventDefault()
+        handleNewClaudeTab()
+      }
+
+      // Cmd/Ctrl+W - Close tab
       if (e.key === 'w') {
         e.preventDefault()
         if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-
-          if (layout && activePaneId) {
-            // Close active pane
-            closePane(activeTabId, activePaneId)
-
-            // If no panes left in tab, close the tab
-            const updatedLayout = getLayout(activeTabId)
-            if (!updatedLayout) {
-              closeTab(activeTabId)
-            }
-          } else {
-            // No panes, just close the tab
-            closeTab(activeTabId)
-          }
+          closeTab(activeTabId)
         }
       }
 
@@ -198,74 +149,6 @@ function App() {
         }
       }
 
-      // Cmd/Ctrl+D - Split horizontally
-      if (e.key === 'd' && !e.shiftKey) {
-        e.preventDefault()
-        if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-
-          if (!layout || !activePaneId) {
-            // No layout yet, create initial split with current tab
-            const newTabId = createTab()
-            splitPane(activeTabId, activeTabId, 'horizontal', newTabId)
-            // Remove the newly created tab from tab bar (we only want it in the pane)
-            closeTab(newTabId)
-          } else {
-            // Split the active pane
-            const newTabId = createTab()
-            splitPane(activeTabId, activePaneId, 'horizontal', newTabId)
-            // Remove the newly created tab from tab bar
-            closeTab(newTabId)
-          }
-        }
-      }
-
-      // Cmd/Ctrl+Shift+D - Split vertically
-      if (e.key === 'd' && e.shiftKey) {
-        e.preventDefault()
-        if (activeTabId) {
-          const layout = getLayout(activeTabId)
-          const activePaneId = getActivePaneId(activeTabId)
-
-          if (!layout || !activePaneId) {
-            // No layout yet, create initial split with current tab
-            const newTabId = createTab()
-            splitPane(activeTabId, activeTabId, 'vertical', newTabId)
-            // Remove the newly created tab from tab bar
-            closeTab(newTabId)
-          } else {
-            // Split the active pane
-            const newTabId = createTab()
-            splitPane(activeTabId, activePaneId, 'vertical', newTabId)
-            // Remove the newly created tab from tab bar
-            closeTab(newTabId)
-          }
-        }
-      }
-
-      // Cmd/Ctrl+[ - Previous pane
-      if (e.key === '[' && !e.shiftKey) {
-        e.preventDefault()
-        if (activeTabId) {
-          focusPreviousPane(activeTabId)
-        }
-      }
-
-      // Cmd/Ctrl+] - Next pane
-      if (e.key === ']' && !e.shiftKey) {
-        e.preventDefault()
-        if (activeTabId) {
-          focusNextPane(activeTabId)
-        }
-      }
-
-      // Cmd/Ctrl+B - Toggle file browser
-      if (e.key === 'b') {
-        e.preventDefault()
-        toggleFileBrowser()
-      }
-
       // Cmd+, - Preferences (macOS)
       if (isMac && e.key === ',') {
         e.preventDefault()
@@ -282,26 +165,8 @@ function App() {
     closeTab,
     setActiveTab,
     getTabByIndex,
-    getLayout,
-    getActivePaneId,
-    setActivePaneId,
-    splitPane,
-    closePane,
-    focusNextPane,
-    focusPreviousPane,
-    toggleFileBrowser,
+    handleNewClaudeTab,
   ])
-
-  const handleNewTab = useCallback(() => {
-    createTab()
-  }, [createTab])
-
-  const handlePaneClick = useCallback(
-    (tabId: string, paneId: string) => {
-      setActivePaneId(tabId, paneId)
-    },
-    [setActivePaneId]
-  )
 
   return (
     <div
@@ -316,7 +181,7 @@ function App() {
       {/* Tab bar */}
       <TabBar onNewTab={handleNewTab} />
 
-      {/* Main content area with file browser and terminal */}
+      {/* Main content area */}
       <div
         style={{
           flex: 1,
@@ -324,9 +189,6 @@ function App() {
           display: 'flex',
         }}
       >
-        {/* File browser sidebar */}
-        <FileBrowserPanel />
-
         {/* Terminal views */}
         <div
           style={{
@@ -335,10 +197,7 @@ function App() {
             position: 'relative',
           }}
         >
-        {tabs.map((tab) => {
-          const layout = getLayout(tab.id)
-
-          return (
+        {tabs.map((tab) => (
             <div
               key={tab.id}
               style={{
@@ -350,14 +209,13 @@ function App() {
                 display: tab.isActive ? 'block' : 'none',
               }}
             >
-              {layout ? (
-                <SplitLayout layout={layout} onPaneClick={(paneId) => handlePaneClick(tab.id, paneId)} />
+              {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
+                <ClaudeChat agentId={tab.agentId} workingDir={tab.workingDir} />
               ) : (
                 <TerminalView terminalId={tab.id} />
               )}
             </div>
-          )
-        })}
+          ))}
         </div>
       </div>
 

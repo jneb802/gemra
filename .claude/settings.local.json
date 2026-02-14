@@ -54,7 +54,23 @@
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
       "Bash(git worktree remove:*)",
-      "Bash(zig build:*)"
+      "Bash(zig build:*)",
+      "Bash(ls:*)",
+      "Bash(zig-out/bin/gemra:*)",
+      "Bash(nm:*)",
+      "Bash(chmod:*)",
+      "Bash(./build.sh:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(swiftc:*)",
+      "Bash(open:*)",
+      "Bash(log show:*)",
+      "Bash(../build/GemraApp.app/Contents/MacOS/GemraApp:*)",
+      "Bash(/Users/benjmarston/Develop/gemra/build/GemraApp.app/Contents/MacOS/GemraApp)",
+      "Bash(killall:*)",
+      "Bash(osascript:*)",
+      "Bash(gh pr:*)",
+      "Bash(pkill:*)",
+      "Bash(npm run typecheck:*)"
     ]
   }
 }

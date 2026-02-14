@@ -8,7 +8,6 @@ A modern terminal emulator built with Electron, React, TypeScript, and xterm.js.
 - ✅ **Phase 2** - Multi-tab support with independent terminals
 - ✅ **Phase 3** - Enhanced text selection and clipboard integration
 - ✅ **Phase 4** - Split panes (horizontal/vertical) with resizable dividers
-- ✅ **Phase 5** - File browser sidebar with collapsible tree
 - ✅ **Phase 6** - Native macOS menu bar with all shortcuts
 - ✅ **Phase 7** - Preferences UI with font, cursor, and theme settings
 
@@ -68,7 +67,6 @@ npm run package:mac
 - **Cmd+A** - Select all
 
 ### Other
-- **Cmd+B** - Toggle file browser
 - **Cmd+,** - Preferences
 
 ## Architecture
@@ -78,9 +76,8 @@ Main Process (Node.js)          Renderer Process (Chromium)
 ├─ WindowManager                ├─ React App
 ├─ PtyManager (node-pty)        ├─ Multi-tab UI (Zustand)
 ├─ MenuBuilder                  ├─ Split pane layout (binary tree)
-├─ File browser IPC             ├─ xterm.js with WebGL
-└─ IPC handlers                 └─ Preferences modal
-         ↕ IPC (contextBridge) ↕
+└─ IPC handlers                 ├─ xterm.js with WebGL
+         ↕ IPC (contextBridge) ↕└─ Preferences modal
 ```
 
 ## Project Structure
@@ -95,8 +92,7 @@ electron/
 │   │   ├── menu/
 │   │   │   └── MenuBuilder.ts   # Native menu bar
 │   │   └── ipc/
-│   │       ├── terminal.ts      # Terminal IPC handlers
-│   │       └── file-browser.ts  # File system IPC
+│   │       └── terminal.ts      # Terminal IPC handlers
 │   │
 │   ├── renderer/                # Renderer process (Chromium)
 │   │   ├── index.tsx            # React entry point
@@ -110,14 +106,11 @@ electron/
 │   │   │   │   └── TabItem.tsx
 │   │   │   ├── SplitPane/
 │   │   │   │   └── SplitLayout.tsx
-│   │   │   ├── FileBrowser/
-│   │   │   │   └── FileBrowserPanel.tsx
 │   │   │   └── Preferences/
 │   │   │       └── PreferencesModal.tsx
 │   │   └── stores/              # Zustand state stores
 │   │       ├── tabStore.ts
 │   │       ├── layoutStore.ts
-│   │       ├── fileBrowserStore.ts
 │   │       └── settingsStore.ts
 │   │
 │   ├── preload/                 # Preload script
@@ -155,13 +148,6 @@ electron/
 - Independent terminal per pane
 - Visual active pane indicator (blue border)
 - Keyboard navigation between panes
-
-### ✅ File Browser
-- Collapsible directory tree
-- File/folder icons
-- Click to open files in default app
-- Toggle visibility with Cmd+B
-- Starts at home directory
 
 ### ✅ Native Menu
 - Full macOS menu bar (App, Shell, Edit, View, Window, Help)

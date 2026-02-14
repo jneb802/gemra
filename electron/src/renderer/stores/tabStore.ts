@@ -1,9 +1,14 @@
 import { create } from 'zustand'
 
+export type TabType = 'terminal' | 'claude-chat'
+
 export interface Tab {
   id: string
   title: string
   isActive: boolean
+  type: TabType
+  agentId?: string // For Claude chat tabs
+  workingDir?: string // For Claude chat tabs
 }
 
 interface TabState {
@@ -11,7 +16,8 @@ interface TabState {
   activeTabId: string | null
 
   // Actions
-  createTab: () => string
+  createTab: (type?: TabType) => string
+  createClaudeTab: (agentId: string, workingDir: string) => string
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTabTitle: (id: string, title: string) => void
@@ -25,12 +31,35 @@ export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
 
-  createTab: () => {
+  createTab: (type: TabType = 'terminal') => {
     const id = `tab-${++tabCounter}`
     const newTab: Tab = {
       id,
-      title: `Shell ${tabCounter}`,
+      title: type === 'claude-chat' ? `Claude ${tabCounter}` : `Shell ${tabCounter}`,
       isActive: true,
+      type,
+    }
+
+    set((state) => ({
+      tabs: [
+        ...state.tabs.map((tab) => ({ ...tab, isActive: false })),
+        newTab,
+      ],
+      activeTabId: id,
+    }))
+
+    return id
+  },
+
+  createClaudeTab: (agentId: string, workingDir: string) => {
+    const id = `tab-${++tabCounter}`
+    const newTab: Tab = {
+      id,
+      title: `Claude ${tabCounter}`,
+      isActive: true,
+      type: 'claude-chat',
+      agentId,
+      workingDir,
     }
 
     set((state) => ({

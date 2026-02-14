@@ -36,7 +36,7 @@ See `electron/README.md` for complete documentation.
 ## Features
 
 - Multiple terminal tabs with smooth transitions
-- File browser with split pane support
+- Split pane support (horizontal/vertical)
 - Full VT100/ANSI escape sequence support
 - WebGL-accelerated rendering via xterm.js
 - Native macOS window chrome

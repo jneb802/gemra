@@ -57,25 +57,17 @@ export class MenuBuilder {
             },
           },
           {
+            label: 'New Claude Chat',
+            accelerator: 'CmdOrCtrl+Shift+T',
+            click: () => {
+              this.mainWindow.webContents.send('menu:new-claude-chat')
+            },
+          },
+          {
             label: 'Close Tab',
             accelerator: 'CmdOrCtrl+W',
             click: () => {
               this.mainWindow.webContents.send('menu:close-tab')
-            },
-          },
-          { type: 'separator' },
-          {
-            label: 'Split Pane Horizontally',
-            accelerator: 'CmdOrCtrl+D',
-            click: () => {
-              this.mainWindow.webContents.send('menu:split-horizontal')
-            },
-          },
-          {
-            label: 'Split Pane Vertically',
-            accelerator: 'CmdOrCtrl+Shift+D',
-            click: () => {
-              this.mainWindow.webContents.send('menu:split-vertical')
             },
           },
           { type: 'separator' },
@@ -124,14 +116,6 @@ export class MenuBuilder {
       {
         label: 'View',
         submenu: [
-          {
-            label: 'Toggle File Browser',
-            accelerator: 'CmdOrCtrl+B',
-            click: () => {
-              this.mainWindow.webContents.send('menu:toggle-file-browser')
-            },
-          },
-          { type: 'separator' },
           { role: 'reload' },
           { role: 'forceReload' },
           { role: 'toggleDevTools' },

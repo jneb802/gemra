@@ -3,7 +3,7 @@ import { WindowManager } from './WindowManager'
 import { PtyManager } from './PtyManager'
 import { MenuBuilder } from './menu/MenuBuilder'
 import { setupTerminalIpc } from './ipc/terminal'
-import { setupFileBrowserIpc } from './ipc/file-browser'
+import { setupClaudeIpc, cleanupClaudeAgents } from './ipc/claude'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 try {
@@ -26,7 +26,7 @@ const createWindow = () => {
 
   // Setup IPC handlers
   setupTerminalIpc(ptyManager, mainWindow)
-  setupFileBrowserIpc()
+  setupClaudeIpc(mainWindow)
 
   // Setup menu
   const menuBuilder = new MenuBuilder(mainWindow)
@@ -52,11 +52,12 @@ app.on('window-all-closed', () => {
   }
 })
 
-// Clean up PTYs before quit
-app.on('before-quit', () => {
+// Clean up PTYs and Claude agents before quit
+app.on('before-quit', async () => {
   if (ptyManager) {
     ptyManager.killAll()
   }
+  await cleanupClaudeAgents()
 })
 
 // Handle app activation (macOS)
