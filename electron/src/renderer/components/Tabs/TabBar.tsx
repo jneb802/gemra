@@ -1,5 +1,6 @@
-import { Plus } from 'lucide-react'
+import { Plus, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useTabStore } from '../../stores/tabStore'
+import { useFileBrowserStore } from '../../stores/fileBrowserStore'
 import { TabItem } from './TabItem'
 
 interface TabBarProps {
@@ -10,6 +11,8 @@ export function TabBar({ onNewTab }: TabBarProps) {
   const tabs = useTabStore((state) => state.tabs)
   const setActiveTab = useTabStore((state) => state.setActiveTab)
   const closeTab = useTabStore((state) => state.closeTab)
+  const isFileBrowserVisible = useFileBrowserStore((state) => state.isVisible)
+  const toggleFileBrowser = useFileBrowserStore((state) => state.toggleVisibility)
 
   return (
     <div
@@ -24,6 +27,43 @@ export function TabBar({ onNewTab }: TabBarProps) {
     >
       {/* macOS traffic light spacing */}
       <div style={{ width: '70px', flexShrink: 0 }} />
+
+      {/* File browser toggle button */}
+      <button
+        onClick={toggleFileBrowser}
+        title={isFileBrowserVisible ? 'Hide File Browser' : 'Show File Browser'}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '32px',
+          height: '32px',
+          padding: 0,
+          border: 'none',
+          backgroundColor: isFileBrowserVisible ? '#2d2d2d' : 'transparent',
+          cursor: 'pointer',
+          flexShrink: 0,
+          borderRadius: '4px',
+          marginLeft: '8px',
+          marginRight: '8px',
+          WebkitAppRegion: 'no-drag',
+          transition: 'background-color 0.15s ease',
+        } as React.CSSProperties}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#2d2d2d'
+        }}
+        onMouseLeave={(e) => {
+          if (!isFileBrowserVisible) {
+            e.currentTarget.style.backgroundColor = 'transparent'
+          }
+        }}
+      >
+        {isFileBrowserVisible ? (
+          <PanelLeftClose size={16} color="#b0b0b0" />
+        ) : (
+          <PanelLeft size={16} color="#b0b0b0" />
+        )}
+      </button>
 
       {/* Tab items */}
       <div
@@ -48,6 +88,7 @@ export function TabBar({ onNewTab }: TabBarProps) {
       {/* New tab button */}
       <button
         onClick={onNewTab}
+        title="New Tab"
         style={{
           display: 'flex',
           alignItems: 'center',

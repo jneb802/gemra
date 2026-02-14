@@ -108,8 +108,13 @@ export class PtyManager extends EventEmitter {
    */
   killAll(): void {
     for (const [id, terminal] of this.terminals) {
-      terminal.pty.kill()
-      this.terminals.delete(id)
+      try {
+        terminal.pty.kill()
+      } catch (error) {
+        console.error(`Failed to kill PTY ${id}:`, error)
+      }
     }
+    this.terminals.clear()
+    this.removeAllListeners() // Remove all event listeners
   }
 }

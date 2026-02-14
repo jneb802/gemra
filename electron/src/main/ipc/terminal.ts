@@ -48,13 +48,26 @@ export function setupTerminalIpc(ptyManager: PtyManager, mainWindow: BrowserWind
     }
   })
 
-  // Forward PTY data to renderer
-  ptyManager.on('data', (data: PtyData) => {
-    mainWindow.webContents.send(IPC_CHANNELS.PTY_DATA, data)
-  })
+  // Forward PTY data to renderer (with safety check)
+  const handlePtyData = (data: PtyData) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.PTY_DATA, data)
+    }
+  }
+  ptyManager.on('data', handlePtyData)
 
-  // Forward PTY exit to renderer
-  ptyManager.on('exit', (data: { terminalId: string; exitCode: number; signal?: number }) => {
-    mainWindow.webContents.send(IPC_CHANNELS.PTY_EXIT, data)
+  // Forward PTY exit to renderer (with safety check)
+  const handlePtyExit = (data: { terminalId: string; exitCode: number; signal?: number }) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.PTY_EXIT, data)
+    }
+  }
+  ptyManager.on('exit', handlePtyExit)
+
+  // Clean up event listeners when window is closing
+  mainWindow.on('close', () => {
+    ptyManager.removeListener('data', handlePtyData)
+    ptyManager.removeListener('exit', handlePtyExit)
+    ptyManager.killAll()
   })
 }
