@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import type { ClaudeMessage } from '../../../shared/types'
+import { generateId } from '../../../shared/utils/id'
 
 interface ClaudeChatProps {
   agentId: string
@@ -40,7 +41,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           return [
             ...prev,
             {
-              id: `msg-${Date.now()}`,
+              id: generateId.message(),
               role: 'assistant',
               content: data.text,
             },
@@ -83,7 +84,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     setMessages((prev) => [
       ...prev,
       {
-        id: `msg-${Date.now()}`,
+        id: generateId.message(),
         role: 'user',
         content: text,
       },

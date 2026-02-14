@@ -59,10 +59,3 @@ app.on('before-quit', async () => {
   }
   await cleanupClaudeAgents()
 })
-
-// Handle app activation (macOS)
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  }
-})
