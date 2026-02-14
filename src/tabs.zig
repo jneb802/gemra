@@ -72,11 +72,14 @@ pub const TabManager = struct {
     /// Creates a new tab with the given dimensions.
     /// The caller must start the I/O thread after adding the tab,
     /// because the Tab needs to be in the list before the thread starts.
-    fn createTab(self: *Self, cols: u16, rows: u16) !*Tab {
+    fn createTab(self: *Self, cols: u16, rows: u16, is_first: bool) !*Tab {
         const tab_id = @as(u32, @intCast(self.tabs.items.len));
 
-        // Spawn PTY
-        const pty = try Pty.spawn(cols, rows);
+        // Spawn PTY - use login shell only for the first tab
+        const pty = if (is_first)
+            try Pty.spawnLogin(cols, rows)
+        else
+            try Pty.spawn(cols, rows);
 
         // Initialize terminal with this tab's PTY master fd
         const term = try self.allocator.create(Terminal);
@@ -106,7 +109,8 @@ pub const TabManager = struct {
     /// Adds a new tab and starts its I/O thread.
     /// The render_needed pointer is used by the I/O thread to signal that a render is needed.
     pub fn add(self: *Self, cols: u16, rows: u16, render_needed: *std.atomic.Value(bool)) !usize {
-        const tab = try self.createTab(cols, rows);
+        const is_first = self.tabs.items.len == 0;
+        const tab = try self.createTab(cols, rows, is_first);
         const index = self.tabs.items.len - 1;
 
         // Start I/O thread for this tab

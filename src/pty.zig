@@ -18,6 +18,14 @@ pub const Pty = struct {
     child_pid: posix.pid_t,
 
     pub fn spawn(cols: u16, rows: u16) !Pty {
+        return spawnInternal(cols, rows, false);
+    }
+
+    pub fn spawnLogin(cols: u16, rows: u16) !Pty {
+        return spawnInternal(cols, rows, true);
+    }
+
+    fn spawnInternal(cols: u16, rows: u16, login_shell: bool) !Pty {
         var master: posix.fd_t = undefined;
         var slave: posix.fd_t = undefined;
 
@@ -61,14 +69,25 @@ pub const Pty = struct {
             // Get user's default shell
             const shell = getDefaultShell();
 
-            // Build a login shell argv[0] by prefixing the basename with '-'
-            // e.g. "/bin/zsh" → "-zsh". This tells the shell it's a login shell,
-            // which triggers /etc/zprofile, ~/.zprofile, and "Last login:" message.
-            var login_name_buf: [256]u8 = undefined;
-            const login_name = makeLoginShellName(&login_name_buf, shell);
+            // For login shells, prefix argv[0] with '-' to trigger login initialization
+            // For regular shells, just use the shell name
+            const shell_name: [*:0]const u8 = if (login_shell) blk: {
+                // Build a login shell argv[0] by prefixing the basename with '-'
+                // e.g. "/bin/zsh" → "-zsh". This tells the shell it's a login shell,
+                // which triggers /etc/zprofile, ~/.zprofile, and "Last login:" message.
+                var login_name_buf: [256]u8 = undefined;
+                break :blk makeLoginShellName(&login_name_buf, shell);
+            } else blk: {
+                // Regular shell: use the basename without '-' prefix
+                const shell_span = std.mem.span(shell);
+                if (std.mem.lastIndexOfScalar(u8, shell_span, '/')) |pos| {
+                    break :blk @ptrCast(shell_span[pos + 1 .. :0]);
+                }
+                break :blk shell;
+            };
 
             // Exec the shell using execvp (inherits environment)
-            var argv0 = [_:null]?[*:0]u8{@constCast(login_name)};
+            var argv0 = [_:null]?[*:0]u8{@constCast(shell_name)};
             _ = c.execvp(shell, @ptrCast(&argv0));
 
             // If execvp fails, try /bin/zsh, then /bin/sh
