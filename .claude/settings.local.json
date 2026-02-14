@@ -70,7 +70,8 @@
       "Bash(osascript:*)",
       "Bash(gh pr:*)",
       "Bash(pkill:*)",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

@@ -4,7 +4,6 @@ import { ACPMessage } from '../../shared/types'
 
 export interface ClaudeAgentOptions {
   workingDirectory: string
-  apiKey: string
 }
 
 /**

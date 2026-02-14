@@ -13,17 +13,11 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
   // Start a new Claude agent
   ipcMain.handle('claude:start', async (_, workingDir: string) => {
     try {
-      const apiKey = process.env.ANTHROPIC_API_KEY
-      if (!apiKey) {
-        throw new Error('ANTHROPIC_API_KEY environment variable not set')
-      }
-
       const agentId = `agent-${Date.now()}`
       console.log(`[ClaudeIPC] Starting agent ${agentId} in ${workingDir}`)
 
       const agent = new ClaudeAgent(agentId, {
         workingDirectory: workingDir,
-        apiKey,
       })
 
       // Listen for text responses from agent
