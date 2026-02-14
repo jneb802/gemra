@@ -1,7 +1,25 @@
-zig-out/
+# Zig build artifacts (archived)
 .zig-cache/
+zig-out/
+*.zig.zon.lock
+
+# Old Swift app (archived)
+GemraApp/
+*.xcodeproj/
+*.xcworkspace/
+
+# Old build artifacts (archived)
+build/
+build.sh
+
+# macOS
 .DS_Store
+
+# Claude Code
 CLAUDE.md
+
 # Nightshift plan artifacts (keep out of version control)
 .nightshift-plan
+
+# Old feature proposals (archived)
 features/
