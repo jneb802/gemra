@@ -92,7 +92,7 @@ code {
   padding: 32px 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
 }
 
 .message-list.empty {
@@ -118,7 +118,6 @@ code {
 /* Message container */
 .message {
   width: 100%;
-  max-width: var(--message-max-width);
   margin-bottom: var(--message-spacing-default);
   padding: var(--message-padding-vertical) var(--message-padding-horizontal);
   border-radius: 8px;
