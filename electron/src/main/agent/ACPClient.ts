@@ -140,9 +140,10 @@ export class ACPClient extends EventEmitter {
    * Create a new session (compatibility method)
    */
   async createSession(): Promise<string> {
-    // Session is created in start()
+    // Generate our own session ID for tracking
+    // SDK's sessionId is only available after first message
     if (!this.sessionId) {
-      this.sessionId = this.session.sessionId
+      this.sessionId = `session-${Date.now()}`
       this.logger.log(`Session ID: ${this.sessionId}`)
     }
     return this.sessionId
@@ -154,11 +155,6 @@ export class ACPClient extends EventEmitter {
   async sendPrompt(prompt: string): Promise<void> {
     if (!this.session) {
       throw new Error('Session not started')
-    }
-
-    // Ensure session ID is set
-    if (!this.sessionId) {
-      this.sessionId = this.session.sessionId
     }
 
     this.logger.log('Sending prompt:', prompt)

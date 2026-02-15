@@ -231,7 +231,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         <span className="working-dir">{workingDir}</span>
       </div>
 
-      <MessageList messages={messages} />
+      <MessageList messages={messages} isStreaming={agentStatus.type === 'streaming'} />
 
       {/* Status indicator */}
       {agentStatus.type === 'thinking' && (

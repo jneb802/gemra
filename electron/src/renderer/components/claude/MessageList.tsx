@@ -1,18 +1,84 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { List, useDynamicRowHeight, type ListImperativeAPI } from 'react-window'
 import type { ClaudeMessage } from '../../../shared/types'
+import { estimateMessageHeight, useMessageGrouping } from './useMessageHeights'
+import { MessageItem, type MessageItemProps } from './MessageItem'
 
 interface MessageListProps {
   messages: ClaudeMessage[]
+  isStreaming?: boolean
 }
 
-export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+export const MessageList: React.FC<MessageListProps> = ({ messages, isStreaming = false }) => {
+  const listRef = useRef<ListImperativeAPI | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isUserScrolling, setIsUserScrolling] = useState(false)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>()
+  const [containerHeight, setContainerHeight] = useState(600)
 
-  // Auto-scroll to bottom when new messages arrive
+  // Use message grouping helper
+  const { isGroupedWithPrevious } = useMessageGrouping(messages)
+
+  // Calculate default row height (average)
+  const defaultRowHeight = messages.length > 0
+    ? estimateMessageHeight(messages[0], false)
+    : 100
+
+  // Use dynamic row height for variable-sized rows
+  const rowHeight = useDynamicRowHeight({
+    defaultRowHeight,
+    key: messages.map(m => m.id).join('-'), // Re-initialize when messages change
+  })
+
+  // Measure container height
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (containerRef.current) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContainerHeight(entry.contentRect.height)
+        }
+      })
+      observer.observe(containerRef.current)
 
+      // Set initial height
+      setContainerHeight(containerRef.current.clientHeight)
+
+      return () => observer.disconnect()
+    }
+  }, [])
+
+  // Observe row elements for height measurement
+  useEffect(() => {
+    if (listRef.current?.element) {
+      const rows = listRef.current.element.querySelectorAll('[role="listitem"]')
+      if (rows.length > 0 && 'observeRowElements' in rowHeight) {
+        const unobserve = rowHeight.observeRowElements(rows)
+        return unobserve
+      }
+    }
+  }, [messages, rowHeight, listRef.current])
+
+  // Auto-scroll to bottom when streaming or user hasn't manually scrolled
+  useEffect(() => {
+    if ((isStreaming || !isUserScrolling) && messages.length > 0 && listRef.current) {
+      listRef.current.scrollToRow({
+        index: messages.length - 1,
+        align: 'end',
+        behavior: 'smooth',
+      })
+    }
+  }, [messages.length, isStreaming, isUserScrolling, listRef])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Early return for empty state
   if (messages.length === 0) {
     return (
       <div className="message-list empty">
@@ -24,27 +90,22 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
     )
   }
 
-  // Helper to determine if message should be grouped with previous
-  const isGroupedWithPrevious = (index: number): boolean => {
-    if (index === 0) return false
-    return messages[index].role === messages[index - 1].role
+  // Row props passed to each MessageItem
+  const rowProps: MessageItemProps = {
+    messages,
   }
 
   return (
-    <div className="message-list">
-      {messages.map((message, index) => (
-        <div
-          key={message.id}
-          className={`message message-${message.role}${
-            isGroupedWithPrevious(index) ? ' message-grouped' : ''
-          }`}
-        >
-          <div className="message-content">
-            {message.content}
-          </div>
-        </div>
-      ))}
-      <div ref={messagesEndRef} />
+    <div ref={containerRef} className="message-list">
+      <List<MessageItemProps>
+        listRef={listRef}
+        rowComponent={MessageItem}
+        rowCount={messages.length}
+        rowHeight={rowHeight}
+        rowProps={rowProps}
+        overscanCount={3}
+        style={{ height: containerHeight }}
+      />
     </div>
   )
 }
