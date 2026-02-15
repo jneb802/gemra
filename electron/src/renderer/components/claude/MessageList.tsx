@@ -1,15 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { List, useDynamicRowHeight, type ListImperativeAPI } from 'react-window'
-import type { ClaudeMessage } from '../../../shared/types'
+import type { ClaudeMessage, MessageMetadata } from '../../../shared/types'
 import { estimateMessageHeight, useMessageGrouping } from './useMessageHeights'
 import { MessageItem, type MessageItemProps } from './MessageItem'
 
 interface MessageListProps {
   messages: ClaudeMessage[]
   isStreaming?: boolean
+  currentTurnMetadata?: MessageMetadata | null
 }
 
-export const MessageList: React.FC<MessageListProps> = ({ messages, isStreaming = false }) => {
+export const MessageList: React.FC<MessageListProps> = ({
+  messages,
+  isStreaming = false,
+  currentTurnMetadata,
+}) => {
   const listRef = useRef<ListImperativeAPI | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -93,6 +98,7 @@ export const MessageList: React.FC<MessageListProps> = ({ messages, isStreaming 
   // Row props passed to each MessageItem
   const rowProps: MessageItemProps = {
     messages,
+    currentTurnMetadata,
   }
 
   return (

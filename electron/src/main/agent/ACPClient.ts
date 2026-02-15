@@ -16,6 +16,7 @@ export class ACPClient extends EventEmitter {
   private sessionId?: string
   private logger = new Logger('ACPClient')
   private isActive = false
+  private currentPhase: 'idle' | 'thinking' | 'streaming' | 'tool_execution' = 'idle'
 
   constructor(private options: ACPClientOptions) {
     super()
@@ -108,6 +109,12 @@ export class ACPClient extends EventEmitter {
       // Assistant message with content
       const message = sdkMessage.message
       if (message && message.content) {
+        // Transition to streaming phase on first text
+        if (this.currentPhase !== 'streaming') {
+          this.currentPhase = 'streaming'
+          this.emit('agentStatus', { type: 'streaming' })
+        }
+
         // Extract text from content blocks
         for (const block of message.content) {
           if (block.type === 'text' && block.text) {
@@ -122,6 +129,24 @@ export class ACPClient extends EventEmitter {
               },
             }
             this.emit('message', acpMessage)
+          } else if (block.type === 'tool_use') {
+            // Tool execution within message
+            this.currentPhase = 'tool_execution'
+            this.emit('toolExecution', {
+              id: block.id,
+              name: block.name,
+              input: block.input,
+              status: 'running',
+            })
+            this.emit('agentStatus', {
+              type: 'tool_execution',
+              tool: {
+                id: block.id,
+                name: block.name,
+                input: block.input,
+                status: 'running',
+              },
+            })
           }
         }
       }
@@ -136,6 +161,10 @@ export class ACPClient extends EventEmitter {
       }
       this.emit('message', acpMessage)
 
+      // Transition to idle
+      this.currentPhase = 'idle'
+      this.emit('agentStatus', { type: 'idle' })
+
       // Check for errors
       if (sdkMessage.is_error || sdkMessage.error) {
         this.emit('error', new Error(sdkMessage.result || sdkMessage.error || 'Unknown error'))
@@ -147,8 +176,17 @@ export class ACPClient extends EventEmitter {
         this.logger.log('Session ID from SDK:', this.sessionId)
       }
     } else if (sdkMessage.type === 'tool_use' || sdkMessage.type === 'tool_execution') {
-      // Tool execution (for debugging)
-      this.logger.log('Tool use:', sdkMessage.tool || sdkMessage.name)
+      // Tool execution
+      this.currentPhase = 'tool_execution'
+      const toolInfo = {
+        id: sdkMessage.id || sdkMessage.tool?.id || 'unknown',
+        name: sdkMessage.name || sdkMessage.tool?.name || 'unknown',
+        input: sdkMessage.input || sdkMessage.tool?.input || {},
+        status: 'running' as const,
+      }
+      this.emit('toolExecution', toolInfo)
+      this.emit('agentStatus', { type: 'tool_execution', tool: toolInfo })
+      this.logger.log('Tool use:', toolInfo.name)
     }
   }
 
@@ -174,6 +212,11 @@ export class ACPClient extends EventEmitter {
     }
 
     this.logger.log('Sending prompt:', prompt)
+
+    // Transition to thinking phase when sending
+    this.currentPhase = 'thinking'
+    this.emit('agentStatus', { type: 'thinking' })
+
     await this.session.send(prompt)
   }
 

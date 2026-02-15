@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
-import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus } from '../../../shared/types'
+import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
 
@@ -27,6 +27,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [containerStatus, setContainerStatus] = useState<ContainerStatus>('disabled')
   const [containerError, setContainerError] = useState<string | undefined>()
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
+  const [currentTurnMetadata, setCurrentTurnMetadata] = useState<MessageMetadata | null>(null)
+  const lastAssistantMessageIdRef = useRef<string | null>(null)
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -85,6 +87,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
           // If last message is from assistant, append to it
           if (lastMessage && lastMessage.role === 'assistant') {
+            // Track ID for metadata attachment
+            lastAssistantMessageIdRef.current = lastMessage.id
             return [
               ...prev.slice(0, -1),
               {
@@ -95,10 +99,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           }
 
           // Otherwise, create new assistant message
+          const newId = generateId.message()
+          lastAssistantMessageIdRef.current = newId
           return [
             ...prev,
             {
-              id: generateId.message(),
+              id: newId,
               role: 'assistant',
               content: data.text,
             },
@@ -123,6 +129,51 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           inputTokens: prev.inputTokens + data.usage.inputTokens,
           outputTokens: prev.outputTokens + data.usage.outputTokens,
         }))
+
+        // Finalize metadata for current turn
+        const now = Date.now()
+        setCurrentTurnMetadata((prev) => {
+          if (!prev) return null
+
+          // Calculate final phase time
+          const phaseElapsed = now - (prev.phaseStartTime || now)
+          let finalThinkingTime = prev.thinkingTime || 0
+          let finalStreamingTime = prev.streamingTime || 0
+          let finalToolTime = prev.toolExecutionTime || 0
+
+          if (prev.currentPhase === 'thinking') {
+            finalThinkingTime += phaseElapsed
+          } else if (prev.currentPhase === 'streaming') {
+            finalStreamingTime += phaseElapsed
+          } else if (prev.currentPhase === 'tool_execution') {
+            finalToolTime += phaseElapsed
+          }
+
+          const totalDuration = now - (prev.startTime || now)
+          const finalMetadata: MessageMetadata = {
+            ...prev,
+            thinkingTime: finalThinkingTime,
+            streamingTime: finalStreamingTime,
+            toolExecutionTime: finalToolTime,
+            totalDuration,
+            inputTokens: data.usage.inputTokens,
+            outputTokens: data.usage.outputTokens,
+            isComplete: true,
+          }
+
+          // Attach metadata to last assistant message
+          if (lastAssistantMessageIdRef.current) {
+            setMessages((msgs) =>
+              msgs.map((msg) =>
+                msg.id === lastAssistantMessageIdRef.current
+                  ? { ...msg, metadata: finalMetadata }
+                  : msg
+              )
+            )
+          }
+
+          return null // Clear current turn
+        })
       }
     })
 
@@ -131,6 +182,31 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       if (data.agentId === agentId) {
         console.log('[ClaudeChat] Agent status:', data.status)
         setAgentStatus(data.status)
+
+        // Update metadata with phase transitions
+        setCurrentTurnMetadata((prev) => {
+          if (!prev) return null
+
+          const now = Date.now()
+          const phaseElapsed = now - (prev.phaseStartTime || now)
+
+          // Accumulate time from previous phase
+          const updates: Partial<MessageMetadata> = {
+            currentPhase: data.status.type,
+            phaseStartTime: now,
+          }
+
+          // Add accumulated time based on previous phase
+          if (prev.currentPhase === 'thinking') {
+            updates.thinkingTime = (prev.thinkingTime || 0) + phaseElapsed
+          } else if (prev.currentPhase === 'streaming') {
+            updates.streamingTime = (prev.streamingTime || 0) + phaseElapsed
+          } else if (prev.currentPhase === 'tool_execution') {
+            updates.toolExecutionTime = (prev.toolExecutionTime || 0) + phaseElapsed
+          }
+
+          return { ...prev, ...updates }
+        })
       }
     })
 
@@ -192,11 +268,31 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Live timer effect for elapsed time updates
+  useEffect(() => {
+    if (!currentTurnMetadata || currentTurnMetadata.isComplete) return
+
+    const interval = setInterval(() => {
+      // Trigger re-render every 1s to update elapsed time
+      setCurrentTurnMetadata((prev) => (prev ? { ...prev } : null))
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [currentTurnMetadata?.isComplete])
+
   const handleSend = async (text: string) => {
     console.log('[ClaudeChat] Sending message:', text)
 
     // Clear any previous error
     setError(null)
+
+    // Start tracking new turn
+    setCurrentTurnMetadata({
+      startTime: Date.now(),
+      currentPhase: 'thinking',
+      phaseStartTime: Date.now(),
+      isComplete: false,
+    })
 
     // Add user message
     setMessages((prev) => [
@@ -217,11 +313,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       if (!result.success) {
         setError(result.error || 'Failed to send message')
         setIsWorking(false)
+        setCurrentTurnMetadata(null)
       }
     } catch (err) {
       console.error('[ClaudeChat] Failed to send:', err)
       setError('Failed to send message')
       setIsWorking(false)
+      setCurrentTurnMetadata(null)
     }
   }
 
@@ -371,7 +469,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         <span className="working-dir">{workingDir}</span>
       </div>
 
-      <MessageList messages={messages} isStreaming={agentStatus.type === 'streaming'} />
+      <MessageList
+        messages={messages}
+        isStreaming={agentStatus.type === 'streaming'}
+        currentTurnMetadata={currentTurnMetadata}
+      />
 
       {/* Status indicator */}
       {agentStatus.type === 'thinking' && (

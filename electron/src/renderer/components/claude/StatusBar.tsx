@@ -27,13 +27,13 @@ const MODEL_OPTIONS = [
   { id: 'default', label: 'Opus 4.6', description: 'Most capable' },
   { id: 'sonnet', label: 'Sonnet 4.5', description: 'Best for everyday tasks' },
   { id: 'haiku', label: 'Haiku 4.5', description: 'Fastest' },
-] as const
+]
 
 const MODE_OPTIONS = [
-  { id: 'default' as const, label: 'Default', description: 'Standard behavior' },
-  { id: 'acceptEdits' as const, label: 'Accept Edits', description: 'Auto-accept edits' },
-  { id: 'plan' as const, label: 'Plan', description: 'Planning only' },
-] as const
+  { id: 'default' as 'default', label: 'Default', description: 'Standard behavior' },
+  { id: 'acceptEdits' as 'acceptEdits', label: 'Accept Edits', description: 'Auto-accept edits' },
+  { id: 'plan' as 'plan', label: 'Plan', description: 'Planning only' },
+]
 
 export const StatusBar: React.FC<StatusBarProps> = ({
   mode,

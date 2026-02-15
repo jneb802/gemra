@@ -54,10 +54,31 @@ export const IPC_CHANNELS = {
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
 
 // Claude Agent types
+export interface MessageMetadata {
+  // Timing phases (milliseconds)
+  thinkingTime?: number      // Time in 'thinking' state
+  streamingTime?: number     // Time in 'streaming' state
+  toolExecutionTime?: number // Total time executing tools
+  totalDuration?: number     // Overall turn duration
+
+  // Token usage for this turn
+  inputTokens?: number
+  outputTokens?: number
+
+  // Live tracking state
+  startTime?: number         // When user sent message
+  phaseStartTime?: number    // When current phase started
+  currentPhase?: 'thinking' | 'streaming' | 'tool_execution' | 'idle'
+
+  // Status flag
+  isComplete?: boolean       // Whether turn finished
+}
+
 export interface ClaudeMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   id: string
+  metadata?: MessageMetadata // Per-turn metadata
 }
 
 export interface ClaudeAgentInfo {
