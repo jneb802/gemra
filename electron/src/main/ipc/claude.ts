@@ -1,11 +1,26 @@
 import { BrowserWindow } from 'electron'
-import { execSync } from 'child_process'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
+import { getGitBranch, getGitStats } from '../utils/gitUtils'
+import { Logger } from '../../shared/utils/logger'
 
 // Map of agent ID to agent instance
 const agents = new Map<string, ClaudeAgent>()
+
+// Logger instance
+const logger = new Logger('ClaudeIPC')
+
+/**
+ * Get agent by ID or throw error
+ */
+function getAgentOrThrow(agentId: string): ClaudeAgent {
+  const agent = agents.get(agentId)
+  if (!agent) {
+    throw new Error(`Agent ${agentId} not found`)
+  }
+  return agent
+}
 
 /**
  * Forward agent events to the renderer process
@@ -17,25 +32,25 @@ function forwardAgentEvents(
 ): void {
   // Listen for text responses from agent
   agent.on('text', (text: string) => {
-    console.log(`[ClaudeIPC] Agent ${agentId} text:`, text)
+    logger.log(`Agent ${agentId} text:`, text)
     mainWindow.webContents.send('claude:text', { agentId, text })
   })
 
   // Listen for status changes
   agent.on('status', (status: string) => {
-    console.log(`[ClaudeIPC] Agent ${agentId} status:`, status)
+    logger.log(`Agent ${agentId} status:`, status)
     mainWindow.webContents.send('claude:status', { agentId, status })
   })
 
   // Listen for token usage
   agent.on('usage', (usage: any) => {
-    console.log(`[ClaudeIPC] Agent ${agentId} usage:`, usage)
+    logger.log(`Agent ${agentId} usage:`, usage)
     mainWindow.webContents.send('claude:usage', { agentId, usage })
   })
 
   // Listen for errors
   agent.on('error', (error: Error) => {
-    console.error(`[ClaudeIPC] Agent ${agentId} error:`, error)
+    logger.error(`Agent ${agentId} error:`, error)
     mainWindow.webContents.send('claude:error', {
       agentId,
       error: error.message,
@@ -44,7 +59,7 @@ function forwardAgentEvents(
 
   // Listen for exit
   agent.on('exit', (info: any) => {
-    console.log(`[ClaudeIPC] Agent ${agentId} exited:`, info)
+    logger.log(`Agent ${agentId} exited:`, info)
     agents.delete(agentId)
     mainWindow.webContents.send('claude:exit', { agentId, info })
   })
@@ -54,12 +69,12 @@ function forwardAgentEvents(
  * Setup IPC handlers for Claude Code integration
  */
 export function setupClaudeIpc(mainWindow: BrowserWindow): void {
-  console.log('[ClaudeIPC] Setting up IPC handlers...')
+  logger.log('Setting up IPC handlers...')
 
   // Start a new Claude agent
   createIpcHandler('claude:start', async (workingDir: string, profileId?: string) => {
     const agentId = generateId.agent()
-    console.log(`[ClaudeIPC] Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'}`)
+    logger.log(`Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'}`)
 
     const agent = new ClaudeAgent(agentId, {
       workingDirectory: workingDir,
@@ -80,26 +95,18 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
   // Send a prompt to an agent
   createIpcHandler('claude:send', async (agentId: string, prompt: string) => {
-    console.log(`[ClaudeIPC] Sending prompt to agent ${agentId}:`, prompt)
+    logger.log(`Sending prompt to agent ${agentId}:`, prompt)
 
-    const agent = agents.get(agentId)
-    if (!agent) {
-      throw new Error(`Agent ${agentId} not found`)
-    }
-
+    const agent = getAgentOrThrow(agentId)
     await agent.sendPrompt(prompt)
     return {}
   })
 
   // Stop an agent
   createIpcHandler('claude:stop', async (agentId: string) => {
-    console.log(`[ClaudeIPC] Stopping agent ${agentId}`)
+    logger.log(`Stopping agent ${agentId}`)
 
-    const agent = agents.get(agentId)
-    if (!agent) {
-      throw new Error(`Agent ${agentId} not found`)
-    }
-
+    const agent = getAgentOrThrow(agentId)
     await agent.stop()
     agents.delete(agentId)
 
@@ -108,55 +115,32 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
   // Get git branch
   createIpcHandler('claude:get-git-branch', async (workingDir: string) => {
-    console.log(`[ClaudeIPC] Getting git branch for ${workingDir}`)
+    logger.log(`Getting git branch for ${workingDir}`)
 
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      cwd: workingDir,
-      encoding: 'utf-8',
-    }).trim()
-
+    const branch = getGitBranch(workingDir)
     return { branch }
   })
 
   // Get git stats
   createIpcHandler('claude:get-git-stats', async (workingDir: string) => {
-    console.log(`[ClaudeIPC] Getting git stats for ${workingDir}`)
+    logger.log(`Getting git stats for ${workingDir}`)
 
-    const shortstat = execSync('git diff --shortstat', {
-      cwd: workingDir,
-      encoding: 'utf-8',
-    }).trim()
-
-    // Parse output like: "3 files changed, 10 insertions(+), 5 deletions(-)"
-    let filesChanged = 0
-    let insertions = 0
-    let deletions = 0
-
-    if (shortstat) {
-      const filesMatch = shortstat.match(/(\d+) files? changed/)
-      const insertionsMatch = shortstat.match(/(\d+) insertions?/)
-      const deletionsMatch = shortstat.match(/(\d+) deletions?/)
-
-      filesChanged = filesMatch ? parseInt(filesMatch[1]) : 0
-      insertions = insertionsMatch ? parseInt(insertionsMatch[1]) : 0
-      deletions = deletionsMatch ? parseInt(deletionsMatch[1]) : 0
-    }
-
-    return { filesChanged, insertions, deletions }
+    const stats = getGitStats(workingDir)
+    return stats
   })
 
-  console.log('[ClaudeIPC] IPC handlers set up successfully')
+  logger.log('IPC handlers set up successfully')
 }
 
 /**
  * Clean up all agents
  */
 export async function cleanupClaudeAgents(): Promise<void> {
-  console.log('[ClaudeIPC] Cleaning up all agents...')
+  logger.log('Cleaning up all agents...')
 
   const promises = Array.from(agents.values()).map((agent) => agent.stop())
   await Promise.all(promises)
 
   agents.clear()
-  console.log('[ClaudeIPC] All agents cleaned up')
+  logger.log('All agents cleaned up')
 }

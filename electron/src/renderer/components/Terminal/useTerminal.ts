@@ -3,6 +3,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { terminalThemes } from '../../themes/terminalThemes'
 import '@xterm/xterm/css/xterm.css'
 
 interface UseTerminalOptions {
@@ -29,54 +30,7 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
       fontFamily: settings.fontFamily,
       fontSize: settings.fontSize,
       lineHeight: settings.lineHeight,
-      theme:
-        settings.theme === 'dark'
-          ? {
-              background: '#1e1e1e',
-              foreground: '#d4d4d4',
-              cursor: '#d4d4d4',
-              cursorAccent: '#1e1e1e',
-              selectionBackground: 'rgba(255, 255, 255, 0.3)',
-              black: '#000000',
-              red: '#cd3131',
-              green: '#0dbc79',
-              yellow: '#e5e510',
-              blue: '#2472c8',
-              magenta: '#bc3fbc',
-              cyan: '#11a8cd',
-              white: '#e5e5e5',
-              brightBlack: '#666666',
-              brightRed: '#f14c4c',
-              brightGreen: '#23d18b',
-              brightYellow: '#f5f543',
-              brightBlue: '#3b8eea',
-              brightMagenta: '#d670d6',
-              brightCyan: '#29b8db',
-              brightWhite: '#ffffff',
-            }
-          : {
-              background: '#ffffff',
-              foreground: '#383a42',
-              cursor: '#383a42',
-              cursorAccent: '#ffffff',
-              selectionBackground: 'rgba(0, 0, 0, 0.3)',
-              black: '#000000',
-              red: '#e45649',
-              green: '#50a14f',
-              yellow: '#c18401',
-              blue: '#0184bc',
-              magenta: '#a626a4',
-              cyan: '#0997b3',
-              white: '#fafafa',
-              brightBlack: '#a0a1a7',
-              brightRed: '#e45649',
-              brightGreen: '#50a14f',
-              brightYellow: '#c18401',
-              brightBlue: '#0184bc',
-              brightMagenta: '#a626a4',
-              brightCyan: '#0997b3',
-              brightWhite: '#ffffff',
-            },
+      theme: terminalThemes[settings.theme],
       scrollback: settings.scrollback,
       allowProposedApi: true,
     })

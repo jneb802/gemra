@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { ACPMessage } from '../../shared/types'
+import { Logger } from '../../shared/utils/logger'
 
 export interface ACPClientOptions {
   workingDirectory: string
@@ -15,6 +16,7 @@ export class ACPClient extends EventEmitter {
   private messageBuffer = ''
   private requestId = 0
   private sessionId?: string
+  private logger = new Logger('ACPClient')
 
   constructor(private options: ACPClientOptions) {
     super()
@@ -25,7 +27,7 @@ export class ACPClient extends EventEmitter {
    */
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log('[ACPClient] Starting claude-code-acp...')
+      this.logger.log('Starting claude-code-acp...')
 
       this.process = spawn('claude-code-acp', [], {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -47,12 +49,12 @@ export class ACPClient extends EventEmitter {
 
         // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
         if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
-          console.log('[ACPClient] warning:', message.trim())
+          this.logger.log('warning:', message.trim())
           return
         }
 
         // Only emit actual errors
-        console.error('[ACPClient] stderr:', message)
+        this.logger.error('stderr:', message)
         this.emit('error', new Error(message))
       })
 
@@ -64,7 +66,7 @@ export class ACPClient extends EventEmitter {
 
       // Handle process errors
       this.process.on('error', (error) => {
-        console.error('[ACPClient] Process error:', error)
+        this.logger.error('Process error:', error)
         reject(error)
       })
 
@@ -96,10 +98,10 @@ export class ACPClient extends EventEmitter {
 
       try {
         const message: ACPMessage = JSON.parse(line)
-        console.log('[ACPClient] Received message:', message)
+        this.logger.log('Received message:', message)
         this.emit('message', message)
       } catch (error) {
-        console.error('[ACPClient] Failed to parse message:', line, error)
+        this.logger.error('Failed to parse message:', line, error)
         this.emit('error', new Error(`Failed to parse ACP message: ${line}`))
       }
     }
@@ -144,7 +146,7 @@ export class ACPClient extends EventEmitter {
 
       this.on('message', handler)
 
-      console.log('[ACPClient] Creating session:', message)
+      this.logger.log('Creating session:', message)
       this.process!.stdin!.write(JSON.stringify(message) + '\n')
 
       // Timeout after 10 seconds
@@ -184,7 +186,7 @@ export class ACPClient extends EventEmitter {
       },
     }
 
-    console.log('[ACPClient] Sending prompt:', message)
+    this.logger.log('Sending prompt:', message)
     this.process.stdin.write(JSON.stringify(message) + '\n')
   }
 
@@ -194,11 +196,11 @@ export class ACPClient extends EventEmitter {
   async stop(): Promise<void> {
     if (!this.process) return
 
-    console.log('[ACPClient] Stopping process...')
+    this.logger.log('Stopping process...')
 
     return new Promise((resolve) => {
       this.process!.on('exit', () => {
-        console.log('[ACPClient] Process stopped')
+        this.logger.log('Process stopped')
         resolve()
       })
 
@@ -207,7 +209,7 @@ export class ACPClient extends EventEmitter {
       // Force kill after 5 seconds
       setTimeout(() => {
         if (this.process && !this.process.killed) {
-          console.log('[ACPClient] Force killing process')
+          this.logger.log('Force killing process')
           this.process.kill('SIGKILL')
         }
       }, 5000)
