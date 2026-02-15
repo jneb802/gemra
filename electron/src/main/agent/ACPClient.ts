@@ -62,6 +62,7 @@ export class ACPClient extends EventEmitter {
         model: 'claude-sonnet-4-5-20250929', // Use Sonnet 4.5 (correct format)
         pathToClaudeCodeExecutable: cliPath,
         executable: 'node', // Will use system node (must be in PATH)
+        workingDirectory: this.options.workingDirectory, // Set working directory
         env: {
           ...process.env,
           ...this.options.customEnv,
