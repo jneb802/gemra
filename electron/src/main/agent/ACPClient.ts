@@ -1,5 +1,7 @@
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { app } from 'electron'
+import path from 'path'
 import { ACPMessage, DockerOptions } from '../../shared/types'
 import { DockerManager } from '../docker/DockerManager'
 import { Logger } from '../../shared/utils/logger'
@@ -25,6 +27,17 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
+   * Get the path to claude-code-acp binary
+   */
+  private getClaudeCodePath(): string {
+    // In development, use node_modules/.bin
+    // In production, the binary is bundled in app.asar
+    const appPath = app.getAppPath()
+    const binPath = path.join(appPath, 'node_modules', '.bin', 'claude-code-acp')
+    return binPath
+  }
+
+  /**
    * Start the claude-code-acp process (with or without Docker)
    */
   async start(): Promise<void> {
@@ -45,7 +58,10 @@ export class ACPClient extends EventEmitter {
       // Emit disabled status for non-Docker mode
       this.emit('containerStatus', { status: 'disabled' })
 
-      this.process = spawn('claude-code-acp', [], {
+      const claudeCodePath = this.getClaudeCodePath()
+      this.logger.log(`Using claude-code-acp from: ${claudeCodePath}`)
+
+      this.process = spawn(claudeCodePath, [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
