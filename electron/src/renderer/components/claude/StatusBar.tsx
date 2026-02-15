@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { ContextIndicator } from './ContextIndicator'
 import { DropdownMenu, Separator } from '../common'
 import type { ContainerStatus } from '../../../shared/types'
@@ -18,6 +18,7 @@ interface StatusBarProps {
   }
   containerStatus: ContainerStatus
   containerError?: string
+  workingDir: string
   onModeChange: (mode: 'default' | 'acceptEdits' | 'plan') => void
   onModelChange: (model: string) => void
   onContainerToggle: () => void
@@ -43,11 +44,25 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   tokenUsage,
   containerStatus,
   containerError,
+  workingDir,
   onModeChange,
   onModelChange,
   onContainerToggle,
 }) => {
   const hasGitChanges = gitStats.filesChanged > 0 || gitStats.insertions > 0 || gitStats.deletions > 0
+  const [showCopied, setShowCopied] = useState(false)
+
+  // Get last two parts of path (e.g., "Develop/gemra" from "/Users/benjmarston/Develop/gemra")
+  const getShortPath = (path: string): string => {
+    const parts = path.split('/').filter(Boolean)
+    return parts.slice(-2).join('/')
+  }
+
+  const handleCopyPath = () => {
+    navigator.clipboard.writeText(workingDir)
+    setShowCopied(true)
+    setTimeout(() => setShowCopied(false), 1500)
+  }
 
   const getContainerLabel = () => {
     switch (containerStatus) {
@@ -100,6 +115,38 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         color: '#888',
       }}
     >
+      {/* Working directory */}
+      <div
+        onClick={handleCopyPath}
+        title={`${workingDir}\n\nClick to copy path`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          cursor: 'pointer',
+          fontFamily: 'Monaco, Menlo, Consolas, monospace',
+          color: '#9cdcfe',
+          padding: '4px 8px',
+          borderRadius: '3px',
+          backgroundColor: 'rgba(156, 220, 254, 0.1)',
+          transition: 'background-color 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(156, 220, 254, 0.15)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(156, 220, 254, 0.1)'
+        }}
+      >
+        <span>📁</span>
+        <span>{getShortPath(workingDir)}</span>
+        {showCopied && (
+          <span style={{ color: '#4ade80', marginLeft: '4px' }}>✓ Copied</span>
+        )}
+      </div>
+
+      <Separator />
+
       {/* Model selector */}
       <DropdownMenu
         label="Model"

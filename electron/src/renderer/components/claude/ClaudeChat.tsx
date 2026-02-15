@@ -488,10 +488,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
   return (
     <div className="claude-chat">
-      <div className="claude-chat-header">
-        <span className="working-dir">{workingDir}</span>
-      </div>
-
       <MessageList
         messages={messages}
         isStreaming={agentStatus.type === 'streaming'}
@@ -543,6 +539,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         tokenUsage={tokenUsage}
         containerStatus={containerStatus}
         containerError={containerError}
+        workingDir={workingDir}
         onModeChange={setMode}
         onModelChange={setModel}
         onContainerToggle={handleContainerToggle}
