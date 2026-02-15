@@ -12,6 +12,14 @@ body,
   overflow: hidden;
 }
 
+:root {
+  --message-max-width: 70ch;
+  --message-spacing-grouped: 8px;
+  --message-spacing-default: 28px;
+  --message-padding-vertical: 20px;
+  --message-padding-horizontal: 16px;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
@@ -81,7 +89,10 @@ code {
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .message-list.empty {
@@ -104,63 +115,75 @@ code {
   font-style: italic;
 }
 
+/* Message container */
 .message {
-  margin-bottom: 16px;
-  padding: 12px;
+  width: 100%;
+  max-width: var(--message-max-width);
+  margin-bottom: var(--message-spacing-default);
+  padding: var(--message-padding-vertical) var(--message-padding-horizontal);
   border-radius: 8px;
 }
 
+/* Grouped messages (consecutive from same sender) */
+.message-grouped {
+  margin-bottom: var(--message-spacing-grouped);
+}
+
+/* User message styling */
 .message-user {
-  background-color: #2d2d2d;
-  margin-left: 64px;
+  background-color: #2a2a2a;
 }
 
+/* Assistant message styling - minimal */
 .message-assistant {
-  background-color: #1a1a1a;
-  margin-right: 64px;
-  border: 1px solid #3e3e3e;
+  background-color: transparent;
 }
 
-.message-role {
-  font-size: 12px;
-  font-weight: bold;
-  margin-bottom: 8px;
-  color: #888;
+/* Message content */
+.message-content {
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #d4d4d4;
 }
 
-.message-user .message-role {
-  color: #569cd6;
+/* Status indicators */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #2d2d2d;
+  border-top: 1px solid #3e3e3e;
+  font-size: 14px;
 }
 
-.message-assistant .message-role {
+.status-indicator.thinking {
+  color: #9cdcfe;
+}
+
+.status-indicator.streaming {
   color: #4ec9b0;
 }
 
-.message-content {
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+.status-indicator.tool-execution {
+  color: #dcdcaa;
 }
 
-.thinking-indicator {
-  padding: 12px 16px;
-  text-align: center;
-  background-color: #2d2d2d;
-  border-top: 1px solid #3e3e3e;
+.status-icon {
+  font-size: 16px;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.status-detail {
+  margin-left: 4px;
   color: #888;
-  font-size: 14px;
-  font-style: italic;
-}
-
-.thinking-dots::after {
-  content: '...';
-  animation: thinking 1.5s infinite;
-}
-
-@keyframes thinking {
-  0%, 20% { content: '.'; }
-  40% { content: '..'; }
-  60%, 100% { content: '...'; }
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
 }
 
 .error-message {

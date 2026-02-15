@@ -79,6 +79,19 @@ export interface TokenUsage {
   timestamp: number
 }
 
+export interface ToolExecution {
+  id: string
+  name: string
+  input: any
+  status: 'running' | 'completed' | 'error'
+}
+
+export type AgentStatus =
+  | { type: 'idle' }
+  | { type: 'thinking' }
+  | { type: 'tool_execution'; tool: ToolExecution }
+  | { type: 'streaming' }
+
 export interface ACPMessage {
   jsonrpc: '2.0'
   id?: string | number
