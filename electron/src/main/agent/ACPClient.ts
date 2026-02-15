@@ -34,9 +34,22 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Find claude-code-acp binary in common locations
+   * Find claude-code-acp (bundled or system-installed)
+   * Returns { command, args } for spawning the process
    */
-  private findClaudeCodeAcp(): string {
+  private findClaudeCodeAcp(): { command: string; args: string[] } {
+    const { existsSync } = require('fs')
+    const { join } = require('path')
+
+    // Try bundled version first (in production app)
+    const bundledPath = join(__dirname, '../../node_modules/@zed-industries/claude-code-acp/dist/index.js')
+    if (existsSync(bundledPath)) {
+      console.log('[ACPClient] Using bundled claude-code-acp at:', bundledPath)
+      // Run the bundled JS file using Electron's Node.js
+      return { command: process.execPath, args: [bundledPath] }
+    }
+
+    // Fall back to system PATH or common locations
     const homeDir = process.env.HOME || process.env.USERPROFILE
     const possiblePaths = [
       'claude-code-acp', // Try PATH first
@@ -51,10 +64,12 @@ export class ACPClient extends EventEmitter {
         // Check if binary exists and is executable
         if (path === 'claude-code-acp') {
           execSync('which claude-code-acp', { stdio: 'ignore' })
-          return path
+          console.log('[ACPClient] Using system claude-code-acp from PATH')
+          return { command: path, args: [] }
         } else {
           execSync(`test -x "${path}"`, { stdio: 'ignore' })
-          return path
+          console.log(`[ACPClient] Using system claude-code-acp at: ${path}`)
+          return { command: path, args: [] }
         }
       } catch {
         continue
@@ -74,17 +89,17 @@ export class ACPClient extends EventEmitter {
       // Emit disabled status for non-Docker mode
       this.emit('containerStatus', { status: 'disabled' })
 
-      // Find the binary
-      let binaryPath: string
+      // Find the binary/script
+      let cmdInfo: { command: string; args: string[] }
       try {
-        binaryPath = this.findClaudeCodeAcp()
-        console.log(`[ACPClient] Found claude-code-acp at: ${binaryPath}`)
+        cmdInfo = this.findClaudeCodeAcp()
+        console.log(`[ACPClient] Command: ${cmdInfo.command}, Args: ${cmdInfo.args.join(' ')}`)
       } catch (error: any) {
         reject(error)
         return
       }
 
-      this.process = spawn(binaryPath, [], {
+      this.process = spawn(cmdInfo.command, cmdInfo.args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
