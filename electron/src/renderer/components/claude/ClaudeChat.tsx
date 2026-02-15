@@ -4,6 +4,7 @@ import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
+import type { SlashCommand } from './SlashCommandMenu'
 
 interface ClaudeChatProps {
   agentId: string
@@ -25,6 +26,18 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [tokenUsage, setTokenUsage] = useState({ inputTokens: 0, outputTokens: 0 })
   const [containerStatus, setContainerStatus] = useState<ContainerStatus>('disabled')
   const [containerError, setContainerError] = useState<string | undefined>()
+  const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
+
+  // Define custom commands
+  const CUSTOM_COMMANDS: SlashCommand[] = [
+    { name: 'help', description: 'Show all available commands' },
+    { name: 'clear', description: 'Clear chat history' },
+    { name: 'mode', description: 'Switch agent mode', argumentHint: '<default|acceptEdits|plan>' },
+    { name: 'model', description: 'Switch model', argumentHint: '<opus|sonnet|haiku>' },
+    { name: 'new-terminal', description: 'Open new terminal tab' },
+    { name: 'new-chat', description: 'Start new chat session' },
+    { name: 'git-status', description: 'Show git status' },
+  ]
 
   // Update git stats helper
   const updateGitStats = async () => {
@@ -51,6 +64,15 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     // Get initial git stats and start polling
     updateGitStats()
     const statsInterval = setInterval(updateGitStats, 2000)
+
+    // Fetch Claude commands from SDK
+    window.electron.claude.getSupportedCommands(agentId).then((result) => {
+      if (result.commands) {
+        setClaudeCommands(result.commands)
+      }
+    }).catch((error) => {
+      console.error('[ClaudeChat] Failed to fetch Claude commands:', error)
+    })
 
     // Listen for text responses from Claude
     const unlistenText = window.electron.claude.onText((data) => {
@@ -209,6 +231,124 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     // For now, this is a placeholder
   }
 
+  // Helper to add system messages
+  const addSystemMessage = (content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: generateId.message(),
+        role: 'system' as const,
+        content,
+      },
+    ])
+  }
+
+  // Format help text
+  const formatHelpText = (custom: SlashCommand[], claude: SlashCommand[]): string => {
+    let help = '**Custom Commands:**\n\n'
+    custom.forEach((cmd) => {
+      const args = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+      help += `• \`/${cmd.name}${args}\` - ${cmd.description}\n`
+    })
+
+    help += '\n**Claude Commands:**\n\n'
+    if (claude.length === 0) {
+      help += '• No Claude commands available\n'
+    } else {
+      claude.forEach((cmd) => {
+        const args = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+        help += `• \`/${cmd.name}${args}\` - ${cmd.description}\n`
+      })
+    }
+
+    return help
+  }
+
+  // Execute custom commands
+  const executeCustomCommand = (command: SlashCommand, args?: string) => {
+    switch (command.name) {
+      case 'help':
+        const helpText = formatHelpText(CUSTOM_COMMANDS, claudeCommands)
+        addSystemMessage(helpText)
+        break
+
+      case 'clear':
+        setMessages([])
+        addSystemMessage('Chat history cleared')
+        break
+
+      case 'mode': {
+        const validModes = ['default', 'acceptEdits', 'plan']
+        if (!args || !validModes.includes(args)) {
+          addSystemMessage(`Usage: /mode <${validModes.join('|')}>`)
+          return
+        }
+        setMode(args as ClaudeMode)
+        addSystemMessage(`Mode changed to: ${args}`)
+        break
+      }
+
+      case 'model': {
+        const validModels = ['opus', 'sonnet', 'haiku']
+        if (!args || !validModels.includes(args)) {
+          addSystemMessage(`Usage: /model <${validModels.join('|')}>`)
+          return
+        }
+        setModel(args)
+        addSystemMessage(`Model changed to: ${args}`)
+        break
+      }
+
+      case 'new-terminal':
+        window.electron.onMenuEvent('menu:new-tab', () => {})
+        addSystemMessage('New terminal opened')
+        break
+
+      case 'new-chat':
+        setMessages([])
+        addSystemMessage('Started new chat session')
+        break
+
+      case 'git-status':
+        window.electron.claude.getGitStats(workingDir).then((result) => {
+          if (result.success) {
+            const status = `Files: ${result.filesChanged}, +${result.insertions}, -${result.deletions}`
+            addSystemMessage(`Git status: ${status}`)
+          } else {
+            addSystemMessage('Failed to get git status')
+          }
+        })
+        break
+
+      default:
+        addSystemMessage(`Unknown command: ${command.name}`)
+    }
+  }
+
+  // Execute Claude commands
+  const executeClaudeCommand = (command: SlashCommand, args?: string) => {
+    // Format command text
+    const commandText = args ? `/${command.name} ${args}` : `/${command.name}`
+
+    // Send as regular message - SDK handles interpretation
+    handleSend(commandText)
+  }
+
+  // Handle command execution from InputBox
+  const handleExecuteCommand = (
+    command: SlashCommand,
+    category: 'custom' | 'claude',
+    args?: string
+  ) => {
+    console.log('[ClaudeChat] Executing command:', command.name, 'category:', category, 'args:', args)
+
+    if (category === 'custom') {
+      executeCustomCommand(command, args)
+    } else {
+      executeClaudeCommand(command, args)
+    }
+  }
+
   // Helper to get tool display name
   const getToolDisplayName = (toolName: string): string => {
     const toolMap: Record<string, string> = {
@@ -283,7 +423,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         onContainerToggle={handleContainerToggle}
       />
 
-      <InputBox onSend={handleSend} disabled={isWorking} />
+      <InputBox
+        onSend={handleSend}
+        disabled={isWorking}
+        customCommands={CUSTOM_COMMANDS}
+        claudeCommands={claudeCommands}
+        onExecuteCommand={handleExecuteCommand}
+      />
     </div>
   )
 }

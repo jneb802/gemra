@@ -162,6 +162,15 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     return stats
   })
 
+  // Get supported slash commands
+  createIpcHandler('claude:get-supported-commands', async (agentId: string) => {
+    logger.log(`Getting supported commands for agent ${agentId}`)
+
+    const agent = getAgentOrThrow(agentId)
+    const commands = await agent.getSupportedCommands()
+    return { commands }
+  })
+
   logger.log('IPC handlers set up successfully')
 }
 

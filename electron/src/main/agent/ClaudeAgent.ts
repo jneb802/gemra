@@ -153,4 +153,11 @@ export class ClaudeAgent extends EventEmitter {
   isRunning(): boolean {
     return this.client.isRunning()
   }
+
+  /**
+   * Get supported slash commands from SDK
+   */
+  async getSupportedCommands(): Promise<any[]> {
+    return this.client.getSupportedCommands()
+  }
 }

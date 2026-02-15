@@ -55,7 +55,7 @@ export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
 
 // Claude Agent types
 export interface ClaudeMessage {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
   id: string
 }

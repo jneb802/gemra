@@ -207,4 +207,22 @@ export class ACPClient extends EventEmitter {
   isRunning(): boolean {
     return this.isActive && !!this.session
   }
+
+  /**
+   * Get supported slash commands from SDK
+   */
+  async getSupportedCommands(): Promise<any[]> {
+    if (!this.session) {
+      throw new Error('Session not started')
+    }
+
+    try {
+      const commands = await this.session.supportedCommands()
+      this.logger.log('Supported commands:', commands)
+      return commands
+    } catch (error) {
+      this.logger.error('Failed to get supported commands:', error)
+      return []
+    }
+  }
 }
