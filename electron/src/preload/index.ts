@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('electron', {
     stop: (agentId: string) =>
       ipcRenderer.invoke('claude:stop', agentId),
 
+    getGitBranch: (workingDir: string) =>
+      ipcRenderer.invoke('claude:get-git-branch', workingDir),
+
+    getGitStats: (workingDir: string) =>
+      ipcRenderer.invoke('claude:get-git-stats', workingDir),
+
     onText: (callback: (data: { agentId: string; text: string }) => void) => {
       const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; text: string }) =>
         callback(data)
@@ -99,6 +105,8 @@ export interface ElectronAPI {
     start: (workingDir: string) => Promise<{ success: boolean; agentId?: string; error?: string }>
     send: (agentId: string, prompt: string) => Promise<{ success: boolean; error?: string }>
     stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
+    getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>
+    getGitStats: (workingDir: string) => Promise<{ success: boolean; filesChanged: number; insertions: number; deletions: number }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void

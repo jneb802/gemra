@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
+import { StatusBar } from './StatusBar'
 import type { ClaudeMessage } from '../../../shared/types'
 
 interface ClaudeChatProps {
@@ -8,13 +9,49 @@ interface ClaudeChatProps {
   workingDir: string
 }
 
+type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
+
 export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [gitBranch, setGitBranch] = useState<string>('main')
+  const [gitStats, setGitStats] = useState({ filesChanged: 0, insertions: 0, deletions: 0 })
+  const [mode, setMode] = useState<ClaudeMode>('default')
 
   useEffect(() => {
     console.log('[ClaudeChat] Mounted with agentId:', agentId)
+
+    // Get git branch
+    window.electron.claude.getGitBranch(workingDir).then((result) => {
+      if (result.success) {
+        setGitBranch(result.branch)
+      }
+    })
+
+    // Get git stats
+    window.electron.claude.getGitStats(workingDir).then((result) => {
+      if (result.success) {
+        setGitStats({
+          filesChanged: result.filesChanged,
+          insertions: result.insertions,
+          deletions: result.deletions,
+        })
+      }
+    })
+
+    // Poll git stats every 2 seconds
+    const statsInterval = setInterval(() => {
+      window.electron.claude.getGitStats(workingDir).then((result) => {
+        if (result.success) {
+          setGitStats({
+            filesChanged: result.filesChanged,
+            insertions: result.insertions,
+            deletions: result.deletions,
+          })
+        }
+      })
+    }, 2000)
 
     // Listen for text responses from Claude
     const unlistenText = window.electron.claude.onText((data) => {
@@ -70,8 +107,28 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       unlistenText()
       unlistenStatus()
       unlistenError()
+      clearInterval(statsInterval)
     }
-  }, [agentId])
+  }, [agentId, workingDir])
+
+  // Handle Shift+Tab to cycle modes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+
+        setMode((current) => {
+          const modes: ClaudeMode[] = ['default', 'acceptEdits', 'plan']
+          const currentIndex = modes.indexOf(current)
+          const nextIndex = (currentIndex + 1) % modes.length
+          return modes[nextIndex]
+        })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleSend = async (text: string) => {
     console.log('[ClaudeChat] Sending message:', text)
@@ -125,6 +182,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           Error: {error}
         </div>
       )}
+
+      <StatusBar mode={mode} gitBranch={gitBranch} gitStats={gitStats} />
 
       <InputBox onSend={handleSend} disabled={isWorking} />
     </div>

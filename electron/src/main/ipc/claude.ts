@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
+import { execSync } from 'child_process'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 
 // Map of agent ID to agent instance
@@ -86,7 +87,7 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
         throw new Error(`Agent ${agentId} not found`)
       }
 
-      agent.sendPrompt(prompt)
+      await agent.sendPrompt(prompt)
 
       return {
         success: true,
@@ -121,6 +122,71 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
       return {
         success: false,
         error: error.message,
+      }
+    }
+  })
+
+  // Get git branch for a working directory
+  ipcMain.handle('claude:get-git-branch', async (_, workingDir: string) => {
+    try {
+      console.log(`[ClaudeIPC] Getting git branch for ${workingDir}`)
+
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        cwd: workingDir,
+        encoding: 'utf-8',
+      }).trim()
+
+      return {
+        success: true,
+        branch,
+      }
+    } catch (error: any) {
+      console.error('[ClaudeIPC] Failed to get git branch:', error)
+      return {
+        success: false,
+        branch: 'unknown',
+      }
+    }
+  })
+
+  // Get git stats (files changed, insertions, deletions)
+  ipcMain.handle('claude:get-git-stats', async (_, workingDir: string) => {
+    try {
+      console.log(`[ClaudeIPC] Getting git stats for ${workingDir}`)
+
+      const shortstat = execSync('git diff --shortstat', {
+        cwd: workingDir,
+        encoding: 'utf-8',
+      }).trim()
+
+      // Parse output like: "3 files changed, 10 insertions(+), 5 deletions(-)"
+      let filesChanged = 0
+      let insertions = 0
+      let deletions = 0
+
+      if (shortstat) {
+        const filesMatch = shortstat.match(/(\d+) files? changed/)
+        const insertionsMatch = shortstat.match(/(\d+) insertions?/)
+        const deletionsMatch = shortstat.match(/(\d+) deletions?/)
+
+        filesChanged = filesMatch ? parseInt(filesMatch[1]) : 0
+        insertions = insertionsMatch ? parseInt(insertionsMatch[1]) : 0
+        deletions = deletionsMatch ? parseInt(deletionsMatch[1]) : 0
+      }
+
+      return {
+        success: true,
+        filesChanged,
+        insertions,
+        deletions,
+      }
+    } catch (error: any) {
+      console.error('[ClaudeIPC] Failed to get git stats:', error)
+      return {
+        success: false,
+        filesChanged: 0,
+        insertions: 0,
+        deletions: 0,
       }
     }
   })

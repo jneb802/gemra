@@ -18,12 +18,12 @@ export function TabBar({ onNewTab }: TabBarProps) {
         alignItems: 'center',
         backgroundColor: '#1e1e1e',
         borderBottom: '1px solid #3e3e3e',
-        height: '36px',
+        height: '40px',
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}
     >
       {/* macOS traffic light spacing */}
-      <div style={{ width: '70px', flexShrink: 0 }} />
+      <div style={{ width: '72px', flexShrink: 0 }} />
 
       {/* Tab items */}
       <div
@@ -53,8 +53,8 @@ export function TabBar({ onNewTab }: TabBarProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '36px',
-          height: '36px',
+          width: '40px',
+          height: '40px',
           padding: 0,
           border: 'none',
           backgroundColor: 'transparent',
