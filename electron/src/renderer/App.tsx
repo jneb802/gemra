@@ -4,6 +4,7 @@ import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { useTabStore } from './stores/tabStore'
+import { usePlatform } from './hooks/usePlatform'
 
 function App() {
   const tabs = useTabStore((state) => state.tabs)
@@ -14,8 +15,23 @@ function App() {
   const setActiveTab = useTabStore((state) => state.setActiveTab)
   const getTabByIndex = useTabStore((state) => state.getTabByIndex)
 
-
+  const { isMac, getModifierKey } = usePlatform()
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
+
+  // Tab navigation helpers
+  const navigateToPreviousTab = useCallback(() => {
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
+    if (currentIndex > 0) {
+      setActiveTab(tabs[currentIndex - 1].id)
+    }
+  }, [tabs, activeTabId, setActiveTab])
+
+  const navigateToNextTab = useCallback(() => {
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
+    if (currentIndex < tabs.length - 1) {
+      setActiveTab(tabs[currentIndex + 1].id)
+    }
+  }, [tabs, activeTabId, setActiveTab])
 
   // Handler for creating Claude chat tabs
   const handleNewClaudeTab = useCallback(async () => {
@@ -39,9 +55,9 @@ function App() {
   // Create initial tab on mount
   useEffect(() => {
     if (tabs.length === 0) {
-      createTab('terminal')
+      handleNewClaudeTab()
     }
-  }, [tabs.length, createTab])
+  }, [tabs.length, handleNewClaudeTab])
 
   // Handle menu events
   useEffect(() => {
@@ -64,17 +80,11 @@ function App() {
     )
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:previous-tab', () => {
-        const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
-        if (currentIndex > 0) setActiveTab(tabs[currentIndex - 1].id)
-      })
+      window.electron.onMenuEvent('menu:previous-tab', navigateToPreviousTab)
     )
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:next-tab', () => {
-        const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
-        if (currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1].id)
-      })
+      window.electron.onMenuEvent('menu:next-tab', navigateToNextTab)
     )
 
     unsubscribers.push(
@@ -85,26 +95,23 @@ function App() {
       unsubscribers.forEach((unsub) => unsub())
     }
   }, [
-    tabs,
-    activeTabId,
     createTab,
     closeTab,
-    setActiveTab,
+    activeTabId,
     handleNewClaudeTab,
+    navigateToPreviousTab,
+    navigateToNextTab,
   ])
 
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = window.electron.platform === 'darwin'
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey
-
-      if (!cmdOrCtrl) return
+      if (!getModifierKey(e)) return
 
       // Cmd/Ctrl+T - New terminal tab
       if (e.key === 't' && !e.shiftKey) {
         e.preventDefault()
-        createTab('terminal')
+        createTab()
       }
 
       // Cmd/Ctrl+Shift+T - New Claude chat tab
@@ -134,19 +141,13 @@ function App() {
       // Cmd/Ctrl+Shift+[ - Previous tab
       if (e.shiftKey && e.key === '[') {
         e.preventDefault()
-        const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
-        if (currentIndex > 0) {
-          setActiveTab(tabs[currentIndex - 1].id)
-        }
+        navigateToPreviousTab()
       }
 
       // Cmd/Ctrl+Shift+] - Next tab
       if (e.shiftKey && e.key === ']') {
         e.preventDefault()
-        const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
-        if (currentIndex < tabs.length - 1) {
-          setActiveTab(tabs[currentIndex + 1].id)
-        }
+        navigateToNextTab()
       }
 
       // Cmd+, - Preferences (macOS)
@@ -159,13 +160,16 @@ function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
-    tabs,
+    isMac,
     activeTabId,
     createTab,
     closeTab,
     setActiveTab,
     getTabByIndex,
+    getModifierKey,
     handleNewClaudeTab,
+    navigateToPreviousTab,
+    navigateToNextTab,
   ])
 
   return (

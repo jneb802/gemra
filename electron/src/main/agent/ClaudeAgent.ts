@@ -47,55 +47,55 @@ export class ClaudeAgent extends EventEmitter {
   /**
    * Send a prompt to the agent
    */
-  sendPrompt(prompt: string): void {
+  async sendPrompt(prompt: string): Promise<void> {
     console.log(`[ClaudeAgent ${this.id}] Sending prompt:`, prompt)
     this.status = 'working'
     this.emit('status', 'working')
 
-    this.client.sendPrompt(prompt)
+    try {
+      await this.client.sendPrompt(prompt)
+    } catch (error: any) {
+      this.status = 'error'
+      this.emit('error', error)
+      throw error
+    }
   }
 
   /**
    * Handle incoming ACP messages
    */
   private handleMessage(message: ACPMessage): void {
-    console.log(`[ClaudeAgent ${this.id}] Handling message:`, message)
+    console.log(`[ClaudeAgent ${this.id}] Handling message:`, JSON.stringify(message, null, 2))
 
-    // For MVP, we're looking for text content in the response
-    // The actual ACP protocol is more complex, but we'll simplify for now
+    // Handle session/update messages (agent streaming responses)
+    if (message.method === 'session/update') {
+      const update = message.params?.update
 
-    // Check if it's a notification with content
-    if (message.method === 'agent/update') {
-      const content = message.params?.content
+      console.log(`[ClaudeAgent ${this.id}] Update:`, JSON.stringify(update, null, 2))
 
-      if (content) {
-        // Extract text from content blocks
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text' && block.text) {
-              this.emit('text', block.text)
-            }
+      if (update?.sessionUpdate === 'agent_message_chunk') {
+        const content = update.content
+
+        console.log(`[ClaudeAgent ${this.id}] Content:`, JSON.stringify(content, null, 2))
+
+        // Handle single content object or array
+        const blocks = Array.isArray(content) ? content : [content]
+
+        for (const block of blocks) {
+          console.log(`[ClaudeAgent ${this.id}] Block:`, JSON.stringify(block, null, 2))
+          if (block.type === 'text' && block.text) {
+            console.log(`[ClaudeAgent ${this.id}] Emitting text:`, block.text)
+            this.emit('text', block.text)
           }
-        } else if (typeof content === 'string') {
-          this.emit('text', content)
         }
       }
     }
 
-    // Check if it's a response with result
+    // Check if it's a response with result (prompt completed)
     if (message.result) {
       // Agent finished processing
       this.status = 'idle'
       this.emit('status', 'idle')
-
-      // Extract any text from result
-      if (typeof message.result === 'string') {
-        this.emit('text', message.result)
-      } else if (message.result.content) {
-        if (typeof message.result.content === 'string') {
-          this.emit('text', message.result.content)
-        }
-      }
     }
 
     // Forward all messages for debugging

@@ -2,6 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/types'
 import type { PtyOptions, PtyData, PtyResize } from '@shared/types'
 
+/**
+ * Helper function to create IPC event listeners with automatic cleanup
+ */
+function createIpcListener<T>(channel: string) {
+  return (callback: (data: T) => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, data: T) => callback(data)
+    ipcRenderer.on(channel, subscription)
+    return () => ipcRenderer.removeListener(channel, subscription)
+  }
+}
+
 // Expose protected methods via contextBridge
 contextBridge.exposeInMainWorld('electron', {
   // PTY operations
@@ -18,18 +29,9 @@ contextBridge.exposeInMainWorld('electron', {
     kill: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.PTY_KILL, id),
 
-    onData: (callback: (data: PtyData) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: PtyData) => callback(data)
-      ipcRenderer.on(IPC_CHANNELS.PTY_DATA, subscription)
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.PTY_DATA, subscription)
-    },
+    onData: createIpcListener<PtyData>(IPC_CHANNELS.PTY_DATA),
 
-    onExit: (callback: (data: { terminalId: string; exitCode: number }) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: { terminalId: string; exitCode: number }) =>
-        callback(data)
-      ipcRenderer.on(IPC_CHANNELS.PTY_EXIT, subscription)
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.PTY_EXIT, subscription)
-    },
+    onExit: createIpcListener<{ terminalId: string; exitCode: number }>(IPC_CHANNELS.PTY_EXIT),
   },
 
   // Menu event listeners
@@ -53,33 +55,19 @@ contextBridge.exposeInMainWorld('electron', {
     stop: (agentId: string) =>
       ipcRenderer.invoke('claude:stop', agentId),
 
-    onText: (callback: (data: { agentId: string; text: string }) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; text: string }) =>
-        callback(data)
-      ipcRenderer.on('claude:text', subscription)
-      return () => ipcRenderer.removeListener('claude:text', subscription)
-    },
+    getGitBranch: (workingDir: string) =>
+      ipcRenderer.invoke('claude:get-git-branch', workingDir),
 
-    onStatus: (callback: (data: { agentId: string; status: string }) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; status: string }) =>
-        callback(data)
-      ipcRenderer.on('claude:status', subscription)
-      return () => ipcRenderer.removeListener('claude:status', subscription)
-    },
+    getGitStats: (workingDir: string) =>
+      ipcRenderer.invoke('claude:get-git-stats', workingDir),
 
-    onError: (callback: (data: { agentId: string; error: string }) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; error: string }) =>
-        callback(data)
-      ipcRenderer.on('claude:error', subscription)
-      return () => ipcRenderer.removeListener('claude:error', subscription)
-    },
+    onText: createIpcListener<{ agentId: string; text: string }>('claude:text'),
 
-    onExit: (callback: (data: { agentId: string; info: any }) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: { agentId: string; info: any }) =>
-        callback(data)
-      ipcRenderer.on('claude:exit', subscription)
-      return () => ipcRenderer.removeListener('claude:exit', subscription)
-    },
+    onStatus: createIpcListener<{ agentId: string; status: string }>('claude:status'),
+
+    onError: createIpcListener<{ agentId: string; error: string }>('claude:error'),
+
+    onExit: createIpcListener<{ agentId: string; info: any }>('claude:exit'),
   },
 })
 
@@ -99,6 +87,8 @@ export interface ElectronAPI {
     start: (workingDir: string) => Promise<{ success: boolean; agentId?: string; error?: string }>
     send: (agentId: string, prompt: string) => Promise<{ success: boolean; error?: string }>
     stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
+    getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>
+    getGitStats: (workingDir: string) => Promise<{ success: boolean; filesChanged: number; insertions: number; deletions: number }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void

@@ -22,8 +22,8 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Send on Cmd+Enter or Ctrl+Enter
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Send on Enter (Shift+Enter for new line)
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
@@ -44,7 +44,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
       <textarea
         ref={textareaRef}
         className="input-textarea"
-        placeholder="Type your message... (Cmd+Enter to send)"
+        placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
         value={text}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

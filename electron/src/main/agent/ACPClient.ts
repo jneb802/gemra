@@ -13,6 +13,7 @@ export class ACPClient extends EventEmitter {
   private process?: ChildProcess
   private messageBuffer = ''
   private requestId = 0
+  private sessionId?: string
 
   constructor(private options: ACPClientOptions) {
     super()
@@ -39,6 +40,14 @@ export class ACPClient extends EventEmitter {
       // Handle stderr (errors and logs)
       this.process.stderr?.on('data', (data: Buffer) => {
         const message = data.toString()
+
+        // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
+        if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
+          console.log('[ACPClient] warning:', message.trim())
+          return
+        }
+
+        // Only emit actual errors
         console.error('[ACPClient] stderr:', message)
         this.emit('error', new Error(message))
       })
@@ -93,20 +102,81 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Send a prompt to the agent
+   * Create a new session
    */
-  sendPrompt(prompt: string): void {
+  async createSession(): Promise<string> {
     if (!this.process || !this.process.stdin) {
       throw new Error('Agent process not started')
+    }
+
+    return new Promise((resolve, reject) => {
+      const id = ++this.requestId
+      const message = {
+        jsonrpc: '2.0',
+        id,
+        method: 'session/new',
+        params: {
+          cwd: this.options.workingDirectory,
+          mcpServers: [],
+        },
+      }
+
+      // Listen for the response
+      const handler = (response: ACPMessage) => {
+        if (response.id === id) {
+          this.off('message', handler)
+          if (response.result && response.result.sessionId) {
+            const sessionId = response.result.sessionId
+            this.sessionId = sessionId
+            console.log(`[ACPClient] Session created: ${sessionId}`)
+            resolve(sessionId)
+          } else if (response.error) {
+            reject(new Error(`Session creation failed: ${response.error.message}`))
+          } else {
+            reject(new Error('Invalid session/new response'))
+          }
+        }
+      }
+
+      this.on('message', handler)
+
+      console.log('[ACPClient] Creating session:', message)
+      this.process!.stdin!.write(JSON.stringify(message) + '\n')
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        this.off('message', handler)
+        reject(new Error('Session creation timeout'))
+      }, 10000)
+    })
+  }
+
+  /**
+   * Send a prompt to the agent
+   */
+  async sendPrompt(prompt: string): Promise<void> {
+    if (!this.process || !this.process.stdin) {
+      throw new Error('Agent process not started')
+    }
+
+    // Create session if not exists
+    if (!this.sessionId) {
+      await this.createSession()
     }
 
     const id = ++this.requestId
     const message: ACPMessage = {
       jsonrpc: '2.0',
       id,
-      method: 'agent/prompt',
+      method: 'session/prompt',
       params: {
-        prompt,
+        sessionId: this.sessionId,
+        prompt: [
+          {
+            type: 'text',
+            text: prompt,
+          },
+        ],
       },
     }
 
