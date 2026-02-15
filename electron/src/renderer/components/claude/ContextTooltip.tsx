@@ -30,8 +30,7 @@ export const ContextTooltip: React.FC<ContextTooltipProps> = ({
       style={{
         position: 'absolute',
         bottom: '100%',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        right: '0',
         marginBottom: '8px',
         backgroundColor: '#2d2d2d',
         border: '1px solid #3e3e3e',
