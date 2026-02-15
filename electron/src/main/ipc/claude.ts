@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { execSync } from 'child_process'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
@@ -79,7 +80,7 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
       throw new Error(`Agent ${agentId} not found`)
     }
 
-    agent.sendPrompt(prompt)
+    await agent.sendPrompt(prompt)
     return {}
   })
 
@@ -100,40 +101,41 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
   // Get git branch
   createIpcHandler('claude:get-git-branch', async (workingDir: string) => {
-    const { execSync } = require('child_process')
-    try {
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-        cwd: workingDir,
-        encoding: 'utf-8',
-      }).trim()
-      return { branch }
-    } catch (error) {
-      return { branch: 'unknown' }
-    }
+    console.log(`[ClaudeIPC] Getting git branch for ${workingDir}`)
+
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: workingDir,
+      encoding: 'utf-8',
+    }).trim()
+
+    return { branch }
   })
 
   // Get git stats
   createIpcHandler('claude:get-git-stats', async (workingDir: string) => {
-    const { execSync } = require('child_process')
-    try {
-      const stats = execSync('git diff --shortstat', {
-        cwd: workingDir,
-        encoding: 'utf-8',
-      }).trim()
+    console.log(`[ClaudeIPC] Getting git stats for ${workingDir}`)
 
-      // Parse stats like "3 files changed, 25 insertions(+), 10 deletions(-)"
-      const filesMatch = stats.match(/(\d+) files? changed/)
-      const insertionsMatch = stats.match(/(\d+) insertions?/)
-      const deletionsMatch = stats.match(/(\d+) deletions?/)
+    const shortstat = execSync('git diff --shortstat', {
+      cwd: workingDir,
+      encoding: 'utf-8',
+    }).trim()
 
-      return {
-        filesChanged: filesMatch ? parseInt(filesMatch[1]) : 0,
-        insertions: insertionsMatch ? parseInt(insertionsMatch[1]) : 0,
-        deletions: deletionsMatch ? parseInt(deletionsMatch[1]) : 0,
-      }
-    } catch (error) {
-      return { filesChanged: 0, insertions: 0, deletions: 0 }
+    // Parse output like: "3 files changed, 10 insertions(+), 5 deletions(-)"
+    let filesChanged = 0
+    let insertions = 0
+    let deletions = 0
+
+    if (shortstat) {
+      const filesMatch = shortstat.match(/(\d+) files? changed/)
+      const insertionsMatch = shortstat.match(/(\d+) insertions?/)
+      const deletionsMatch = shortstat.match(/(\d+) deletions?/)
+
+      filesChanged = filesMatch ? parseInt(filesMatch[1]) : 0
+      insertions = insertionsMatch ? parseInt(insertionsMatch[1]) : 0
+      deletions = deletionsMatch ? parseInt(deletionsMatch[1]) : 0
     }
+
+    return { filesChanged, insertions, deletions }
   })
 
   console.log('[ClaudeIPC] IPC handlers set up successfully')

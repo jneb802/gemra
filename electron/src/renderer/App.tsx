@@ -55,9 +55,9 @@ function App() {
   // Create initial tab on mount
   useEffect(() => {
     if (tabs.length === 0) {
-      createTab('terminal')
+      handleNewClaudeTab()
     }
-  }, [tabs.length, createTab])
+  }, [tabs.length, handleNewClaudeTab])
 
   // Handle menu events
   useEffect(() => {
