@@ -27,14 +27,20 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Get the path to claude-code-acp binary
+   * Get the path to claude-code-acp script
    */
   private getClaudeCodePath(): string {
-    // In development, use node_modules/.bin
-    // In production, the binary is bundled in app.asar
+    // Path to the actual JS file (not the symlink)
     const appPath = app.getAppPath()
-    const binPath = path.join(appPath, 'node_modules', '.bin', 'claude-code-acp')
-    return binPath
+    const scriptPath = path.join(
+      appPath,
+      'node_modules',
+      '@zed-industries',
+      'claude-code-acp',
+      'dist',
+      'index.js'
+    )
+    return scriptPath
   }
 
   /**
@@ -61,7 +67,8 @@ export class ACPClient extends EventEmitter {
       const claudeCodePath = this.getClaudeCodePath()
       this.logger.log(`Using claude-code-acp from: ${claudeCodePath}`)
 
-      this.process = spawn(claudeCodePath, [], {
+      // Use node to execute the JS file (more reliable in packaged apps)
+      this.process = spawn(process.execPath, [claudeCodePath], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
