@@ -281,23 +281,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     return () => clearInterval(interval)
   }, [currentTurnMetadata?.isComplete])
 
-  // Process queued messages when agent becomes idle
-  useEffect(() => {
-    if (!isWorking && messageQueue.length > 0) {
-      console.log('[ClaudeChat] Agent idle, processing queued message')
-      processNextMessage()
-    }
-  }, [isWorking, messageQueue.length, processNextMessage])
-
-  const handleSend = async (text: string) => {
+  const sendMessageInternal = useCallback(async (text: string) => {
     console.log('[ClaudeChat] Sending message:', text)
-
-    // If already working, queue the message instead
-    if (isWorking) {
-      console.log('[ClaudeChat] Agent busy, queueing message')
-      setMessageQueue((prev) => [...prev, text])
-      return
-    }
 
     // Clear any previous error
     setError(null)
@@ -337,18 +322,29 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       setIsWorking(false)
       setCurrentTurnMetadata(null)
     }
-  }
+  }, [agentId])
 
-  // Process next queued message
-  const processNextMessage = useCallback(() => {
-    if (messageQueue.length > 0) {
-      const [nextMessage, ...remainingQueue] = messageQueue
-      setMessageQueue(remainingQueue)
-      console.log('[ClaudeChat] Processing queued message:', nextMessage)
-      // Small delay to ensure state is clean
-      setTimeout(() => handleSend(nextMessage), 100)
+  const handleSend = useCallback(async (text: string) => {
+    // If already working, queue the message instead
+    if (isWorking) {
+      console.log('[ClaudeChat] Agent busy, queueing message')
+      setMessageQueue((prev) => [...prev, text])
+      return
     }
-  }, [messageQueue])
+
+    await sendMessageInternal(text)
+  }, [isWorking, sendMessageInternal])
+
+  // Process queued messages when agent becomes idle
+  useEffect(() => {
+    if (!isWorking && messageQueue.length > 0) {
+      const [nextMessage, ...remainingQueue] = messageQueue
+      console.log('[ClaudeChat] Agent idle, processing queued message:', nextMessage)
+      setMessageQueue(remainingQueue)
+      // Small delay to ensure state is clean
+      setTimeout(() => sendMessageInternal(nextMessage), 100)
+    }
+  }, [isWorking, messageQueue, sendMessageInternal])
 
   const handleContainerToggle = () => {
     console.log('[ClaudeChat] Container toggle clicked - current status:', containerStatus)
