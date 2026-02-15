@@ -259,6 +259,12 @@ export class ACPClient extends EventEmitter {
       throw new Error('Session not started')
     }
 
+    // Check if supportedCommands method exists (SDK may not support it yet)
+    if (typeof this.session.supportedCommands !== 'function') {
+      this.logger.log('SDK does not support supportedCommands() method')
+      return []
+    }
+
     try {
       const commands = await this.session.supportedCommands()
       this.logger.log('Supported commands:', commands)
