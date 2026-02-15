@@ -4,7 +4,6 @@ import { ACPMessage } from '../../shared/types'
 
 export interface ACPClientOptions {
   workingDirectory: string
-  apiKey: string
 }
 
 /**
@@ -28,10 +27,7 @@ export class ACPClient extends EventEmitter {
 
       this.process = spawn('claude-code-acp', [], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          ANTHROPIC_API_KEY: this.options.apiKey,
-        },
+        env: process.env,
         cwd: this.options.workingDirectory,
       })
 

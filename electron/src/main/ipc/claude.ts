@@ -98,6 +98,44 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     return {}
   })
 
+  // Get git branch
+  createIpcHandler('claude:get-git-branch', async (workingDir: string) => {
+    const { execSync } = require('child_process')
+    try {
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        cwd: workingDir,
+        encoding: 'utf-8',
+      }).trim()
+      return { branch }
+    } catch (error) {
+      return { branch: 'unknown' }
+    }
+  })
+
+  // Get git stats
+  createIpcHandler('claude:get-git-stats', async (workingDir: string) => {
+    const { execSync } = require('child_process')
+    try {
+      const stats = execSync('git diff --shortstat', {
+        cwd: workingDir,
+        encoding: 'utf-8',
+      }).trim()
+
+      // Parse stats like "3 files changed, 25 insertions(+), 10 deletions(-)"
+      const filesMatch = stats.match(/(\d+) files? changed/)
+      const insertionsMatch = stats.match(/(\d+) insertions?/)
+      const deletionsMatch = stats.match(/(\d+) deletions?/)
+
+      return {
+        filesChanged: filesMatch ? parseInt(filesMatch[1]) : 0,
+        insertions: insertionsMatch ? parseInt(insertionsMatch[1]) : 0,
+        deletions: deletionsMatch ? parseInt(deletionsMatch[1]) : 0,
+      }
+    } catch (error) {
+      return { filesChanged: 0, insertions: 0, deletions: 0 }
+    }
+  })
+
   console.log('[ClaudeIPC] IPC handlers set up successfully')
 }
 
