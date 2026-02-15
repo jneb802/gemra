@@ -98,11 +98,28 @@ export class ClaudeAgent extends EventEmitter {
 
         for (const block of blocks) {
           console.log(`[ClaudeAgent ${this.id}] Block:`, JSON.stringify(block, null, 2))
+
           if (block.type === 'text' && block.text) {
             console.log(`[ClaudeAgent ${this.id}] Emitting text:`, block.text)
             this.emit('text', block.text)
+            this.emit('agentStatus', { type: 'streaming' })
+          } else if (block.type === 'tool_use') {
+            // Tool execution started
+            const toolExecution = {
+              id: block.id,
+              name: block.name,
+              input: block.input,
+              status: 'running' as const,
+            }
+            console.log(`[ClaudeAgent ${this.id}] Tool execution started:`, toolExecution)
+            this.emit('agentStatus', { type: 'tool_execution', tool: toolExecution })
+            this.emit('toolExecution', toolExecution)
           }
         }
+      } else if (update?.sessionUpdate === 'agent_turn_start') {
+        // Agent started thinking
+        console.log(`[ClaudeAgent ${this.id}] Agent thinking...`)
+        this.emit('agentStatus', { type: 'thinking' })
       }
     }
 
@@ -122,6 +139,7 @@ export class ClaudeAgent extends EventEmitter {
       // Agent finished processing
       this.status = 'idle'
       this.emit('status', 'idle')
+      this.emit('agentStatus', { type: 'idle' })
     }
 
     // Forward all messages for debugging
