@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events'
 import { ACPClient } from './ACPClient'
-import { ACPMessage } from '../../shared/types'
+import { ACPMessage, DockerOptions } from '../../shared/types'
 import { getProfile } from '../../shared/profiles'
 
 export interface ClaudeAgentOptions {
   workingDirectory: string
   profileId?: string
+  dockerOptions?: DockerOptions
 }
 
 /**
@@ -22,9 +23,14 @@ export class ClaudeAgent extends EventEmitter {
     const profile = getProfile(options.profileId || 'anthropic')
     console.log(`[ClaudeAgent ${id}] Using profile: ${profile.name}`)
 
+    if (options.dockerOptions?.enabled) {
+      console.log(`[ClaudeAgent ${id}] Docker mode enabled`)
+    }
+
     this.client = new ACPClient({
       workingDirectory: options.workingDirectory,
       customEnv: profile.env,
+      dockerOptions: options.dockerOptions,
     })
 
     // Forward client events

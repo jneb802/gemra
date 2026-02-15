@@ -46,8 +46,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Claude Code operations
   claude: {
-    start: (workingDir: string, profileId?: string) =>
-      ipcRenderer.invoke('claude:start', workingDir, profileId),
+    start: (workingDir: string, profileId?: string, useDocker?: boolean) =>
+      ipcRenderer.invoke('claude:start', workingDir, profileId, useDocker),
 
     send: (agentId: string, prompt: string) =>
       ipcRenderer.invoke('claude:send', agentId, prompt),
@@ -86,7 +86,7 @@ export interface ElectronAPI {
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string
   claude: {
-    start: (workingDir: string, profileId?: string) => Promise<{ success: boolean; agentId?: string; error?: string }>
+    start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>
     send: (agentId: string, prompt: string) => Promise<{ success: boolean; error?: string }>
     stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
     getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>

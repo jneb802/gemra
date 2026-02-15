@@ -1,10 +1,12 @@
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { ACPMessage } from '../../shared/types'
+import { ACPMessage, DockerOptions } from '../../shared/types'
+import { DockerManager } from '../docker/DockerManager'
 
 export interface ACPClientOptions {
   workingDirectory: string
   customEnv?: Record<string, string>
+  dockerOptions?: DockerOptions
 }
 
 /**
@@ -21,11 +23,22 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Start the claude-code-acp process
+   * Start the claude-code-acp process (with or without Docker)
    */
   async start(): Promise<void> {
+    if (this.options.dockerOptions?.enabled) {
+      return this.startWithDocker()
+    } else {
+      return this.startDirect()
+    }
+  }
+
+  /**
+   * Start claude-code-acp directly on host (no Docker)
+   */
+  private async startDirect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log('[ACPClient] Starting claude-code-acp...')
+      console.log('[ACPClient] Starting claude-code-acp (direct mode)...')
 
       this.process = spawn('claude-code-acp', [], {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -36,46 +49,157 @@ export class ACPClient extends EventEmitter {
         cwd: this.options.workingDirectory,
       })
 
-      // Handle stdout (NDJSON messages from agent)
-      this.process.stdout?.on('data', (data: Buffer) => {
-        this.handleStdout(data)
-      })
+      this.setupProcessHandlers(resolve, reject)
+    })
+  }
 
-      // Handle stderr (errors and logs)
-      this.process.stderr?.on('data', (data: Buffer) => {
-        const message = data.toString()
+  /**
+   * Start claude-code-acp in Docker container
+   */
+  private async startWithDocker(): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      console.log('[ACPClient] Starting claude-code-acp (Docker mode)...')
 
-        // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
-        if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
-          console.log('[ACPClient] warning:', message.trim())
-          return
+      try {
+        const dockerManager = new DockerManager()
+
+        // Check Docker availability
+        const dockerCheck = await dockerManager.isDockerAvailable()
+        if (!dockerCheck.available) {
+          console.error('[ACPClient] Docker not available:', dockerCheck.error)
+          this.emit('error', new Error(dockerCheck.error))
+          // Fallback to direct mode
+          console.log('[ACPClient] Falling back to direct mode')
+          return this.startDirect().then(resolve).catch(reject)
         }
 
-        // Only emit actual errors
-        console.error('[ACPClient] stderr:', message)
-        this.emit('error', new Error(message))
-      })
+        // Build image if needed
+        const buildResult = await dockerManager.buildImageIfNeeded(
+          this.options.workingDirectory
+        )
+        if (!buildResult.success) {
+          console.error('[ACPClient] Failed to build Docker image:', buildResult.error)
+          this.emit('error', new Error(buildResult.error))
+          // Fallback to direct mode
+          console.log('[ACPClient] Falling back to direct mode')
+          return this.startDirect().then(resolve).catch(reject)
+        }
 
-      // Handle process exit
-      this.process.on('exit', (code, signal) => {
-        console.log(`[ACPClient] Process exited with code ${code}, signal ${signal}`)
-        this.emit('exit', { code, signal })
-      })
+        const imageName = buildResult.imageName!
+        const args = this.buildDockerArgs(imageName)
 
-      // Handle process errors
-      this.process.on('error', (error) => {
-        console.error('[ACPClient] Process error:', error)
+        console.log('[ACPClient] Spawning Docker container:', args)
+
+        this.process = spawn('docker', args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: process.env,
+        })
+
+        this.setupProcessHandlers(resolve, reject)
+      } catch (error) {
+        console.error('[ACPClient] Docker startup error:', error)
         reject(error)
-      })
-
-      // Resolve when process is spawned
-      if (this.process.pid) {
-        console.log(`[ACPClient] Started with PID ${this.process.pid}`)
-        resolve()
-      } else {
-        reject(new Error('Failed to start process'))
       }
     })
+  }
+
+  /**
+   * Build docker run arguments
+   */
+  private buildDockerArgs(imageName: string): string[] {
+    const homeDir = process.env.HOME || process.env.USERPROFILE
+
+    return [
+      'run',
+      '-i', // Interactive (keep stdin open)
+      '--rm', // Auto-remove container on exit
+      '--network',
+      'host', // Access host localhost (for LiteLLM)
+      '-v',
+      `${this.options.workingDirectory}:/workspace`, // Mount working dir
+      '-w',
+      '/workspace', // Set working directory in container
+      '-v',
+      `${homeDir}/.gitconfig:/root/.gitconfig:ro`, // Git config (read-only)
+      '-v',
+      `${homeDir}/.ssh:/root/.ssh:ro`, // SSH keys (read-only)
+      ...this.buildEnvArgs(), // Add -e flags for each env var
+      imageName,
+      'claude-code-acp', // Command to run in container
+    ]
+  }
+
+  /**
+   * Build environment variable arguments for Docker
+   */
+  private buildEnvArgs(): string[] {
+    const envVars = {
+      ...this.options.customEnv,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      GIT_USER_NAME: process.env.GIT_USER_NAME,
+      GIT_USER_EMAIL: process.env.GIT_USER_EMAIL,
+    }
+
+    const args: string[] = []
+    for (const [key, value] of Object.entries(envVars)) {
+      if (value) {
+        args.push('-e', `${key}=${value}`)
+      }
+    }
+    return args
+  }
+
+  /**
+   * Setup process event handlers (shared between direct and Docker modes)
+   */
+  private setupProcessHandlers(
+    resolve: () => void,
+    reject: (error: Error) => void
+  ): void {
+    if (!this.process) {
+      reject(new Error('Process not initialized'))
+      return
+    }
+
+    // Handle stdout (NDJSON messages from agent)
+    this.process.stdout?.on('data', (data: Buffer) => {
+      this.handleStdout(data)
+    })
+
+    // Handle stderr (errors and logs)
+    this.process.stderr?.on('data', (data: Buffer) => {
+      const message = data.toString()
+
+      // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
+      if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
+        console.log('[ACPClient] warning:', message.trim())
+        return
+      }
+
+      // Only emit actual errors
+      console.error('[ACPClient] stderr:', message)
+      this.emit('error', new Error(message))
+    })
+
+    // Handle process exit
+    this.process.on('exit', (code, signal) => {
+      console.log(`[ACPClient] Process exited with code ${code}, signal ${signal}`)
+      this.emit('exit', { code, signal })
+    })
+
+    // Handle process errors
+    this.process.on('error', (error) => {
+      console.error('[ACPClient] Process error:', error)
+      reject(error)
+    })
+
+    // Resolve when process is spawned
+    if (this.process.pid) {
+      console.log(`[ACPClient] Started with PID ${this.process.pid}`)
+      resolve()
+    } else {
+      reject(new Error('Failed to start process'))
+    }
   }
 
   /**
