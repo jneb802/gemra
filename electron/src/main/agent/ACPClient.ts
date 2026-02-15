@@ -30,8 +30,15 @@ export class ACPClient extends EventEmitter {
    * Get the path to claude-code-acp script
    */
   private getClaudeCodePath(): string {
-    // Path to the actual JS file (not the symlink)
-    const appPath = app.getAppPath()
+    let appPath = app.getAppPath()
+
+    // In packaged apps, app.getAppPath() returns path to app.asar
+    // But node_modules are unpacked to app.asar.unpacked
+    // Node.js cannot read from .asar archives, so we must use the unpacked path
+    if (app.isPackaged && appPath.endsWith('.asar')) {
+      appPath = appPath.replace('.asar', '.asar.unpacked')
+    }
+
     const scriptPath = path.join(
       appPath,
       'node_modules',
