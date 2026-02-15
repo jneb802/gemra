@@ -14,6 +14,18 @@ export class PtyManager extends EventEmitter {
   private terminals = new Map<string, PtyInstance>()
 
   /**
+   * Get a terminal instance by ID
+   */
+  private getTerminal(id: string): PtyInstance | null {
+    const terminal = this.terminals.get(id)
+    if (!terminal) {
+      console.error(`Terminal ${id} not found`)
+      return null
+    }
+    return terminal
+  }
+
+  /**
    * Spawn a new PTY instance
    */
   spawn(id: string, options: PtyOptions): { pid: number } {
@@ -57,11 +69,8 @@ export class PtyManager extends EventEmitter {
    * Write data to a PTY
    */
   write(id: string, data: string): boolean {
-    const terminal = this.terminals.get(id)
-    if (!terminal) {
-      console.error(`Terminal ${id} not found`)
-      return false
-    }
+    const terminal = this.getTerminal(id)
+    if (!terminal) return false
 
     terminal.pty.write(data)
     return true
@@ -71,11 +80,8 @@ export class PtyManager extends EventEmitter {
    * Resize a PTY
    */
   resize(id: string, cols: number, rows: number): boolean {
-    const terminal = this.terminals.get(id)
-    if (!terminal) {
-      console.error(`Terminal ${id} not found`)
-      return false
-    }
+    const terminal = this.getTerminal(id)
+    if (!terminal) return false
 
     terminal.pty.resize(cols, rows)
     return true
@@ -85,11 +91,8 @@ export class PtyManager extends EventEmitter {
    * Kill a PTY
    */
   kill(id: string): boolean {
-    const terminal = this.terminals.get(id)
-    if (!terminal) {
-      console.error(`Terminal ${id} not found`)
-      return false
-    }
+    const terminal = this.getTerminal(id)
+    if (!terminal) return false
 
     terminal.pty.kill()
     this.terminals.delete(id)

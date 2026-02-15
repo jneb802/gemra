@@ -1,51 +1,31 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { PtyManager } from '../PtyManager'
 import { IPC_CHANNELS } from '@shared/types'
 import type { PtyOptions, PtyData, PtyResize } from '@shared/types'
+import { createIpcHandler } from '../utils/ipcUtils'
 
 export function setupTerminalIpc(ptyManager: PtyManager, mainWindow: BrowserWindow) {
   // Handle PTY spawn
-  ipcMain.handle(IPC_CHANNELS.PTY_SPAWN, (_event, id: string, options: PtyOptions) => {
-    try {
-      const result = ptyManager.spawn(id, options)
-      return { success: true, ...result }
-    } catch (error) {
-      console.error('Failed to spawn PTY:', error)
-      return { success: false, error: String(error) }
-    }
+  createIpcHandler(IPC_CHANNELS.PTY_SPAWN, (id: string, options: PtyOptions) => {
+    return ptyManager.spawn(id, options)
   })
 
   // Handle PTY write
-  ipcMain.handle(IPC_CHANNELS.PTY_WRITE, (_event, id: string, data: string) => {
-    try {
-      const success = ptyManager.write(id, data)
-      return { success }
-    } catch (error) {
-      console.error('Failed to write to PTY:', error)
-      return { success: false, error: String(error) }
-    }
+  createIpcHandler(IPC_CHANNELS.PTY_WRITE, (id: string, data: string) => {
+    const success = ptyManager.write(id, data)
+    return { success }
   })
 
   // Handle PTY resize
-  ipcMain.handle(IPC_CHANNELS.PTY_RESIZE, (_event, { terminalId, rows, cols }: PtyResize) => {
-    try {
-      const success = ptyManager.resize(terminalId, cols, rows)
-      return { success }
-    } catch (error) {
-      console.error('Failed to resize PTY:', error)
-      return { success: false, error: String(error) }
-    }
+  createIpcHandler(IPC_CHANNELS.PTY_RESIZE, ({ terminalId, rows, cols }: PtyResize) => {
+    const success = ptyManager.resize(terminalId, cols, rows)
+    return { success }
   })
 
   // Handle PTY kill
-  ipcMain.handle(IPC_CHANNELS.PTY_KILL, (_event, id: string) => {
-    try {
-      const success = ptyManager.kill(id)
-      return { success }
-    } catch (error) {
-      console.error('Failed to kill PTY:', error)
-      return { success: false, error: String(error) }
-    }
+  createIpcHandler(IPC_CHANNELS.PTY_KILL, (id: string) => {
+    const success = ptyManager.kill(id)
+    return { success }
   })
 
   // Forward PTY data to renderer (with safety check)

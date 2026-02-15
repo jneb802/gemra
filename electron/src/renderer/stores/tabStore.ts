@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { generateId } from '../../shared/utils/id'
 
 export type TabType = 'terminal' | 'claude-chat'
 
@@ -11,13 +12,19 @@ export interface Tab {
   workingDir?: string // For Claude chat tabs
 }
 
+export interface CreateTabOptions {
+  type?: TabType
+  agentId?: string
+  workingDir?: string
+}
+
 interface TabState {
   tabs: Tab[]
   activeTabId: string | null
 
   // Actions
-  createTab: (type?: TabType) => string
-  createClaudeTab: (agentId: string, workingDir: string) => string
+  createTab: (options?: CreateTabOptions) => string
+  createClaudeTab: (agentId: string, workingDir: string) => string // Kept for backwards compatibility
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTabTitle: (id: string, title: string) => void
@@ -31,13 +38,18 @@ export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
 
-  createTab: (type: TabType = 'terminal') => {
-    const id = `tab-${++tabCounter}`
+  createTab: (options: CreateTabOptions = {}) => {
+    const { type = 'terminal', agentId, workingDir } = options
+    const id = generateId.tab()
+    tabCounter++
+
     const newTab: Tab = {
       id,
       title: type === 'claude-chat' ? `Claude ${tabCounter}` : `Shell ${tabCounter}`,
       isActive: true,
       type,
+      ...(agentId && { agentId }),
+      ...(workingDir && { workingDir }),
     }
 
     set((state) => ({
@@ -51,26 +63,9 @@ export const useTabStore = create<TabState>((set, get) => ({
     return id
   },
 
+  // Kept for backwards compatibility - delegates to createTab
   createClaudeTab: (agentId: string, workingDir: string) => {
-    const id = `tab-${++tabCounter}`
-    const newTab: Tab = {
-      id,
-      title: `Claude ${tabCounter}`,
-      isActive: true,
-      type: 'claude-chat',
-      agentId,
-      workingDir,
-    }
-
-    set((state) => ({
-      tabs: [
-        ...state.tabs.map((tab) => ({ ...tab, isActive: false })),
-        newTab,
-      ],
-      activeTabId: id,
-    }))
-
-    return id
+    return get().createTab({ type: 'claude-chat', agentId, workingDir })
   },
 
   closeTab: (id: string) => {
