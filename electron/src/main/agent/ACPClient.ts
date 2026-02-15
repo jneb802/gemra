@@ -38,13 +38,34 @@ export class ACPClient extends EventEmitter {
     try {
       // Dynamic import of ES module SDK
       const sdk = await import('@anthropic-ai/claude-agent-sdk')
+      const { app } = await import('electron')
+      const path = await import('path')
+
+      // Get path to SDK CLI executable
+      let appPath = app.getAppPath()
+      if (app.isPackaged && appPath.endsWith('.asar')) {
+        appPath = appPath.replace('.asar', '.asar.unpacked')
+      }
+      const cliPath = path.join(
+        appPath,
+        'node_modules',
+        '@anthropic-ai',
+        'claude-agent-sdk',
+        'cli.js'
+      )
+
+      this.logger.log(`Using SDK CLI from: ${cliPath}`)
 
       // Create a new session
       this.session = sdk.unstable_v2_createSession({
         model: 'claude-sonnet-4.5-20250929', // Use Sonnet 4.5
+        pathToClaudeCodeExecutable: cliPath,
+        executable: 'node', // Will use system node (must be in PATH)
         env: {
           ...process.env,
           ...this.options.customEnv,
+          // Add common node paths to PATH for Finder launches
+          PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
         },
       })
 
