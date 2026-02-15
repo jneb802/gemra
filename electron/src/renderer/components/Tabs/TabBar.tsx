@@ -79,7 +79,11 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
       {/* Docker toggle button */}
       <button
         onClick={() => updateSettings({ useDocker: !useDocker })}
-        title={useDocker ? 'Docker mode enabled' : 'Docker mode disabled'}
+        title={
+          useDocker
+            ? 'Docker mode enabled - Claude agents run in isolated containers'
+            : 'Docker mode disabled - Click to run Claude agents in isolated Docker containers'
+        }
         style={{
           display: 'flex',
           alignItems: 'center',
