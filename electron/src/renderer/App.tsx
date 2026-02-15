@@ -18,6 +18,24 @@ function App() {
   const { isMac, getModifierKey } = usePlatform()
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
 
+  // Handler for closing tabs with agent cleanup
+  const handleCloseTab = useCallback(async (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId)
+
+    // Stop Claude agent if it's a claude-chat tab
+    if (tab?.type === 'claude-chat' && tab.agentId) {
+      try {
+        await window.electron.claude.stop(tab.agentId)
+        console.log(`Stopped agent ${tab.agentId} for tab ${tabId}`)
+      } catch (error) {
+        console.error('Failed to stop agent:', error)
+      }
+    }
+
+    // Close the tab
+    closeTab(tabId)
+  }, [tabs, closeTab])
+
   // Tab navigation helpers
   const navigateToPreviousTab = useCallback(() => {
     const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId)
@@ -35,8 +53,8 @@ function App() {
 
   // Handler for creating Claude chat tabs
   const handleNewClaudeTab = useCallback(async () => {
-    // Start a new Claude agent (use home directory as default)
-    const workingDir = '/Users/benjmarston/Develop/gemra'
+    // Use current working directory or home directory
+    const workingDir = process.env.HOME || process.cwd()
     const result = await window.electron.claude.start(workingDir)
 
     if (result.success && result.agentId) {
@@ -49,7 +67,7 @@ function App() {
   }, [createClaudeTab])
 
   const handleNewTab = useCallback(() => {
-    createTab('terminal')
+    createTab({ type: 'terminal' })
   }, [createTab])
 
   // Create initial tab on mount
@@ -64,7 +82,7 @@ function App() {
     const unsubscribers: (() => void)[] = []
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:new-tab', () => createTab('terminal'))
+      window.electron.onMenuEvent('menu:new-tab', () => createTab({ type: 'terminal' }))
     )
 
     unsubscribers.push(
@@ -74,7 +92,7 @@ function App() {
     unsubscribers.push(
       window.electron.onMenuEvent('menu:close-tab', () => {
         if (activeTabId) {
-          closeTab(activeTabId)
+          handleCloseTab(activeTabId)
         }
       })
     )
@@ -96,7 +114,7 @@ function App() {
     }
   }, [
     createTab,
-    closeTab,
+    handleCloseTab,
     activeTabId,
     handleNewClaudeTab,
     navigateToPreviousTab,
@@ -124,7 +142,7 @@ function App() {
       if (e.key === 'w') {
         e.preventDefault()
         if (activeTabId) {
-          closeTab(activeTabId)
+          handleCloseTab(activeTabId)
         }
       }
 
@@ -163,7 +181,7 @@ function App() {
     isMac,
     activeTabId,
     createTab,
-    closeTab,
+    handleCloseTab,
     setActiveTab,
     getTabByIndex,
     getModifierKey,
@@ -183,7 +201,7 @@ function App() {
       }}
     >
       {/* Tab bar */}
-      <TabBar onNewTab={handleNewTab} />
+      <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
 
       {/* Main content area */}
       <div

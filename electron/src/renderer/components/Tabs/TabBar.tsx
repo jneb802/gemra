@@ -4,12 +4,12 @@ import { TabItem } from './TabItem'
 
 interface TabBarProps {
   onNewTab: () => void
+  onCloseTab: (id: string) => void
 }
 
-export function TabBar({ onNewTab }: TabBarProps) {
+export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
   const tabs = useTabStore((state) => state.tabs)
   const setActiveTab = useTabStore((state) => state.setActiveTab)
-  const closeTab = useTabStore((state) => state.closeTab)
 
   return (
     <div
@@ -40,7 +40,7 @@ export function TabBar({ onNewTab }: TabBarProps) {
             key={tab.id}
             tab={tab}
             onSelect={() => setActiveTab(tab.id)}
-            onClose={() => closeTab(tab.id)}
+            onClose={() => onCloseTab(tab.id)}
           />
         ))}
       </div>
