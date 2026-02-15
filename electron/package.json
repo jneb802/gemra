@@ -66,11 +66,7 @@
       "package.json"
     ],
     "asarUnpack": [
-      "node_modules/node-pty/**/*",
-      "node_modules/@zed-industries/claude-code-acp/**/*",
-      "node_modules/@anthropic-ai/claude-agent-sdk/**/*",
-      "node_modules/@agentclientprotocol/**/*",
-      "node_modules/@modelcontextprotocol/**/*"
+      "node_modules/**/*"
     ],
     "directories": {
       "output": "release"
