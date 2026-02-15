@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Allow file system access for terminal operations -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- Disable photo library access -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string></string>
+
+	<!-- Disable camera access -->
+	<key>NSCameraUsageDescription</key>
+	<string></string>
+
+	<!-- Allow network access for API calls -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Allow executing code (for pty/shell) -->
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+
+	<!-- Disable sandbox for terminal functionality -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+</dict>
+</plist>
