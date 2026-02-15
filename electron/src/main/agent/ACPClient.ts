@@ -72,30 +72,9 @@ export class ACPClient extends EventEmitter {
 
       this.isActive = true
       this.logger.log('Session created successfully')
-
-      // Start streaming messages in the background
-      this.startMessageStream()
     } catch (error) {
       this.logger.error('Failed to start SDK session:', error)
       throw error
-    }
-  }
-
-  /**
-   * Stream messages from the SDK session
-   */
-  private async startMessageStream(): Promise<void> {
-    try {
-      for await (const message of this.session.stream()) {
-        this.handleSDKMessage(message)
-      }
-      // Stream ended - agent stopped
-      this.logger.log('Message stream ended')
-      this.emit('exit', { code: 0, signal: null })
-    } catch (error) {
-      this.logger.error('Stream error:', error)
-      this.emit('error', error)
-      this.emit('exit', { code: 1, signal: null })
     }
   }
 
@@ -217,7 +196,21 @@ export class ACPClient extends EventEmitter {
     this.currentPhase = 'thinking'
     this.emit('agentStatus', { type: 'thinking' })
 
-    await this.session.send(prompt)
+    try {
+      // Send the prompt
+      await this.session.send(prompt)
+
+      // Stream the response
+      for await (const message of this.session.stream()) {
+        this.handleSDKMessage(message)
+      }
+
+      this.logger.log('Message stream completed for this turn')
+    } catch (error) {
+      this.logger.error('Error during prompt/streaming:', error)
+      this.emit('error', error)
+      throw error
+    }
   }
 
   /**
