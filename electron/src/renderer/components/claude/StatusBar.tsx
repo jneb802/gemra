@@ -96,16 +96,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         color: '#888',
       }}
     >
-      {/* Context indicator */}
-      <ContextIndicator
-        inputTokens={tokenUsage.inputTokens}
-        outputTokens={tokenUsage.outputTokens}
-        model={model}
-      />
-
-      {/* Separator */}
-      <div style={{ width: '1px', height: '16px', backgroundColor: '#3e3e3e' }} />
-
       {/* Model selector */}
       <div ref={modelMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ color: '#666' }}>Model:</span>
@@ -296,6 +286,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           </div>
         </>
       )}
+
+      {/* Spacer to push context indicator to the right */}
+      <div style={{ flex: 1 }} />
+
+      {/* Separator */}
+      <div style={{ width: '1px', height: '16px', backgroundColor: '#3e3e3e' }} />
+
+      {/* Context indicator */}
+      <ContextIndicator
+        inputTokens={tokenUsage.inputTokens}
+        outputTokens={tokenUsage.outputTokens}
+        model={model}
+      />
     </div>
   )
 }
