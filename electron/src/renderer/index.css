@@ -157,6 +157,17 @@ code {
   background-color: transparent;
 }
 
+/* System message styling */
+.message-system {
+  background: transparent;
+  color: #888;
+  font-style: italic;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-left: 3px solid #555;
+  margin: 8px 0;
+}
+
 /* Message content */
 .message-content {
   font-size: 16px;
