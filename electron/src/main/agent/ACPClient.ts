@@ -1,9 +1,5 @@
-import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { app } from 'electron'
-import path from 'path'
 import { ACPMessage, DockerOptions } from '../../shared/types'
-import { DockerManager } from '../docker/DockerManager'
 import { Logger } from '../../shared/utils/logger'
 
 export interface ACPClientOptions {
@@ -13,400 +9,169 @@ export interface ACPClientOptions {
 }
 
 /**
- * ACP Client - Handles JSON-RPC communication with claude-code-acp over stdio
+ * ACP Client - Uses Claude Agent SDK directly (no subprocess)
  */
 export class ACPClient extends EventEmitter {
-  private process?: ChildProcess
-  private messageBuffer = ''
-  private requestId = 0
+  private session: any // Will be SDKSession from the SDK
   private sessionId?: string
   private logger = new Logger('ACPClient')
+  private isActive = false
 
   constructor(private options: ACPClientOptions) {
     super()
   }
 
   /**
-   * Get the path to claude-code-acp script
-   */
-  private getClaudeCodePath(): string {
-    let appPath = app.getAppPath()
-
-    // In packaged apps, app.getAppPath() returns path to app.asar
-    // But node_modules are unpacked to app.asar.unpacked
-    // Node.js cannot read from .asar archives, so we must use the unpacked path
-    if (app.isPackaged && appPath.endsWith('.asar')) {
-      appPath = appPath.replace('.asar', '.asar.unpacked')
-    }
-
-    const scriptPath = path.join(
-      appPath,
-      'node_modules',
-      '@zed-industries',
-      'claude-code-acp',
-      'dist',
-      'index.js'
-    )
-    return scriptPath
-  }
-
-  /**
-   * Start the claude-code-acp process (with or without Docker)
+   * Start the Claude Agent SDK session
    */
   async start(): Promise<void> {
     if (this.options.dockerOptions?.enabled) {
-      return this.startWithDocker()
-    } else {
-      return this.startDirect()
-    }
-  }
-
-  /**
-   * Start claude-code-acp directly on host (no Docker)
-   */
-  private async startDirect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.logger.log('Starting claude-code-acp (direct mode)...')
-
-      // Emit disabled status for non-Docker mode
+      // Docker mode not supported with SDK - fall back to direct mode
+      this.logger.log('Docker mode not supported with SDK, using direct mode')
       this.emit('containerStatus', { status: 'disabled' })
+    } else {
+      this.emit('containerStatus', { status: 'disabled' })
+    }
 
-      const claudeCodePath = this.getClaudeCodePath()
-      this.logger.log(`Using claude-code-acp from: ${claudeCodePath}`)
+    this.logger.log('Starting Claude Agent SDK session...')
 
-      // In packaged apps, spawn with 'node' command (requires node in PATH)
-      // In development, use Electron's node
-      const command = app.isPackaged ? 'node' : process.execPath
-      const args = [claudeCodePath]
+    try {
+      // Dynamic import of ES module SDK
+      const sdk = await import('@anthropic-ai/claude-agent-sdk')
 
-      this.logger.log(`Spawning: ${command} ${args.join(' ')}`)
-
-      this.process = spawn(command, args, {
-        stdio: ['pipe', 'pipe', 'pipe'],
+      // Create a new session
+      this.session = sdk.unstable_v2_createSession({
+        model: 'claude-sonnet-4.5-20250929', // Use Sonnet 4.5
         env: {
           ...process.env,
           ...this.options.customEnv,
         },
-        cwd: this.options.workingDirectory,
       })
 
-      this.setupProcessHandlers(resolve, reject)
-    })
-  }
+      this.isActive = true
+      this.logger.log('Session created successfully')
 
-  /**
-   * Start claude-code-acp in Docker container
-   */
-  private async startWithDocker(): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      this.logger.log('Starting claude-code-acp (Docker mode)...')
-
-      try {
-        const dockerManager = new DockerManager()
-
-        // Check Docker availability
-        const dockerCheck = await dockerManager.isDockerAvailable()
-        if (!dockerCheck.available) {
-          this.logger.error('Docker not available:', dockerCheck.error)
-          this.emit('containerStatus', { status: 'error', error: dockerCheck.error })
-          // Fallback to direct mode
-          this.logger.log('Falling back to direct mode')
-          return this.startDirect().then(resolve).catch(reject)
-        }
-
-        // Emit building status
-        this.emit('containerStatus', { status: 'building' })
-
-        // Build image if needed
-        const buildResult = await dockerManager.buildImageIfNeeded(
-          this.options.workingDirectory
-        )
-        if (!buildResult.success) {
-          this.logger.error('Failed to build Docker image:', buildResult.error)
-          this.emit('containerStatus', { status: 'error', error: buildResult.error })
-          // Fallback to direct mode
-          this.logger.log('Falling back to direct mode')
-          return this.startDirect().then(resolve).catch(reject)
-        }
-
-        // Emit starting status
-        this.emit('containerStatus', { status: 'starting' })
-
-        const imageName = buildResult.imageName!
-        const args = this.buildDockerArgs(imageName)
-
-        this.logger.log('Spawning Docker container:', args)
-
-        this.process = spawn('docker', args, {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: process.env,
-        })
-
-        this.setupProcessHandlers(resolve, reject)
-      } catch (error) {
-        this.logger.error('Docker startup error:', error)
-        reject(error)
-      }
-    })
-  }
-
-  /**
-   * Build docker run arguments
-   */
-  private buildDockerArgs(imageName: string): string[] {
-    const homeDir = process.env.HOME || process.env.USERPROFILE
-
-    return [
-      'run',
-      '-i', // Interactive (keep stdin open)
-      '--rm', // Auto-remove container on exit
-      '--network',
-      'host', // Access host localhost (for LiteLLM)
-      '-v',
-      `${this.options.workingDirectory}:/workspace`, // Mount working dir
-      '-w',
-      '/workspace', // Set working directory in container
-      '-v',
-      `${homeDir}/.gitconfig:/root/.gitconfig:ro`, // Git config (read-only)
-      '-v',
-      `${homeDir}/.ssh:/root/.ssh:ro`, // SSH keys (read-only)
-      ...this.buildEnvArgs(), // Add -e flags for each env var
-      imageName,
-      'claude-code-acp', // Command to run in container
-    ]
-  }
-
-  /**
-   * Build environment variable arguments for Docker
-   */
-  private buildEnvArgs(): string[] {
-    const envVars = {
-      ...this.options.customEnv,
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-      GIT_USER_NAME: process.env.GIT_USER_NAME,
-      GIT_USER_EMAIL: process.env.GIT_USER_EMAIL,
-    }
-
-    const args: string[] = []
-    for (const [key, value] of Object.entries(envVars)) {
-      if (value) {
-        args.push('-e', `${key}=${value}`)
-      }
-    }
-    return args
-  }
-
-  /**
-   * Setup process event handlers (shared between direct and Docker modes)
-   */
-  private setupProcessHandlers(
-    resolve: () => void,
-    reject: (error: Error) => void
-  ): void {
-    if (!this.process) {
-      reject(new Error('Process not initialized'))
-      return
-    }
-
-    // Handle stdout (NDJSON messages from agent)
-    this.process.stdout?.on('data', (data: Buffer) => {
-      this.handleStdout(data)
-    })
-
-    // Handle stderr (errors and logs)
-    this.process.stderr?.on('data', (data: Buffer) => {
-      const message = data.toString()
-
-      // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
-      if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
-        this.logger.log('warning:', message.trim())
-        return
-      }
-
-      // Only emit actual errors
-      this.logger.error('stderr:', message)
-      this.emit('error', new Error(message))
-    })
-
-    // Handle process exit
-    this.process.on('exit', (code, signal) => {
-      this.logger.log(`Process exited with code ${code}, signal ${signal}`)
-      this.emit('exit', { code, signal })
-    })
-
-    // Handle process errors
-    this.process.on('error', (error) => {
-      this.logger.error('Process error:', error)
-      reject(error)
-    })
-
-    // Resolve when process is spawned
-    if (this.process.pid) {
-      this.logger.log(`Started with PID ${this.process.pid}`)
-      // Emit running status (only for Docker mode, direct mode already emitted disabled)
-      if (this.options.dockerOptions?.enabled) {
-        this.emit('containerStatus', { status: 'running' })
-      }
-      resolve()
-    } else {
-      reject(new Error('Failed to start process'))
+      // Start streaming messages in the background
+      this.startMessageStream()
+    } catch (error) {
+      this.logger.error('Failed to start SDK session:', error)
+      throw error
     }
   }
 
   /**
-   * Handle stdout data - parse NDJSON messages
+   * Stream messages from the SDK session
    */
-  private handleStdout(data: Buffer): void {
-    this.messageBuffer += data.toString()
-
-    // Split by newlines
-    const lines = this.messageBuffer.split('\n')
-
-    // Keep the last incomplete line in buffer
-    this.messageBuffer = lines.pop() || ''
-
-    // Process each complete line
-    for (const line of lines) {
-      if (!line.trim()) continue
-
-      // Skip lines that don't look like JSON (log messages, etc.)
-      if (!line.trim().startsWith('{')) {
-        this.logger.log('Skipping non-JSON line:', line)
-        continue
+  private async startMessageStream(): Promise<void> {
+    try {
+      for await (const message of this.session.stream()) {
+        this.handleSDKMessage(message)
       }
-
-      try {
-        const message: ACPMessage = JSON.parse(line)
-        this.logger.log('Received message:', message)
-        this.emit('message', message)
-      } catch (error) {
-        // Only emit error for lines that looked like JSON but failed to parse
-        this.logger.error('Failed to parse message:', line, error)
-        this.emit('error', new Error(`Failed to parse ACP message: ${line}`))
-      }
+      // Stream ended - agent stopped
+      this.logger.log('Message stream ended')
+      this.emit('exit', { code: 0, signal: null })
+    } catch (error) {
+      this.logger.error('Stream error:', error)
+      this.emit('error', error)
+      this.emit('exit', { code: 1, signal: null })
     }
   }
 
   /**
-   * Create a new session
+   * Handle SDK messages and convert to ACP format
    */
-  async createSession(): Promise<string> {
-    if (!this.process || !this.process.stdin) {
-      throw new Error('Agent process not started')
-    }
+  private handleSDKMessage(sdkMessage: any): void {
+    this.logger.log('SDK message:', sdkMessage)
 
-    return new Promise((resolve, reject) => {
-      const id = ++this.requestId
-      const message = {
+    // Convert SDK message format to ACP format for compatibility
+    if (sdkMessage.type === 'agent_message_chunk') {
+      // Text content from agent
+      const acpMessage: ACPMessage = {
         jsonrpc: '2.0',
-        id,
-        method: 'session/new',
+        method: 'session/update',
         params: {
-          cwd: this.options.workingDirectory,
-          mcpServers: [],
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            content: sdkMessage.content || { type: 'text', text: sdkMessage.text || '' },
+          },
         },
       }
-
-      // Listen for the response
-      const handler = (response: ACPMessage) => {
-        if (response.id === id) {
-          this.off('message', handler)
-          if (response.result && response.result.sessionId) {
-            const sessionId = response.result.sessionId
-            this.sessionId = sessionId
-            this.logger.log(`Session created: ${sessionId}`)
-            resolve(sessionId)
-          } else if (response.error) {
-            reject(new Error(`Session creation failed: ${response.error.message}`))
-          } else {
-            reject(new Error('Invalid session/new response'))
-          }
-        }
+      this.emit('message', acpMessage)
+    } else if (sdkMessage.type === 'agent_message_complete') {
+      // Agent finished responding
+      const acpMessage: ACPMessage = {
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          usage: sdkMessage.usage,
+        },
       }
+      this.emit('message', acpMessage)
+    } else if (sdkMessage.type === 'tool_use') {
+      // Tool execution (for debugging)
+      this.logger.log('Tool use:', sdkMessage.tool, sdkMessage.input)
+    } else if (sdkMessage.type === 'error') {
+      this.emit('error', new Error(sdkMessage.error || 'Unknown error'))
+    }
+  }
 
-      this.on('message', handler)
-
-      this.logger.log('Creating session:', message)
-      this.process!.stdin!.write(JSON.stringify(message) + '\n')
-
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        this.off('message', handler)
-        reject(new Error('Session creation timeout'))
-      }, 10000)
-    })
+  /**
+   * Create a new session (compatibility method)
+   */
+  async createSession(): Promise<string> {
+    // Session is created in start()
+    if (!this.sessionId) {
+      this.sessionId = this.session.sessionId
+      this.logger.log(`Session ID: ${this.sessionId}`)
+    }
+    return this.sessionId
   }
 
   /**
    * Send a prompt to the agent
    */
   async sendPrompt(prompt: string): Promise<void> {
-    if (!this.process || !this.process.stdin) {
-      throw new Error('Agent process not started')
+    if (!this.session) {
+      throw new Error('Session not started')
     }
 
-    // Create session if not exists
+    // Ensure session ID is set
     if (!this.sessionId) {
-      await this.createSession()
+      this.sessionId = this.session.sessionId
     }
 
-    const id = ++this.requestId
-    const message: ACPMessage = {
-      jsonrpc: '2.0',
-      id,
-      method: 'session/prompt',
-      params: {
-        sessionId: this.sessionId,
-        prompt: [
-          {
-            type: 'text',
-            text: prompt,
-          },
-        ],
-      },
-    }
-
-    this.logger.log('Sending prompt:', message)
-    this.process.stdin.write(JSON.stringify(message) + '\n')
+    this.logger.log('Sending prompt:', prompt)
+    await this.session.send(prompt)
   }
 
   /**
-   * Stop the agent process
+   * Stop the agent
    */
   async stop(): Promise<void> {
-    if (!this.process) return
+    if (!this.session) return
 
-    this.logger.log('Stopping process...')
+    this.logger.log('Stopping session...')
+    this.isActive = false
 
-    return new Promise((resolve) => {
-      this.process!.on('exit', () => {
-        this.logger.log('Process stopped')
-        resolve()
-      })
-
-      this.process!.kill('SIGTERM')
-
-      // Force kill after 5 seconds
-      setTimeout(() => {
-        if (this.process && !this.process.killed) {
-          this.logger.log('Force killing process')
-          this.process!.kill('SIGKILL')
-        }
-      }, 5000)
-    })
+    try {
+      this.session.close()
+      this.logger.log('Session closed')
+    } catch (error) {
+      this.logger.error('Error closing session:', error)
+    }
   }
 
   /**
-   * Get process ID
+   * Get process ID (not applicable for SDK)
    */
   getPid(): number | undefined {
-    return this.process?.pid
+    return undefined
   }
 
   /**
-   * Check if process is running
+   * Check if session is running
    */
   isRunning(): boolean {
-    return !!this.process && !this.process.killed
+    return this.isActive && !!this.session
   }
 }
