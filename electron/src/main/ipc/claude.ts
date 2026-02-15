@@ -63,6 +63,12 @@ function forwardAgentEvents(
     agents.delete(agentId)
     mainWindow.webContents.send('claude:exit', { agentId, info })
   })
+
+  // Listen for container status changes
+  agent.on('containerStatus', (data: { status: string; error?: string }) => {
+    logger.log(`Agent ${agentId} container status:`, data)
+    mainWindow.webContents.send('container:status', { agentId, ...data })
+  })
 }
 
 /**
@@ -72,26 +78,32 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
   logger.log('Setting up IPC handlers...')
 
   // Start a new Claude agent
-  createIpcHandler('claude:start', async (workingDir: string, profileId?: string) => {
-    const agentId = generateId.agent()
-    logger.log(`Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'}`)
+  createIpcHandler(
+    'claude:start',
+    async (workingDir: string, profileId?: string, useDocker?: boolean) => {
+      const agentId = generateId.agent()
+      logger.log(
+        `Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'} (Docker: ${useDocker})`
+      )
 
-    const agent = new ClaudeAgent(agentId, {
-      workingDirectory: workingDir,
-      profileId: profileId,
-    })
+      const agent = new ClaudeAgent(agentId, {
+        workingDirectory: workingDir,
+        profileId: profileId,
+        dockerOptions: useDocker ? { enabled: true } : undefined,
+      })
 
-    // Forward agent events to renderer
-    forwardAgentEvents(agent, agentId, mainWindow)
+      // Forward agent events to renderer
+      forwardAgentEvents(agent, agentId, mainWindow)
 
-    // Start the agent
-    await agent.start()
+      // Start the agent
+      await agent.start()
 
-    // Store agent instance
-    agents.set(agentId, agent)
+      // Store agent instance
+      agents.set(agentId, agent)
 
-    return { agentId }
-  })
+      return { agentId }
+    }
+  )
 
   // Send a prompt to an agent
   createIpcHandler('claude:send', async (agentId: string, prompt: string) => {

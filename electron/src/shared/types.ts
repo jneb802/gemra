@@ -68,6 +68,11 @@ export interface ClaudeAgentOptions {
   profileId?: string
 }
 
+export interface DockerOptions {
+  enabled: boolean
+  imageName?: string // Override auto-detected image
+}
+
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number

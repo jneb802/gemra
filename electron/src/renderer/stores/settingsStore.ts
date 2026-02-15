@@ -8,6 +8,7 @@ export interface TerminalSettings {
   cursorBlink: boolean
   scrollback: number
   theme: 'dark' | 'light'
+  useDocker: boolean
 }
 
 interface SettingsState extends TerminalSettings {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   cursorBlink: true,
   scrollback: 10000,
   theme: 'dark',
+  useDocker: false,
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({

@@ -4,6 +4,7 @@ import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { useTabStore } from './stores/tabStore'
+import { useSettingsStore } from './stores/settingsStore'
 import { usePlatform } from './hooks/usePlatform'
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
 
   const { isMac, getModifierKey } = usePlatform()
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
+  const useDocker = useSettingsStore((state) => state.useDocker)
 
   // Handler for closing tabs with agent cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
@@ -55,7 +57,7 @@ function App() {
   const handleNewClaudeTab = useCallback(async (profileId?: string) => {
     // Use hardcoded working directory (renderer can't access process)
     const workingDir = '/Users/benjmarston/Develop/gemra'
-    const result = await window.electron.claude.start(workingDir, profileId)
+    const result = await window.electron.claude.start(workingDir, profileId, useDocker)
 
     if (result.success && result.agentId) {
       createClaudeTab(result.agentId, workingDir)
@@ -64,7 +66,7 @@ function App() {
       // Show error to user (TODO: proper error handling)
       alert(`Failed to start Claude agent: ${result.error}`)
     }
-  }, [createClaudeTab])
+  }, [createClaudeTab, useDocker])
 
   // Handler for creating LiteLLM chat tabs
   const handleNewLiteLLMTab = useCallback(async () => {
