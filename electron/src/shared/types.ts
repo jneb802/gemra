@@ -43,6 +43,9 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: 'window:close',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',
+
+  // Claude usage
+  CLAUDE_USAGE: 'claude:usage',
 } as const
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
@@ -60,12 +63,24 @@ export interface ClaudeAgentInfo {
   status: 'idle' | 'working' | 'error'
 }
 
+export interface TokenUsage {
+  inputTokens: number
+  outputTokens: number
+  timestamp: number
+}
+
 export interface ACPMessage {
   jsonrpc: '2.0'
   id?: string | number
   method?: string
   params?: any
-  result?: any
+  result?: {
+    usage?: {
+      input_tokens: number
+      output_tokens: number
+    }
+    [key: string]: any
+  }
   error?: {
     code: number
     message: string

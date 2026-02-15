@@ -53,8 +53,8 @@ function App() {
 
   // Handler for creating Claude chat tabs
   const handleNewClaudeTab = useCallback(async () => {
-    // Use current working directory or home directory
-    const workingDir = process.env.HOME || process.cwd()
+    // Use hardcoded working directory (renderer can't access process)
+    const workingDir = '/Users/benjmarston/Develop/gemra'
     const result = await window.electron.claude.start(workingDir)
 
     if (result.success && result.agentId) {

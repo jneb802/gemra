@@ -27,6 +27,12 @@ function forwardAgentEvents(
     mainWindow.webContents.send('claude:status', { agentId, status })
   })
 
+  // Listen for token usage
+  agent.on('usage', (usage: any) => {
+    console.log(`[ClaudeIPC] Agent ${agentId} usage:`, usage)
+    mainWindow.webContents.send('claude:usage', { agentId, usage })
+  })
+
   // Listen for errors
   agent.on('error', (error: Error) => {
     console.error(`[ClaudeIPC] Agent ${agentId} error:`, error)

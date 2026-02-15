@@ -19,6 +19,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [gitBranch, setGitBranch] = useState<string>('main')
   const [gitStats, setGitStats] = useState({ filesChanged: 0, insertions: 0, deletions: 0 })
   const [mode, setMode] = useState<ClaudeMode>('default')
+  const [model, setModel] = useState<string>('sonnet')
+  const [tokenUsage, setTokenUsage] = useState({ inputTokens: 0, outputTokens: 0 })
 
   useEffect(() => {
     console.log('[ClaudeChat] Mounted with agentId:', agentId)
@@ -95,6 +97,17 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       }
     })
 
+    // Listen for token usage
+    const unlistenUsage = window.electron.claude.onUsage((data) => {
+      if (data.agentId === agentId) {
+        console.log('[ClaudeChat] Token usage:', data.usage)
+        setTokenUsage((prev) => ({
+          inputTokens: prev.inputTokens + data.usage.inputTokens,
+          outputTokens: prev.outputTokens + data.usage.outputTokens,
+        }))
+      }
+    })
+
     // Listen for errors
     const unlistenError = window.electron.claude.onError((data) => {
       if (data.agentId === agentId) {
@@ -107,6 +120,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     return () => {
       unlistenText()
       unlistenStatus()
+      unlistenUsage()
       unlistenError()
       clearInterval(statsInterval)
     }
@@ -184,7 +198,15 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         </div>
       )}
 
-      <StatusBar mode={mode} gitBranch={gitBranch} gitStats={gitStats} />
+      <StatusBar
+        mode={mode}
+        model={model}
+        gitBranch={gitBranch}
+        gitStats={gitStats}
+        tokenUsage={tokenUsage}
+        onModeChange={setMode}
+        onModelChange={setModel}
+      />
 
       <InputBox onSend={handleSend} disabled={isWorking} />
     </div>

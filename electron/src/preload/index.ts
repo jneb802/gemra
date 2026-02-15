@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('electron', {
 
     onStatus: createIpcListener<{ agentId: string; status: string }>('claude:status'),
 
+    onUsage: createIpcListener<{ agentId: string; usage: { inputTokens: number; outputTokens: number; timestamp: number } }>('claude:usage'),
+
     onError: createIpcListener<{ agentId: string; error: string }>('claude:error'),
 
     onExit: createIpcListener<{ agentId: string; info: any }>('claude:exit'),
@@ -91,6 +93,7 @@ export interface ElectronAPI {
     getGitStats: (workingDir: string) => Promise<{ success: boolean; filesChanged: number; insertions: number; deletions: number }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
+    onUsage: (callback: (data: { agentId: string; usage: { inputTokens: number; outputTokens: number; timestamp: number } }) => void) => () => void
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void
     onExit: (callback: (data: { agentId: string; info: any }) => void) => () => void
   }

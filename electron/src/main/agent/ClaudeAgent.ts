@@ -93,6 +93,17 @@ export class ClaudeAgent extends EventEmitter {
 
     // Check if it's a response with result (prompt completed)
     if (message.result) {
+      // Extract token usage if available
+      if (message.result.usage) {
+        const usage = {
+          inputTokens: message.result.usage.input_tokens || 0,
+          outputTokens: message.result.usage.output_tokens || 0,
+          timestamp: Date.now(),
+        }
+        console.log(`[ClaudeAgent ${this.id}] Usage:`, usage)
+        this.emit('usage', usage)
+      }
+
       // Agent finished processing
       this.status = 'idle'
       this.emit('status', 'idle')
