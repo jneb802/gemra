@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ContextIndicator } from './ContextIndicator'
+import type { ContainerStatus } from '../../../shared/types'
 
 interface StatusBarProps {
   mode: 'default' | 'acceptEdits' | 'plan'
@@ -14,8 +15,11 @@ interface StatusBarProps {
     inputTokens: number
     outputTokens: number
   }
+  containerStatus: ContainerStatus
+  containerError?: string
   onModeChange: (mode: 'default' | 'acceptEdits' | 'plan') => void
   onModelChange: (model: string) => void
+  onContainerToggle: () => void
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -24,8 +28,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   gitBranch,
   gitStats,
   tokenUsage,
+  containerStatus,
+  containerError,
   onModeChange,
   onModelChange,
+  onContainerToggle,
 }) => {
   const [showModeMenu, setShowModeMenu] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
@@ -53,6 +60,43 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       default:
         return model
     }
+  }
+
+  const getContainerLabel = () => {
+    switch (containerStatus) {
+      case 'disabled':
+        return 'Off'
+      case 'building':
+        return 'Building image...'
+      case 'starting':
+        return 'Starting...'
+      case 'running':
+        return 'Running'
+      case 'error':
+        return 'Error'
+      default:
+        return 'Unknown'
+    }
+  }
+
+  const getContainerColor = () => {
+    switch (containerStatus) {
+      case 'disabled':
+        return '#888'
+      case 'building':
+      case 'starting':
+        return '#f59e0b' // Orange
+      case 'running':
+        return '#4ade80' // Green
+      case 'error':
+        return '#f87171' // Red
+      default:
+        return '#888'
+    }
+  }
+
+  const isContainerClickable = () => {
+    return containerStatus === 'disabled' || containerStatus === 'running'
   }
 
   const models = [
@@ -247,6 +291,64 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Separator */}
+      <div style={{ width: '1px', height: '16px', backgroundColor: '#3e3e3e' }} />
+
+      {/* Container status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: '#666' }}>Container:</span>
+        <button
+          onClick={isContainerClickable() ? onContainerToggle : undefined}
+          disabled={!isContainerClickable()}
+          title={containerError || undefined}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: getContainerColor(),
+            cursor: isContainerClickable() ? 'pointer' : 'default',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            transition: 'background-color 0.15s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+          onMouseEnter={(e) => {
+            if (isContainerClickable()) {
+              e.currentTarget.style.backgroundColor = '#3e3e3e'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (isContainerClickable()) {
+              e.currentTarget.style.backgroundColor = 'transparent'
+            }
+          }}
+        >
+          {/* Status indicator dot */}
+          {containerStatus === 'running' && (
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: getContainerColor()
+            }} />
+          )}
+          {(containerStatus === 'building' || containerStatus === 'starting') && (
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              border: '1.5px solid currentColor',
+              borderTopColor: 'transparent',
+              animation: 'spin 1s linear infinite'
+            }} />
+          )}
+          {containerStatus === 'error' && '✕ '}
+          {getContainerLabel()}
+        </button>
       </div>
 
       {/* Separator */}

@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, ChildProcess, execSync } from 'child_process'
 import { EventEmitter } from 'events'
 import { ACPMessage, DockerOptions } from '../../shared/types'
 import { DockerManager } from '../docker/DockerManager'
@@ -34,13 +34,57 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
+   * Find claude-code-acp binary in common locations
+   */
+  private findClaudeCodeAcp(): string {
+    const homeDir = process.env.HOME || process.env.USERPROFILE
+    const possiblePaths = [
+      'claude-code-acp', // Try PATH first
+      `${homeDir}/.nvm/versions/node/v20.11.0/bin/claude-code-acp`,
+      `${homeDir}/.local/bin/claude-code-acp`,
+      '/usr/local/bin/claude-code-acp',
+      '/opt/homebrew/bin/claude-code-acp',
+    ]
+
+    for (const path of possiblePaths) {
+      try {
+        // Check if binary exists and is executable
+        if (path === 'claude-code-acp') {
+          execSync('which claude-code-acp', { stdio: 'ignore' })
+          return path
+        } else {
+          execSync(`test -x "${path}"`, { stdio: 'ignore' })
+          return path
+        }
+      } catch {
+        continue
+      }
+    }
+
+    throw new Error('claude-code-acp not found. Please install Claude Code CLI.')
+  }
+
+  /**
    * Start claude-code-acp directly on host (no Docker)
    */
   private async startDirect(): Promise<void> {
     return new Promise((resolve, reject) => {
       console.log('[ACPClient] Starting claude-code-acp (direct mode)...')
 
-      this.process = spawn('claude-code-acp', [], {
+      // Emit disabled status for non-Docker mode
+      this.emit('containerStatus', { status: 'disabled' })
+
+      // Find the binary
+      let binaryPath: string
+      try {
+        binaryPath = this.findClaudeCodeAcp()
+        console.log(`[ACPClient] Found claude-code-acp at: ${binaryPath}`)
+      } catch (error: any) {
+        reject(error)
+        return
+      }
+
+      this.process = spawn(binaryPath, [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -67,11 +111,14 @@ export class ACPClient extends EventEmitter {
         const dockerCheck = await dockerManager.isDockerAvailable()
         if (!dockerCheck.available) {
           console.error('[ACPClient] Docker not available:', dockerCheck.error)
-          this.emit('error', new Error(dockerCheck.error))
+          this.emit('containerStatus', { status: 'error', error: dockerCheck.error })
           // Fallback to direct mode
           console.log('[ACPClient] Falling back to direct mode')
           return this.startDirect().then(resolve).catch(reject)
         }
+
+        // Emit building status
+        this.emit('containerStatus', { status: 'building' })
 
         // Build image if needed
         const buildResult = await dockerManager.buildImageIfNeeded(
@@ -79,11 +126,14 @@ export class ACPClient extends EventEmitter {
         )
         if (!buildResult.success) {
           console.error('[ACPClient] Failed to build Docker image:', buildResult.error)
-          this.emit('error', new Error(buildResult.error))
+          this.emit('containerStatus', { status: 'error', error: buildResult.error })
           // Fallback to direct mode
           console.log('[ACPClient] Falling back to direct mode')
           return this.startDirect().then(resolve).catch(reject)
         }
+
+        // Emit starting status
+        this.emit('containerStatus', { status: 'starting' })
 
         const imageName = buildResult.imageName!
         const args = this.buildDockerArgs(imageName)
@@ -196,6 +246,10 @@ export class ACPClient extends EventEmitter {
     // Resolve when process is spawned
     if (this.process.pid) {
       console.log(`[ACPClient] Started with PID ${this.process.pid}`)
+      // Emit running status (only for Docker mode, direct mode already emitted disabled)
+      if (this.options.dockerOptions?.enabled) {
+        this.emit('containerStatus', { status: 'running' })
+      }
       resolve()
     } else {
       reject(new Error('Failed to start process'))

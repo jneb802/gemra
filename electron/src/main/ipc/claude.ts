@@ -48,6 +48,12 @@ function forwardAgentEvents(
     agents.delete(agentId)
     mainWindow.webContents.send('claude:exit', { agentId, info })
   })
+
+  // Listen for container status changes
+  agent.on('containerStatus', (data: { status: string; error?: string }) => {
+    console.log(`[ClaudeIPC] Agent ${agentId} container status:`, data)
+    mainWindow.webContents.send('container:status', { agentId, ...data })
+  })
 }
 
 /**

@@ -47,6 +47,10 @@ export class ClaudeAgent extends EventEmitter {
       this.status = 'idle'
       this.emit('exit', info)
     })
+
+    this.client.on('containerStatus', (data: { status: string; error?: string }) => {
+      this.emit('containerStatus', data)
+    })
   }
 
   /**

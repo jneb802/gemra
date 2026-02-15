@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
-import type { ClaudeMessage } from '../../../shared/types'
+import type { ClaudeMessage, ContainerStatus } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 
 interface ClaudeChatProps {
@@ -21,6 +21,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [mode, setMode] = useState<ClaudeMode>('default')
   const [model, setModel] = useState<string>('sonnet')
   const [tokenUsage, setTokenUsage] = useState({ inputTokens: 0, outputTokens: 0 })
+  const [containerStatus, setContainerStatus] = useState<ContainerStatus>('disabled')
+  const [containerError, setContainerError] = useState<string | undefined>()
 
   useEffect(() => {
     console.log('[ClaudeChat] Mounted with agentId:', agentId)
@@ -117,11 +119,21 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       }
     })
 
+    // Listen for container status changes
+    const unlistenContainer = window.electron.claude.onContainerStatus((data) => {
+      if (data.agentId === agentId) {
+        console.log('[ClaudeChat] Container status:', data.status, data.error)
+        setContainerStatus(data.status as ContainerStatus)
+        setContainerError(data.error)
+      }
+    })
+
     return () => {
       unlistenText()
       unlistenStatus()
       unlistenUsage()
       unlistenError()
+      unlistenContainer()
       clearInterval(statsInterval)
     }
   }, [agentId, workingDir])
@@ -178,6 +190,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
   }
 
+  const handleContainerToggle = () => {
+    console.log('[ClaudeChat] Container toggle clicked - current status:', containerStatus)
+    // TODO: Implement agent restart with toggled Docker mode
+    // For now, this is a placeholder
+  }
+
   return (
     <div className="claude-chat">
       <div className="claude-chat-header">
@@ -204,8 +222,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         gitBranch={gitBranch}
         gitStats={gitStats}
         tokenUsage={tokenUsage}
+        containerStatus={containerStatus}
+        containerError={containerError}
         onModeChange={setMode}
         onModelChange={setModel}
+        onContainerToggle={handleContainerToggle}
       />
 
       <InputBox onSend={handleSend} disabled={isWorking} />

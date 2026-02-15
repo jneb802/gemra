@@ -29,7 +29,7 @@ export class WindowManager {
       this.mainWindow.webContents.openDevTools()
     } else {
       // Production mode
-      this.mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'))
+      this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
     }
 
     // Open external links in browser

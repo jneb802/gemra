@@ -185,6 +185,23 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
               </select>
             </FormField>
           </Section>
+
+          {/* Claude Settings */}
+          <Section title="Claude Agent">
+            <FormField label="Use Docker by Default">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={localSettings.useDocker}
+                  onChange={(e) => setLocalSettings({ ...localSettings, useDocker: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '12px', color: '#888' }}>
+                  Run new Claude chats in isolated Docker containers
+                </span>
+              </div>
+            </FormField>
+          </Section>
         </div>
 
         {/* Footer */}

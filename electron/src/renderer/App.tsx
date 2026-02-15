@@ -63,8 +63,16 @@ function App() {
       createClaudeTab(result.agentId, workingDir)
     } else {
       console.error('Failed to start Claude agent:', result.error)
-      // Show error to user (TODO: proper error handling)
-      alert(`Failed to start Claude agent: ${result.error}`)
+      // Show error with installation instructions
+      alert(
+        `Failed to start Claude Code agent.\n\n` +
+        `To use Claude Code integration, install it first:\n\n` +
+        `  npm install -g @anthropic-ai/claude-code\n\n` +
+        `Error: ${result.error}\n\n` +
+        `Creating a regular terminal tab instead...`
+      )
+      // Fallback to regular terminal
+      createTab({ type: 'terminal' })
     }
   }, [createClaudeTab, useDocker])
 
