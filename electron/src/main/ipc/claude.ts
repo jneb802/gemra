@@ -8,6 +8,15 @@ import { generateId } from '../../shared/utils/id'
 const agents = new Map<string, ClaudeAgent>()
 
 /**
+ * Safely send IPC message to renderer (prevents crash if window is destroyed)
+ */
+function safeSend(mainWindow: BrowserWindow, channel: string, data: any): void {
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data)
+  }
+}
+
+/**
  * Forward agent events to the renderer process
  */
 function forwardAgentEvents(
@@ -18,37 +27,37 @@ function forwardAgentEvents(
   // Listen for text responses from agent
   agent.on('text', (text: string) => {
     console.log(`[ClaudeIPC] Agent ${agentId} text:`, text)
-    mainWindow.webContents.send('claude:text', { agentId, text })
+    safeSend(mainWindow, 'claude:text', { agentId, text })
   })
 
   // Listen for status changes
   agent.on('status', (status: string) => {
     console.log(`[ClaudeIPC] Agent ${agentId} status:`, status)
-    mainWindow.webContents.send('claude:status', { agentId, status })
+    safeSend(mainWindow, 'claude:status', { agentId, status })
   })
 
   // Listen for token usage
   agent.on('usage', (usage: any) => {
     console.log(`[ClaudeIPC] Agent ${agentId} usage:`, usage)
-    mainWindow.webContents.send('claude:usage', { agentId, usage })
+    safeSend(mainWindow, 'claude:usage', { agentId, usage })
   })
 
   // Listen for agent status changes (thinking, tool execution, streaming)
   agent.on('agentStatus', (status: any) => {
     console.log(`[ClaudeIPC] Agent ${agentId} agentStatus:`, status)
-    mainWindow.webContents.send('claude:agentStatus', { agentId, status })
+    safeSend(mainWindow, 'claude:agentStatus', { agentId, status })
   })
 
   // Listen for tool executions
   agent.on('toolExecution', (tool: any) => {
     console.log(`[ClaudeIPC] Agent ${agentId} toolExecution:`, tool)
-    mainWindow.webContents.send('claude:toolExecution', { agentId, tool })
+    safeSend(mainWindow, 'claude:toolExecution', { agentId, tool })
   })
 
   // Listen for errors
   agent.on('error', (error: Error) => {
     console.error(`[ClaudeIPC] Agent ${agentId} error:`, error)
-    mainWindow.webContents.send('claude:error', {
+    safeSend(mainWindow, 'claude:error', {
       agentId,
       error: error.message,
     })
@@ -58,13 +67,13 @@ function forwardAgentEvents(
   agent.on('exit', (info: any) => {
     console.log(`[ClaudeIPC] Agent ${agentId} exited:`, info)
     agents.delete(agentId)
-    mainWindow.webContents.send('claude:exit', { agentId, info })
+    safeSend(mainWindow, 'claude:exit', { agentId, info })
   })
 
   // Listen for container status changes
   agent.on('containerStatus', (data: { status: string; error?: string }) => {
     console.log(`[ClaudeIPC] Agent ${agentId} container status:`, data)
-    mainWindow.webContents.send('container:status', { agentId, ...data })
+    safeSend(mainWindow, 'container:status', { agentId, ...data })
   })
 }
 
