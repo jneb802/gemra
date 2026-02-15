@@ -80,8 +80,8 @@ function App() {
   }, [handleNewClaudeTab])
 
   const handleNewTab = useCallback(() => {
-    createTab({ type: 'terminal' })
-  }, [createTab])
+    handleNewClaudeTab()
+  }, [handleNewClaudeTab])
 
   // Create initial tab on mount
   useEffect(() => {
@@ -95,11 +95,11 @@ function App() {
     const unsubscribers: (() => void)[] = []
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:new-tab', () => createTab({ type: 'terminal' }))
+      window.electron.onMenuEvent('menu:new-tab', () => handleNewClaudeTab())
     )
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:new-claude-chat', () => handleNewClaudeTab())
+      window.electron.onMenuEvent('menu:new-terminal', () => createTab({ type: 'terminal' }))
     )
 
     unsubscribers.push(
@@ -145,16 +145,16 @@ function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!getModifierKey(e)) return
 
-      // Cmd/Ctrl+T - New terminal tab
+      // Cmd/Ctrl+T - New Claude chat tab
       if (e.key === 't' && !e.shiftKey) {
         e.preventDefault()
-        createTab()
+        handleNewClaudeTab()
       }
 
-      // Cmd/Ctrl+Shift+T - New Claude chat tab
+      // Cmd/Ctrl+Shift+T - New terminal tab
       if (e.key === 'T' && e.shiftKey) {
         e.preventDefault()
-        handleNewClaudeTab()
+        createTab({ type: 'terminal' })
       }
 
       // Cmd/Ctrl+W - Close tab

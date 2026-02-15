@@ -57,10 +57,10 @@ export class MenuBuilder {
             },
           },
           {
-            label: 'New Claude Chat',
+            label: 'New Terminal Tab',
             accelerator: 'CmdOrCtrl+Shift+T',
             click: () => {
-              this.mainWindow.webContents.send('menu:new-claude-chat')
+              this.mainWindow.webContents.send('menu:new-terminal')
             },
           },
           {
