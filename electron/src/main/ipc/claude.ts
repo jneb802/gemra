@@ -33,6 +33,18 @@ function forwardAgentEvents(
     mainWindow.webContents.send('claude:usage', { agentId, usage })
   })
 
+  // Listen for agent status changes (thinking, tool execution, streaming)
+  agent.on('agentStatus', (status: any) => {
+    console.log(`[ClaudeIPC] Agent ${agentId} agentStatus:`, status)
+    mainWindow.webContents.send('claude:agentStatus', { agentId, status })
+  })
+
+  // Listen for tool executions
+  agent.on('toolExecution', (tool: any) => {
+    console.log(`[ClaudeIPC] Agent ${agentId} toolExecution:`, tool)
+    mainWindow.webContents.send('claude:toolExecution', { agentId, tool })
+  })
+
   // Listen for errors
   agent.on('error', (error: Error) => {
     console.error(`[ClaudeIPC] Agent ${agentId} error:`, error)

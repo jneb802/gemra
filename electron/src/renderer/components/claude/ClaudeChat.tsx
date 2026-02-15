@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
-import type { ClaudeMessage, ContainerStatus } from '../../../shared/types'
+import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 
 interface ClaudeChatProps {
@@ -15,6 +15,8 @@ type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>({ type: 'idle' })
+  const [currentTool, setCurrentTool] = useState<ToolExecution | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [gitBranch, setGitBranch] = useState<string>('main')
   const [gitStats, setGitStats] = useState({ filesChanged: 0, insertions: 0, deletions: 0 })
@@ -110,12 +112,29 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       }
     })
 
+    // Listen for agent status updates (thinking, tool execution, streaming)
+    const unlistenAgentStatus = window.electron.claude.onAgentStatus((data) => {
+      if (data.agentId === agentId) {
+        console.log('[ClaudeChat] Agent status:', data.status)
+        setAgentStatus(data.status)
+      }
+    })
+
+    // Listen for tool executions
+    const unlistenToolExecution = window.electron.claude.onToolExecution((data) => {
+      if (data.agentId === agentId) {
+        console.log('[ClaudeChat] Tool execution:', data.tool)
+        setCurrentTool(data.tool)
+      }
+    })
+
     // Listen for errors
     const unlistenError = window.electron.claude.onError((data) => {
       if (data.agentId === agentId) {
         console.error('[ClaudeChat] Error:', data.error)
         setError(data.error)
         setIsWorking(false)
+        setAgentStatus({ type: 'idle' })
       }
     })
 
@@ -132,6 +151,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       unlistenText()
       unlistenStatus()
       unlistenUsage()
+      unlistenAgentStatus()
+      unlistenToolExecution()
       unlistenError()
       unlistenContainer()
       clearInterval(statsInterval)
@@ -196,6 +217,22 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     // For now, this is a placeholder
   }
 
+  // Helper to get tool display name
+  const getToolDisplayName = (toolName: string): string => {
+    const toolMap: Record<string, string> = {
+      Read: 'Reading file',
+      Write: 'Writing file',
+      Edit: 'Editing file',
+      Bash: 'Running command',
+      Grep: 'Searching code',
+      Glob: 'Finding files',
+      Task: 'Spawning agent',
+      WebSearch: 'Searching web',
+      WebFetch: 'Fetching URL',
+    }
+    return toolMap[toolName] || `Running ${toolName}`
+  }
+
   return (
     <div className="claude-chat">
       <div className="claude-chat-header">
@@ -204,9 +241,34 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
       <MessageList messages={messages} />
 
-      {isWorking && (
-        <div className="thinking-indicator">
-          <span className="thinking-dots">Claude is working</span>
+      {/* Status indicator */}
+      {agentStatus.type === 'thinking' && (
+        <div className="status-indicator thinking">
+          <span className="status-icon">🤔</span>
+          <span className="status-text">Thinking...</span>
+        </div>
+      )}
+
+      {agentStatus.type === 'streaming' && isWorking && (
+        <div className="status-indicator streaming">
+          <span className="status-icon">✍️</span>
+          <span className="status-text">Writing response...</span>
+        </div>
+      )}
+
+      {agentStatus.type === 'tool_execution' && agentStatus.tool && (
+        <div className="status-indicator tool-execution">
+          <span className="status-icon">🔧</span>
+          <span className="status-text">{getToolDisplayName(agentStatus.tool.name)}</span>
+          {agentStatus.tool.name === 'Read' && agentStatus.tool.input?.file_path && (
+            <span className="status-detail">{agentStatus.tool.input.file_path}</span>
+          )}
+          {agentStatus.tool.name === 'Bash' && agentStatus.tool.input?.command && (
+            <span className="status-detail">{agentStatus.tool.input.command}</span>
+          )}
+          {agentStatus.tool.name === 'Grep' && agentStatus.tool.input?.pattern && (
+            <span className="status-detail">"{agentStatus.tool.input.pattern}"</span>
+          )}
         </div>
       )}
 
