@@ -46,6 +46,9 @@ export const IPC_CHANNELS = {
 
   // Claude usage
   CLAUDE_USAGE: 'claude:usage',
+
+  // Container status
+  CONTAINER_STATUS: 'container:status',
 } as const
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
@@ -73,11 +76,31 @@ export interface DockerOptions {
   imageName?: string // Override auto-detected image
 }
 
+export type ContainerStatus = 'disabled' | 'building' | 'starting' | 'running' | 'error'
+
+export interface ContainerState {
+  status: ContainerStatus
+  error?: string
+}
+
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   timestamp: number
 }
+
+export interface ToolExecution {
+  id: string
+  name: string
+  input: any
+  status: 'running' | 'completed' | 'error'
+}
+
+export type AgentStatus =
+  | { type: 'idle' }
+  | { type: 'thinking' }
+  | { type: 'tool_execution'; tool: ToolExecution }
+  | { type: 'streaming' }
 
 export interface ACPMessage {
   jsonrpc: '2.0'

@@ -1,6 +1,5 @@
-import { Plus, Container } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useTabStore } from '../../stores/tabStore'
-import { useSettingsStore } from '../../stores/settingsStore'
 import { TabItem } from './TabItem'
 
 interface TabBarProps {
@@ -11,8 +10,6 @@ interface TabBarProps {
 export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
   const tabs = useTabStore((state) => state.tabs)
   const setActiveTab = useTabStore((state) => state.setActiveTab)
-  const useDocker = useSettingsStore((state) => state.useDocker)
-  const updateSettings = useSettingsStore((state) => state.updateSettings)
 
   return (
     <div
@@ -74,42 +71,6 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
         }}
       >
         <Plus size={16} color="#b0b0b0" />
-      </button>
-
-      {/* Docker toggle button */}
-      <button
-        onClick={() => updateSettings({ useDocker: !useDocker })}
-        title={
-          useDocker
-            ? 'Docker mode enabled - Claude agents run in isolated containers'
-            : 'Docker mode disabled - Click to run Claude agents in isolated Docker containers'
-        }
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '40px',
-          height: '40px',
-          padding: 0,
-          border: 'none',
-          backgroundColor: useDocker ? '#2d2d2d' : 'transparent',
-          cursor: 'pointer',
-          flexShrink: 0,
-          WebkitAppRegion: 'no-drag',
-          transition: 'all 0.2s ease',
-        } as React.CSSProperties}
-        onMouseEnter={(e) => {
-          if (!useDocker) {
-            e.currentTarget.style.backgroundColor = '#2d2d2d'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!useDocker) {
-            e.currentTarget.style.backgroundColor = 'transparent'
-          }
-        }}
-      >
-        <Container size={18} color={useDocker ? '#569cd6' : '#888888'} />
       </button>
     </div>
   )

@@ -24,16 +24,21 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
     )
   }
 
+  // Helper to determine if message should be grouped with previous
+  const isGroupedWithPrevious = (index: number): boolean => {
+    if (index === 0) return false
+    return messages[index].role === messages[index - 1].role
+  }
+
   return (
     <div className="message-list">
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <div
           key={message.id}
-          className={`message message-${message.role}`}
+          className={`message message-${message.role}${
+            isGroupedWithPrevious(index) ? ' message-grouped' : ''
+          }`}
         >
-          <div className="message-role">
-            {message.role === 'user' ? 'You' : 'Claude'}
-          </div>
           <div className="message-content">
             {message.content}
           </div>

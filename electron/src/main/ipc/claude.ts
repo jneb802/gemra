@@ -57,6 +57,18 @@ function forwardAgentEvents(
     safeSend(mainWindow, 'claude:usage', { agentId, usage })
   })
 
+  // Listen for agent status changes (thinking, tool execution, streaming)
+  agent.on('agentStatus', (status: any) => {
+    logger.log(`Agent ${agentId} agentStatus:`, status)
+    safeSend(mainWindow, 'claude:agentStatus', { agentId, status })
+  })
+
+  // Listen for tool executions
+  agent.on('toolExecution', (tool: any) => {
+    logger.log(`Agent ${agentId} toolExecution:`, tool)
+    safeSend(mainWindow, 'claude:toolExecution', { agentId, tool })
+  })
+
   // Listen for errors
   agent.on('error', (error: Error) => {
     logger.error(`Agent ${agentId} error:`, error)
