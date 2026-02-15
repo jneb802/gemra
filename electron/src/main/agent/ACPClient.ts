@@ -67,8 +67,14 @@ export class ACPClient extends EventEmitter {
       const claudeCodePath = this.getClaudeCodePath()
       this.logger.log(`Using claude-code-acp from: ${claudeCodePath}`)
 
-      // Use node to execute the JS file (more reliable in packaged apps)
-      this.process = spawn(process.execPath, [claudeCodePath], {
+      // In packaged apps, spawn with 'node' command (requires node in PATH)
+      // In development, use Electron's node
+      const command = app.isPackaged ? 'node' : process.execPath
+      const args = [claudeCodePath]
+
+      this.logger.log(`Spawning: ${command} ${args.join(' ')}`)
+
+      this.process = spawn(command, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,

@@ -56,7 +56,8 @@
           ]
         }
       ],
-      "icon": "resources/icon.icns"
+      "icon": "resources/icon.icns",
+      "identity": null
     },
     "files": [
       "dist-electron/**/*",
@@ -65,7 +66,11 @@
       "package.json"
     ],
     "asarUnpack": [
-      "node_modules/node-pty/**/*"
+      "node_modules/node-pty/**/*",
+      "node_modules/@zed-industries/claude-code-acp/**/*",
+      "node_modules/@anthropic-ai/claude-agent-sdk/**/*",
+      "node_modules/@agentclientprotocol/**/*",
+      "node_modules/@modelcontextprotocol/**/*"
     ],
     "directories": {
       "output": "release"

@@ -73,7 +73,8 @@
       "Bash(npm run typecheck:*)",
       "Bash(npm run dev:*)",
       "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false npm run package:mac)",
-      "Bash(npx asar list:*)"
+      "Bash(npx asar list:*)",
+      "Bash(npm run package:mac:*)"
     ]
   }
 }
