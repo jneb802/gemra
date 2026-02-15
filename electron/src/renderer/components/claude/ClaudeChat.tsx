@@ -26,6 +26,18 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [containerStatus, setContainerStatus] = useState<ContainerStatus>('disabled')
   const [containerError, setContainerError] = useState<string | undefined>()
 
+  // Update git stats helper
+  const updateGitStats = async () => {
+    const result = await window.electron.claude.getGitStats(workingDir)
+    if (result.success) {
+      setGitStats({
+        filesChanged: result.filesChanged,
+        insertions: result.insertions,
+        deletions: result.deletions,
+      })
+    }
+  }
+
   useEffect(() => {
     console.log('[ClaudeChat] Mounted with agentId:', agentId)
 
@@ -36,29 +48,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       }
     })
 
-    // Get git stats
-    window.electron.claude.getGitStats(workingDir).then((result) => {
-      if (result.success) {
-        setGitStats({
-          filesChanged: result.filesChanged,
-          insertions: result.insertions,
-          deletions: result.deletions,
-        })
-      }
-    })
-
-    // Poll git stats every 2 seconds
-    const statsInterval = setInterval(() => {
-      window.electron.claude.getGitStats(workingDir).then((result) => {
-        if (result.success) {
-          setGitStats({
-            filesChanged: result.filesChanged,
-            insertions: result.insertions,
-            deletions: result.deletions,
-          })
-        }
-      })
-    }, 2000)
+    // Get initial git stats and start polling
+    updateGitStats()
+    const statsInterval = setInterval(updateGitStats, 2000)
 
     // Listen for text responses from Claude
     const unlistenText = window.electron.claude.onText((data) => {

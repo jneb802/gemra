@@ -1,7 +1,8 @@
-import { spawn, ChildProcess, execSync } from 'child_process'
+import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { ACPMessage, DockerOptions } from '../../shared/types'
 import { DockerManager } from '../docker/DockerManager'
+import { Logger } from '../../shared/utils/logger'
 
 export interface ACPClientOptions {
   workingDirectory: string
@@ -17,6 +18,7 @@ export class ACPClient extends EventEmitter {
   private messageBuffer = ''
   private requestId = 0
   private sessionId?: string
+  private logger = new Logger('ACPClient')
 
   constructor(private options: ACPClientOptions) {
     super()
@@ -34,72 +36,16 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Find claude-code-acp (bundled or system-installed)
-   * Returns { command, args } for spawning the process
-   */
-  private findClaudeCodeAcp(): { command: string; args: string[] } {
-    const { existsSync } = require('fs')
-    const { join } = require('path')
-
-    // Try bundled version first (in production app)
-    const bundledPath = join(__dirname, '../../node_modules/@zed-industries/claude-code-acp/dist/index.js')
-    if (existsSync(bundledPath)) {
-      console.log('[ACPClient] Using bundled claude-code-acp at:', bundledPath)
-      // Run the bundled JS file using Electron's Node.js
-      return { command: process.execPath, args: [bundledPath] }
-    }
-
-    // Fall back to system PATH or common locations
-    const homeDir = process.env.HOME || process.env.USERPROFILE
-    const possiblePaths = [
-      'claude-code-acp', // Try PATH first
-      `${homeDir}/.nvm/versions/node/v20.11.0/bin/claude-code-acp`,
-      `${homeDir}/.local/bin/claude-code-acp`,
-      '/usr/local/bin/claude-code-acp',
-      '/opt/homebrew/bin/claude-code-acp',
-    ]
-
-    for (const path of possiblePaths) {
-      try {
-        // Check if binary exists and is executable
-        if (path === 'claude-code-acp') {
-          execSync('which claude-code-acp', { stdio: 'ignore' })
-          console.log('[ACPClient] Using system claude-code-acp from PATH')
-          return { command: path, args: [] }
-        } else {
-          execSync(`test -x "${path}"`, { stdio: 'ignore' })
-          console.log(`[ACPClient] Using system claude-code-acp at: ${path}`)
-          return { command: path, args: [] }
-        }
-      } catch {
-        continue
-      }
-    }
-
-    throw new Error('claude-code-acp not found. Please install Claude Code CLI.')
-  }
-
-  /**
    * Start claude-code-acp directly on host (no Docker)
    */
   private async startDirect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log('[ACPClient] Starting claude-code-acp (direct mode)...')
+      this.logger.log('Starting claude-code-acp (direct mode)...')
 
       // Emit disabled status for non-Docker mode
       this.emit('containerStatus', { status: 'disabled' })
 
-      // Find the binary/script
-      let cmdInfo: { command: string; args: string[] }
-      try {
-        cmdInfo = this.findClaudeCodeAcp()
-        console.log(`[ACPClient] Command: ${cmdInfo.command}, Args: ${cmdInfo.args.join(' ')}`)
-      } catch (error: any) {
-        reject(error)
-        return
-      }
-
-      this.process = spawn(cmdInfo.command, cmdInfo.args, {
+      this.process = spawn('claude-code-acp', [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -117,7 +63,7 @@ export class ACPClient extends EventEmitter {
    */
   private async startWithDocker(): Promise<void> {
     return new Promise(async (resolve, reject) => {
-      console.log('[ACPClient] Starting claude-code-acp (Docker mode)...')
+      this.logger.log('Starting claude-code-acp (Docker mode)...')
 
       try {
         const dockerManager = new DockerManager()
@@ -125,10 +71,10 @@ export class ACPClient extends EventEmitter {
         // Check Docker availability
         const dockerCheck = await dockerManager.isDockerAvailable()
         if (!dockerCheck.available) {
-          console.error('[ACPClient] Docker not available:', dockerCheck.error)
+          this.logger.error('Docker not available:', dockerCheck.error)
           this.emit('containerStatus', { status: 'error', error: dockerCheck.error })
           // Fallback to direct mode
-          console.log('[ACPClient] Falling back to direct mode')
+          this.logger.log('Falling back to direct mode')
           return this.startDirect().then(resolve).catch(reject)
         }
 
@@ -140,10 +86,10 @@ export class ACPClient extends EventEmitter {
           this.options.workingDirectory
         )
         if (!buildResult.success) {
-          console.error('[ACPClient] Failed to build Docker image:', buildResult.error)
+          this.logger.error('Failed to build Docker image:', buildResult.error)
           this.emit('containerStatus', { status: 'error', error: buildResult.error })
           // Fallback to direct mode
-          console.log('[ACPClient] Falling back to direct mode')
+          this.logger.log('Falling back to direct mode')
           return this.startDirect().then(resolve).catch(reject)
         }
 
@@ -153,7 +99,7 @@ export class ACPClient extends EventEmitter {
         const imageName = buildResult.imageName!
         const args = this.buildDockerArgs(imageName)
 
-        console.log('[ACPClient] Spawning Docker container:', args)
+        this.logger.log('Spawning Docker container:', args)
 
         this.process = spawn('docker', args, {
           stdio: ['pipe', 'pipe', 'pipe'],
@@ -162,7 +108,7 @@ export class ACPClient extends EventEmitter {
 
         this.setupProcessHandlers(resolve, reject)
       } catch (error) {
-        console.error('[ACPClient] Docker startup error:', error)
+        this.logger.error('Docker startup error:', error)
         reject(error)
       }
     })
@@ -237,30 +183,30 @@ export class ACPClient extends EventEmitter {
 
       // Filter out Node.js warnings (ExperimentalWarning, DeprecationWarning, etc.)
       if (message.includes('Warning:') || message.includes('(Use `node --trace-warnings')) {
-        console.log('[ACPClient] warning:', message.trim())
+        this.logger.log('warning:', message.trim())
         return
       }
 
       // Only emit actual errors
-      console.error('[ACPClient] stderr:', message)
+      this.logger.error('stderr:', message)
       this.emit('error', new Error(message))
     })
 
     // Handle process exit
     this.process.on('exit', (code, signal) => {
-      console.log(`[ACPClient] Process exited with code ${code}, signal ${signal}`)
+      this.logger.log(`Process exited with code ${code}, signal ${signal}`)
       this.emit('exit', { code, signal })
     })
 
     // Handle process errors
     this.process.on('error', (error) => {
-      console.error('[ACPClient] Process error:', error)
+      this.logger.error('Process error:', error)
       reject(error)
     })
 
     // Resolve when process is spawned
     if (this.process.pid) {
-      console.log(`[ACPClient] Started with PID ${this.process.pid}`)
+      this.logger.log(`Started with PID ${this.process.pid}`)
       // Emit running status (only for Docker mode, direct mode already emitted disabled)
       if (this.options.dockerOptions?.enabled) {
         this.emit('containerStatus', { status: 'running' })
@@ -289,10 +235,10 @@ export class ACPClient extends EventEmitter {
 
       try {
         const message: ACPMessage = JSON.parse(line)
-        console.log('[ACPClient] Received message:', message)
+        this.logger.log('Received message:', message)
         this.emit('message', message)
       } catch (error) {
-        console.error('[ACPClient] Failed to parse message:', line, error)
+        this.logger.error('Failed to parse message:', line, error)
         this.emit('error', new Error(`Failed to parse ACP message: ${line}`))
       }
     }
@@ -325,7 +271,7 @@ export class ACPClient extends EventEmitter {
           if (response.result && response.result.sessionId) {
             const sessionId = response.result.sessionId
             this.sessionId = sessionId
-            console.log(`[ACPClient] Session created: ${sessionId}`)
+            this.logger.log(`Session created: ${sessionId}`)
             resolve(sessionId)
           } else if (response.error) {
             reject(new Error(`Session creation failed: ${response.error.message}`))
@@ -337,7 +283,7 @@ export class ACPClient extends EventEmitter {
 
       this.on('message', handler)
 
-      console.log('[ACPClient] Creating session:', message)
+      this.logger.log('Creating session:', message)
       this.process!.stdin!.write(JSON.stringify(message) + '\n')
 
       // Timeout after 10 seconds
@@ -377,7 +323,7 @@ export class ACPClient extends EventEmitter {
       },
     }
 
-    console.log('[ACPClient] Sending prompt:', message)
+    this.logger.log('Sending prompt:', message)
     this.process.stdin.write(JSON.stringify(message) + '\n')
   }
 
@@ -387,11 +333,11 @@ export class ACPClient extends EventEmitter {
   async stop(): Promise<void> {
     if (!this.process) return
 
-    console.log('[ACPClient] Stopping process...')
+    this.logger.log('Stopping process...')
 
     return new Promise((resolve) => {
       this.process!.on('exit', () => {
-        console.log('[ACPClient] Process stopped')
+        this.logger.log('Process stopped')
         resolve()
       })
 
@@ -400,8 +346,8 @@ export class ACPClient extends EventEmitter {
       // Force kill after 5 seconds
       setTimeout(() => {
         if (this.process && !this.process.killed) {
-          console.log('[ACPClient] Force killing process')
-          this.process.kill('SIGKILL')
+          this.logger.log('Force killing process')
+          this.process!.kill('SIGKILL')
         }
       }, 5000)
     })

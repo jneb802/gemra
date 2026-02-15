@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTerminal } from './useTerminal'
+import { MenuItem, Separator } from '../common'
 
 interface TerminalViewProps {
   terminalId: string
@@ -201,48 +202,12 @@ export function TerminalView({ terminalId }: TerminalViewProps) {
             disabled={!terminal?.hasSelection()}
           />
           <MenuItem label="Paste" shortcut="⌘V" onClick={handlePaste} />
-          <div style={{ height: '1px', backgroundColor: '#3e3e3e', margin: '4px 8px' }} />
+          <div style={{ margin: '4px 8px' }}>
+            <Separator orientation="horizontal" />
+          </div>
           <MenuItem label="Select All" shortcut="⌘A" onClick={handleSelectAll} />
         </div>
       )}
     </>
-  )
-}
-
-interface MenuItemProps {
-  label: string
-  shortcut: string
-  onClick: () => void
-  disabled?: boolean
-}
-
-function MenuItem({ label, shortcut, onClick, disabled }: MenuItemProps) {
-  return (
-    <div
-      onClick={disabled ? undefined : onClick}
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '6px 12px',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        color: '#d4d4d4',
-        fontSize: '13px',
-        backgroundColor: 'transparent',
-        transition: 'background-color 0.15s ease',
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.backgroundColor = '#3e3e3e'
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent'
-      }}
-    >
-      <span>{label}</span>
-      <span style={{ fontSize: '11px', color: '#808080', marginLeft: '24px' }}>{shortcut}</span>
-    </div>
   )
 }
