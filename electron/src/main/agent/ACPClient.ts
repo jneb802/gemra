@@ -58,7 +58,7 @@ export class ACPClient extends EventEmitter {
 
       // Create a new session
       this.session = sdk.unstable_v2_createSession({
-        model: 'claude-sonnet-4.5-20250929', // Use Sonnet 4.5
+        model: 'claude-sonnet-4-5-20250929', // Use Sonnet 4.5 (correct format)
         pathToClaudeCodeExecutable: cliPath,
         executable: 'node', // Will use system node (must be in PATH)
         env: {
@@ -102,24 +102,31 @@ export class ACPClient extends EventEmitter {
    * Handle SDK messages and convert to ACP format
    */
   private handleSDKMessage(sdkMessage: any): void {
-    this.logger.log('SDK message:', sdkMessage)
+    this.logger.log('SDK message type:', sdkMessage.type)
 
-    // Convert SDK message format to ACP format for compatibility
-    if (sdkMessage.type === 'agent_message_chunk') {
-      // Text content from agent
-      const acpMessage: ACPMessage = {
-        jsonrpc: '2.0',
-        method: 'session/update',
-        params: {
-          update: {
-            sessionUpdate: 'agent_message_chunk',
-            content: sdkMessage.content || { type: 'text', text: sdkMessage.text || '' },
-          },
-        },
+    if (sdkMessage.type === 'assistant') {
+      // Assistant message with content
+      const message = sdkMessage.message
+      if (message && message.content) {
+        // Extract text from content blocks
+        for (const block of message.content) {
+          if (block.type === 'text' && block.text) {
+            const acpMessage: ACPMessage = {
+              jsonrpc: '2.0',
+              method: 'session/update',
+              params: {
+                update: {
+                  sessionUpdate: 'agent_message_chunk',
+                  content: { type: 'text', text: block.text },
+                },
+              },
+            }
+            this.emit('message', acpMessage)
+          }
+        }
       }
-      this.emit('message', acpMessage)
-    } else if (sdkMessage.type === 'agent_message_complete') {
-      // Agent finished responding
+    } else if (sdkMessage.type === 'result') {
+      // Final result with usage stats
       const acpMessage: ACPMessage = {
         jsonrpc: '2.0',
         id: 1,
@@ -128,11 +135,20 @@ export class ACPClient extends EventEmitter {
         },
       }
       this.emit('message', acpMessage)
-    } else if (sdkMessage.type === 'tool_use') {
+
+      // Check for errors
+      if (sdkMessage.is_error || sdkMessage.error) {
+        this.emit('error', new Error(sdkMessage.result || sdkMessage.error || 'Unknown error'))
+      }
+    } else if (sdkMessage.type === 'system') {
+      // System initialization - store session ID
+      if (sdkMessage.session_id && !this.sessionId) {
+        this.sessionId = sdkMessage.session_id
+        this.logger.log('Session ID from SDK:', this.sessionId)
+      }
+    } else if (sdkMessage.type === 'tool_use' || sdkMessage.type === 'tool_execution') {
       // Tool execution (for debugging)
-      this.logger.log('Tool use:', sdkMessage.tool, sdkMessage.input)
-    } else if (sdkMessage.type === 'error') {
-      this.emit('error', new Error(sdkMessage.error || 'Unknown error'))
+      this.logger.log('Tool use:', sdkMessage.tool || sdkMessage.name)
     }
   }
 
