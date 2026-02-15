@@ -29,6 +29,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
   const [currentTurnMetadata, setCurrentTurnMetadata] = useState<MessageMetadata | null>(null)
   const lastAssistantMessageIdRef = useRef<string | null>(null)
+  const [messageQueue, setMessageQueue] = useState<string[]>([])
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -280,8 +281,23 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     return () => clearInterval(interval)
   }, [currentTurnMetadata?.isComplete])
 
+  // Process queued messages when agent becomes idle
+  useEffect(() => {
+    if (!isWorking && messageQueue.length > 0) {
+      console.log('[ClaudeChat] Agent idle, processing queued message')
+      processNextMessage()
+    }
+  }, [isWorking, messageQueue.length, processNextMessage])
+
   const handleSend = async (text: string) => {
     console.log('[ClaudeChat] Sending message:', text)
+
+    // If already working, queue the message instead
+    if (isWorking) {
+      console.log('[ClaudeChat] Agent busy, queueing message')
+      setMessageQueue((prev) => [...prev, text])
+      return
+    }
 
     // Clear any previous error
     setError(null)
@@ -322,6 +338,17 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       setCurrentTurnMetadata(null)
     }
   }
+
+  // Process next queued message
+  const processNextMessage = useCallback(() => {
+    if (messageQueue.length > 0) {
+      const [nextMessage, ...remainingQueue] = messageQueue
+      setMessageQueue(remainingQueue)
+      console.log('[ClaudeChat] Processing queued message:', nextMessage)
+      // Small delay to ensure state is clean
+      setTimeout(() => handleSend(nextMessage), 100)
+    }
+  }, [messageQueue])
 
   const handleContainerToggle = () => {
     console.log('[ClaudeChat] Container toggle clicked - current status:', containerStatus)

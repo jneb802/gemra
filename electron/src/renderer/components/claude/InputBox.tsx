@@ -23,7 +23,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const menuRef = useRef<SlashCommandMenuHandle>(null)
 
   const handleSend = () => {
-    if (!text.trim() || disabled) return
+    if (!text.trim()) return
 
     onSend(text)
     setText('')
@@ -117,19 +117,23 @@ export const InputBox: React.FC<InputBoxProps> = ({
       <textarea
         ref={textareaRef}
         className="input-textarea"
-        placeholder="Type your message... (Enter to send, Shift+Enter for new line, / for commands)"
+        placeholder={
+          disabled
+            ? 'Type your next message... (will send after response)'
+            : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands)'
+        }
         value={text}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        disabled={disabled}
         rows={1}
       />
       <button
         className="send-button"
         onClick={handleSend}
-        disabled={disabled || !text.trim()}
+        disabled={!text.trim()}
+        title={disabled ? 'Message will be queued and sent after current response' : 'Send message'}
       >
-        Send
+        {disabled && text.trim() ? 'Queue' : 'Send'}
       </button>
     </div>
   )
