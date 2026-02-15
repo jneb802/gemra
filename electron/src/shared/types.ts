@@ -63,6 +63,11 @@ export interface ClaudeAgentInfo {
   status: 'idle' | 'working' | 'error'
 }
 
+export interface ClaudeAgentOptions {
+  workingDir: string
+  profileId?: string
+}
+
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number

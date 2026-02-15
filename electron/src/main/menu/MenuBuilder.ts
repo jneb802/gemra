@@ -64,6 +64,13 @@ export class MenuBuilder {
             },
           },
           {
+            label: 'New LiteLLM Chat',
+            accelerator: 'CmdOrCtrl+Shift+L',
+            click: () => {
+              this.mainWindow.webContents.send('menu:new-litellm-chat')
+            },
+          },
+          {
             label: 'Close Tab',
             accelerator: 'CmdOrCtrl+W',
             click: () => {

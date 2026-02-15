@@ -57,12 +57,13 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
   console.log('[ClaudeIPC] Setting up IPC handlers...')
 
   // Start a new Claude agent
-  createIpcHandler('claude:start', async (workingDir: string) => {
+  createIpcHandler('claude:start', async (workingDir: string, profileId?: string) => {
     const agentId = generateId.agent()
-    console.log(`[ClaudeIPC] Starting agent ${agentId} in ${workingDir}`)
+    console.log(`[ClaudeIPC] Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'}`)
 
     const agent = new ClaudeAgent(agentId, {
       workingDirectory: workingDir,
+      profileId: profileId,
     })
 
     // Forward agent events to renderer

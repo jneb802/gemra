@@ -52,10 +52,10 @@ function App() {
   }, [tabs, activeTabId, setActiveTab])
 
   // Handler for creating Claude chat tabs
-  const handleNewClaudeTab = useCallback(async () => {
+  const handleNewClaudeTab = useCallback(async (profileId?: string) => {
     // Use hardcoded working directory (renderer can't access process)
     const workingDir = '/Users/benjmarston/Develop/gemra'
-    const result = await window.electron.claude.start(workingDir)
+    const result = await window.electron.claude.start(workingDir, profileId)
 
     if (result.success && result.agentId) {
       createClaudeTab(result.agentId, workingDir)
@@ -65,6 +65,11 @@ function App() {
       alert(`Failed to start Claude agent: ${result.error}`)
     }
   }, [createClaudeTab])
+
+  // Handler for creating LiteLLM chat tabs
+  const handleNewLiteLLMTab = useCallback(async () => {
+    await handleNewClaudeTab('litellm')
+  }, [handleNewClaudeTab])
 
   const handleNewTab = useCallback(() => {
     createTab({ type: 'terminal' })
@@ -87,6 +92,10 @@ function App() {
 
     unsubscribers.push(
       window.electron.onMenuEvent('menu:new-claude-chat', () => handleNewClaudeTab())
+    )
+
+    unsubscribers.push(
+      window.electron.onMenuEvent('menu:new-litellm-chat', () => handleNewLiteLLMTab())
     )
 
     unsubscribers.push(
@@ -115,6 +124,8 @@ function App() {
   }, [
     createTab,
     handleCloseTab,
+    handleNewClaudeTab,
+    handleNewLiteLLMTab,
     activeTabId,
     handleNewClaudeTab,
     navigateToPreviousTab,

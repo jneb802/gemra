@@ -1,9 +1,11 @@
 import { EventEmitter } from 'events'
 import { ACPClient } from './ACPClient'
 import { ACPMessage } from '../../shared/types'
+import { getProfile } from '../../shared/profiles'
 
 export interface ClaudeAgentOptions {
   workingDirectory: string
+  profileId?: string
 }
 
 /**
@@ -16,7 +18,14 @@ export class ClaudeAgent extends EventEmitter {
   constructor(public id: string, options: ClaudeAgentOptions) {
     super()
 
-    this.client = new ACPClient(options)
+    // Get profile and merge env vars
+    const profile = getProfile(options.profileId || 'anthropic')
+    console.log(`[ClaudeAgent ${id}] Using profile: ${profile.name}`)
+
+    this.client = new ACPClient({
+      workingDirectory: options.workingDirectory,
+      customEnv: profile.env,
+    })
 
     // Forward client events
     this.client.on('message', (message: ACPMessage) => {
