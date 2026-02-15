@@ -64,6 +64,9 @@
       "node_modules/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
     "directories": {
       "output": "release"
     }

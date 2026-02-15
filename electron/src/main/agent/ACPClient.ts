@@ -256,11 +256,18 @@ export class ACPClient extends EventEmitter {
     for (const line of lines) {
       if (!line.trim()) continue
 
+      // Skip lines that don't look like JSON (log messages, etc.)
+      if (!line.trim().startsWith('{')) {
+        this.logger.log('Skipping non-JSON line:', line)
+        continue
+      }
+
       try {
         const message: ACPMessage = JSON.parse(line)
         this.logger.log('Received message:', message)
         this.emit('message', message)
       } catch (error) {
+        // Only emit error for lines that looked like JSON but failed to parse
         this.logger.error('Failed to parse message:', line, error)
         this.emit('error', new Error(`Failed to parse ACP message: ${line}`))
       }
