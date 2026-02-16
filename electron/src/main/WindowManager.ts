@@ -26,7 +26,7 @@ export class WindowManager {
     if (process.env.ELECTRON_RENDERER_URL) {
       // Development mode
       this.mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-      this.mainWindow.webContents.openDevTools()
+      // DevTools can be opened with F12 or View > Show Debug Console
     } else {
       // Production mode
       this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))

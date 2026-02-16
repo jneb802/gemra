@@ -125,7 +125,13 @@ export class MenuBuilder {
         submenu: [
           { role: 'reload' },
           { role: 'forceReload' },
-          { role: 'toggleDevTools' },
+          {
+            label: 'Show Debug Console',
+            accelerator: 'F12',
+            click: () => {
+              this.mainWindow.webContents.toggleDevTools()
+            },
+          },
           { type: 'separator' },
           { role: 'resetZoom' },
           { role: 'zoomIn' },
