@@ -349,7 +349,8 @@ code {
   width: 100%;
   min-height: 24px;
   max-height: 40vh;
-  padding: 8px var(--spacing-md);
+  padding: 8px;
+  padding-left: 8px;
   background-color: transparent;
   border: none;
   border-radius: 0;
