@@ -2,10 +2,25 @@ import React from 'react'
 import type { RowComponentProps } from 'react-window'
 import type { ClaudeMessage, MessageMetadata, MessageContent } from '../../../shared/types'
 import { MessageStatusIndicator } from './MessageStatusIndicator'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export interface MessageItemProps {
   messages: ClaudeMessage[]
   currentTurnMetadata?: MessageMetadata | null
+}
+
+// Filter out internal system tags from content
+const sanitizeContent = (content: string): string => {
+  // Remove XML-like tags that are internal to Claude SDK
+  return content
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, '')
+    .replace(/<command-name>[\s\S]*?<\/command-name>/g, '')
+    .replace(/<command-message>[\s\S]*?<\/command-message>/g, '')
+    .replace(/<command-args>[\s\S]*?<\/command-args>/g, '')
+    .replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, '')
+    .trim()
 }
 
 export const MessageItem = ({
@@ -30,7 +45,17 @@ export const MessageItem = ({
   // Render message content (handles both string and multimodal)
   const renderContent = () => {
     if (typeof message.content === 'string') {
-      return <div className="message-content">{message.content}</div>
+      const sanitized = sanitizeContent(message.content)
+      // Don't render if content is empty after sanitization
+      if (!sanitized) return null
+
+      return (
+        <div className="message-content">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {sanitized}
+          </ReactMarkdown>
+        </div>
+      )
     }
 
     // Multimodal content (array of blocks)
@@ -38,9 +63,15 @@ export const MessageItem = ({
       <div className="message-content">
         {message.content.map((block: MessageContent, idx: number) => {
           if (block.type === 'text') {
+            const sanitized = sanitizeContent(block.text)
+            // Skip empty blocks after sanitization
+            if (!sanitized) return null
+
             return (
               <div key={idx} style={{ marginBottom: idx < message.content.length - 1 ? '8px' : 0 }}>
-                {block.text}
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {sanitized}
+                </ReactMarkdown>
               </div>
             )
           }
@@ -67,6 +98,13 @@ export const MessageItem = ({
     )
   }
 
+  const content = renderContent()
+
+  // Don't render message if content is null (empty after sanitization)
+  if (!content) {
+    return null
+  }
+
   return (
     <div style={style} {...ariaAttributes}>
       <div
@@ -74,7 +112,7 @@ export const MessageItem = ({
           isGroupedWithPrevious ? ' message-grouped' : ''
         }`}
       >
-        {renderContent()}
+        {content}
 
         {/* Live status for streaming message */}
         {message.role === 'assistant' && isStreaming && currentTurnMetadata && (
