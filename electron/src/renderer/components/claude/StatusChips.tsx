@@ -57,14 +57,12 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
       }}
     >
       <StatusChip
-        icon="📁"
         text={formatDirectory(workingDir)}
         onClick={handleDirectoryClick}
         title={`Working directory: ${workingDir}\nClick to copy full path`}
       />
 
       <StatusChip
-        icon="🌿"
         text={gitBranch}
         onClick={onBranchClick}
         title={`Current branch: ${gitBranch}\nClick to checkout another branch`}

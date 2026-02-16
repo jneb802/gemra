@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
-import { StatusBar } from './StatusBar'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
@@ -15,7 +14,15 @@ interface ClaudeChatProps {
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
-export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir, onUserMessage }) => {
+export const ClaudeChat: React.FC<ClaudeChatProps> = ({
+  agentId,
+  workingDir,
+  onUserMessage,
+  onCreateProject,
+  onOpenRepository,
+  onCloneRepository,
+  onOpenRecent
+}) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({ type: 'idle' })
@@ -679,11 +686,21 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir, onU
 
   return (
     <div className="claude-chat">
-      <MessageList
-        messages={messages}
-        isStreaming={agentStatus.type === 'streaming'}
-        currentTurnMetadata={currentTurnMetadata}
-      />
+      {/* Show welcome screen when there are no messages */}
+      {messages.length === 0 ? (
+        <WelcomeScreen
+          onCreateProject={onCreateProject}
+          onOpenRepository={onOpenRepository}
+          onCloneRepository={onCloneRepository}
+          onOpenRecent={onOpenRecent}
+        />
+      ) : (
+        <MessageList
+          messages={messages}
+          isStreaming={agentStatus.type === 'streaming'}
+          currentTurnMetadata={currentTurnMetadata}
+        />
+      )}
 
       {/* Status indicator */}
       {agentStatus.type === 'thinking' && (
@@ -721,22 +738,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir, onU
           Error: {error}
         </div>
       )}
-
-      <StatusBar
-        mode={mode}
-        model={model}
-        gitBranch={gitBranch}
-        gitStats={gitStats}
-        tokenUsage={tokenUsage}
-        containerStatus={containerStatus}
-        containerError={containerError}
-        workingDir={workingDir}
-        onModeChange={setMode}
-        onModelChange={setModel}
-        onContainerToggle={handleContainerToggle}
-        onBranchClick={handleBranchClick}
-        style={{ display: 'none' }}
-      />
 
       <InputBox
         onSend={handleSend}
