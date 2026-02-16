@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
-import { getGitBranch, getGitStats } from '../utils/gitUtils'
+import { getGitBranch, getGitStats, getGitBranches, checkoutBranch } from '../utils/gitUtils'
 import { Logger } from '../../shared/utils/logger'
 
 // Map of agent ID to agent instance
@@ -169,6 +169,23 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     const agent = getAgentOrThrow(agentId)
     const commands = await agent.getSupportedCommands()
     return { commands }
+  })
+
+  // Get git branches
+  createIpcHandler('claude:get-git-branches', async (workingDir: string) => {
+    logger.log(`Getting git branches for ${workingDir}`)
+
+    const branches = getGitBranches(workingDir)
+    return { branches }
+  })
+
+  // Checkout git branch
+  createIpcHandler('claude:checkout-branch', async (workingDir: string, branch: string) => {
+    logger.log(`Checking out branch ${branch} in ${workingDir}`)
+
+    checkoutBranch(workingDir, branch)
+    const newBranch = getGitBranch(workingDir)
+    return { branch: newBranch }
   })
 
   logger.log('IPC handlers set up successfully')

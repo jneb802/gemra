@@ -64,6 +64,12 @@ contextBridge.exposeInMainWorld('electron', {
     getSupportedCommands: (agentId: string) =>
       ipcRenderer.invoke('claude:get-supported-commands', agentId),
 
+    getGitBranches: (workingDir: string) =>
+      ipcRenderer.invoke('claude:get-git-branches', workingDir),
+
+    checkoutBranch: (workingDir: string, branch: string) =>
+      ipcRenderer.invoke('claude:checkout-branch', workingDir, branch),
+
     onText: createIpcListener<{ agentId: string; text: string }>('claude:text'),
 
     onStatus: createIpcListener<{ agentId: string; status: string }>('claude:status'),
@@ -101,6 +107,8 @@ export interface ElectronAPI {
     getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>
     getGitStats: (workingDir: string) => Promise<{ success: boolean; filesChanged: number; insertions: number; deletions: number }>
     getSupportedCommands: (agentId: string) => Promise<{ commands: any[] }>
+    getGitBranches: (workingDir: string) => Promise<{ success: boolean; branches: string[] }>
+    checkoutBranch: (workingDir: string, branch: string) => Promise<{ success: boolean; branch: string }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
     onUsage: (callback: (data: { agentId: string; usage: { inputTokens: number; outputTokens: number; timestamp: number } }) => void) => () => void

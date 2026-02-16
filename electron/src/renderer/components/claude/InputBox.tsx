@@ -7,6 +7,7 @@ interface InputBoxProps {
   customCommands: SlashCommand[]
   claudeCommands: SlashCommand[]
   onExecuteCommand: (command: SlashCommand, category: 'custom' | 'claude', args?: string) => void
+  onSlashQueryChange?: (query: string) => void
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -15,6 +16,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   customCommands,
   claudeCommands,
   onExecuteCommand,
+  onSlashQueryChange,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -88,11 +90,16 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
     // Detect slash command
     if (value.startsWith('/')) {
+      const query = value.slice(1)
       setShowSlashMenu(true)
-      setSlashQuery(value.slice(1))
+      setSlashQuery(query)
+
+      // Notify parent of slash query change for dynamic command loading
+      onSlashQueryChange?.(query)
     } else {
       setShowSlashMenu(false)
       setSlashQuery('')
+      onSlashQueryChange?.('')
     }
 
     // Auto-grow textarea

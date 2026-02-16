@@ -57,3 +57,23 @@ export function getGitStats(workingDir: string) {
   const shortstat = getGitDiffShortstat(workingDir)
   return parseGitShortstat(shortstat)
 }
+
+/**
+ * Get list of all git branches
+ */
+export function getGitBranches(workingDir: string): string[] {
+  try {
+    const output = execGit('branch --format="%(refname:short)"', workingDir)
+    return output.split('\n').filter((b) => b.trim())
+  } catch (error) {
+    console.error('Failed to get git branches:', error)
+    return []
+  }
+}
+
+/**
+ * Checkout a git branch
+ */
+export function checkoutBranch(workingDir: string, branch: string): void {
+  execGit(`checkout "${branch}"`, workingDir)
+}
