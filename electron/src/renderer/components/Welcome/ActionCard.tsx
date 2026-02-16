@@ -15,11 +15,11 @@ export const ActionCard: React.FC<ActionCardProps> = ({ icon, title, description
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '12px',
-        padding: '24px',
+        gap: '8px',
+        padding: '16px',
         backgroundColor: '#2d2d2d',
         border: '1px solid #3e3e3e',
-        borderRadius: '8px',
+        borderRadius: '6px',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
         color: '#d4d4d4',
@@ -34,14 +34,14 @@ export const ActionCard: React.FC<ActionCardProps> = ({ icon, title, description
         e.currentTarget.style.backgroundColor = '#2d2d2d'
       }}
     >
-      <div style={{ fontSize: '48px', color: '#569cd6' }}>
+      <div style={{ fontSize: '32px', color: '#569cd6' }}>
         {icon}
       </div>
       <div style={{ textAlign: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
+        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, marginBottom: '2px' }}>
           {title}
         </h3>
-        <p style={{ margin: 0, fontSize: '13px', color: '#8e8e8e' }}>
+        <p style={{ margin: 0, fontSize: '12px', color: '#8e8e8e' }}>
           {description}
         </p>
       </div>

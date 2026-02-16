@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
+import { StatusBar } from './StatusBar'
+import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
@@ -10,6 +12,10 @@ interface ClaudeChatProps {
   agentId: string
   workingDir: string
   onUserMessage?: () => void
+  onCreateProject: () => void
+  onOpenRepository: () => void
+  onCloneRepository: () => void
+  onOpenRecent: (path: string) => void
 }
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
@@ -761,6 +767,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         model={model}
         onModelChange={setModel}
         onBranchClick={handleBranchClick}
+        agentMode={mode}
+        onAgentModeChange={setMode}
+        containerStatus={containerStatus}
+        containerError={containerError}
+        onContainerToggle={handleContainerToggle}
+        tokenUsage={tokenUsage}
       />
     </div>
   )

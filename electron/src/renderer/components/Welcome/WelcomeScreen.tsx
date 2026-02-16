@@ -22,35 +22,25 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   return (
     <div
       style={{
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '100vh',
         backgroundColor: '#1e1e1e',
         color: '#d4d4d4',
         padding: '40px',
         overflow: 'auto'
       }}
     >
-      <div style={{ maxWidth: '900px', width: '100%' }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h1 style={{ fontSize: '32px', fontWeight: 600, margin: 0, marginBottom: '8px' }}>
-            Welcome to Gemra
-          </h1>
-          <p style={{ fontSize: '14px', color: '#8e8e8e', margin: 0 }}>
-            Get started by creating a new project or opening an existing one
-          </p>
-        </div>
-
+      <div style={{ maxWidth: '700px', width: '100%' }}>
         {/* Action Cards */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px',
-            marginBottom: '48px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '12px',
+            marginBottom: '32px'
           }}
         >
           <ActionCard
