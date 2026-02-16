@@ -366,7 +366,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       />
 
       {/* Middle row - Textarea with image chip */}
-      <div style={{ flex: 1, position: 'relative', display: 'flex', padding: '12px' }}>
+      <div style={{ position: 'relative', display: 'flex', padding: '4px 12px' }}>
         <textarea
           ref={textareaRef}
           className="input-textarea"
@@ -403,8 +403,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '8px 12px',
-          borderTop: '1px solid var(--border-color)',
+          padding: '4px 12px 8px 12px',
         }}
       >
         <IconModeToggle
@@ -418,8 +417,6 @@ export const InputBox: React.FC<InputBoxProps> = ({
           onModeChange={onAgentModeChange}
           disabled={disabled}
         />
-
-        <div style={{ flex: 1 }} />
 
         <CompactContextIndicator
           inputTokens={tokenUsage.inputTokens}

@@ -61,7 +61,6 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
         gap: '8px',
         padding: '8px 12px',
         backgroundColor: 'var(--bg-secondary)',
-        borderBottom: '1px solid var(--border-color)',
       }}
     >
       <StatusChip
