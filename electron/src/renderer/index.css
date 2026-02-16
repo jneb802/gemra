@@ -1,3 +1,80 @@
+/* ==========================================================================
+   CSS Variables - Single source of truth for design tokens
+   ========================================================================== */
+
+:root {
+  /* Colors - Background */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #2d2d2d;
+  --bg-user-message: #2a2a2a;
+  --bg-error: #3e1f1f;
+
+  /* Colors - Borders */
+  --border-color: #3e3e3e;
+  --border-color-focus: #569cd6;
+  --border-color-error: #ff5555;
+  --border-color-system: #555;
+
+  /* Colors - Text */
+  --text-primary: #d4d4d4;
+  --text-muted: #888;
+  --text-error: #ff5555;
+  --text-thinking: #9cdcfe;
+  --text-streaming: #4ec9b0;
+  --text-tool: #dcdcaa;
+
+  /* Colors - Interactive */
+  --button-primary: #569cd6;
+  --button-primary-hover: #6aadee;
+
+  /* Colors - Scrollbar */
+  --scrollbar-track: #1e1e1e;
+  --scrollbar-thumb: #3e3e3e;
+  --scrollbar-thumb-hover: #4e4e4e;
+
+  /* Colors - Terminal Selection */
+  --selection-bg: rgba(255, 255, 255, 0.3);
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+
+  /* Font Sizes */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+
+  /* Message-specific spacing */
+  --message-max-width: 70ch;
+  --message-spacing-grouped: 8px;
+  --message-spacing-default: 28px;
+  --message-padding-vertical: 20px;
+  --message-padding-horizontal: 16px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  /* Other */
+  --scrollbar-width: 10px;
+}
+
+/* ==========================================================================
+   Reset & Base Styles
+   ========================================================================== */
+
 * {
   margin: 0;
   padding: 0;
@@ -12,106 +89,105 @@ body,
   overflow: hidden;
 }
 
-:root {
-  --message-max-width: 70ch;
-  --message-spacing-grouped: 8px;
-  --message-spacing-default: 28px;
-  --message-padding-vertical: 20px;
-  --message-padding-horizontal: 16px;
-}
-
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 code {
-  font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
-/* xterm.js styles */
+/* ==========================================================================
+   Reusable Components
+   ========================================================================== */
+
+/* Custom scrollbar - Apply to any element with .custom-scrollbar */
+.custom-scrollbar::-webkit-scrollbar,
+.xterm-viewport::-webkit-scrollbar,
+.message-list > div::-webkit-scrollbar,
+.message-list::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.xterm-viewport::-webkit-scrollbar-track,
+.message-list > div::-webkit-scrollbar-track,
+.message-list::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.xterm-viewport::-webkit-scrollbar-thumb,
+.message-list > div::-webkit-scrollbar-thumb,
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-md);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.xterm-viewport::-webkit-scrollbar-thumb:hover,
+.message-list > div::-webkit-scrollbar-thumb:hover,
+.message-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ==========================================================================
+   Terminal Styles (xterm.js)
+   ========================================================================== */
+
 .xterm {
   height: 100%;
-  padding: 8px;
+  padding: var(--spacing-sm);
 }
 
 .xterm-viewport {
   overflow-y: auto;
 }
 
-/* Custom scrollbar */
-.xterm-viewport::-webkit-scrollbar {
-  width: 10px;
-}
-
-.xterm-viewport::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.xterm-viewport::-webkit-scrollbar-thumb {
-  background: #3e3e3e;
-  border-radius: 5px;
-}
-
-.xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: #4e4e4e;
-}
-
-/* Selection color */
+/* Terminal selection color */
 .xterm .xterm-selection div {
-  background-color: rgba(255, 255, 255, 0.3) !important;
+  background-color: var(--selection-bg) !important;
 }
 
-/* Claude Chat Styles */
+/* ==========================================================================
+   Claude Chat Interface
+   ========================================================================== */
+
 .claude-chat {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #1e1e1e;
+  background-color: var(--bg-primary);
 }
 
 .claude-chat-header {
-  padding: 8px 16px;
-  background-color: #2d2d2d;
-  border-bottom: 1px solid #3e3e3e;
-  font-size: 12px;
-  color: #888;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .working-dir {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
+
+/* ==========================================================================
+   Message List
+   ========================================================================== */
 
 .message-list {
   flex: 1;
   position: relative;
   overflow: hidden;
-  padding: 32px 24px;
+  padding: var(--spacing-2xl) var(--spacing-xl);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-}
-
-/* Scrollbar styling for react-window container */
-.message-list > div::-webkit-scrollbar {
-  width: 10px;
-}
-
-.message-list > div::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.message-list > div::-webkit-scrollbar-thumb {
-  background: #3e3e3e;
-  border-radius: 5px;
-}
-
-.message-list > div::-webkit-scrollbar-thumb:hover {
-  background: #4e4e4e;
 }
 
 .message-list.empty {
@@ -122,24 +198,28 @@ code {
 
 .empty-state {
   text-align: center;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .empty-state p {
-  margin: 8px 0;
+  margin: var(--spacing-sm) 0;
 }
 
 .empty-state .hint {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-style: italic;
 }
+
+/* ==========================================================================
+   Message Components
+   ========================================================================== */
 
 /* Message container */
 .message {
   width: 100%;
   margin-bottom: var(--message-spacing-default);
   padding: var(--message-padding-vertical) var(--message-padding-horizontal);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
 }
 
 /* Grouped messages (consecutive from same sender) */
@@ -149,7 +229,7 @@ code {
 
 /* User message styling */
 .message-user {
-  background-color: #2a2a2a;
+  background-color: var(--bg-user-message);
 }
 
 /* Assistant message styling - minimal */
@@ -160,40 +240,40 @@ code {
 /* System message styling */
 .message-system {
   background: transparent;
-  color: #888;
+  color: var(--text-muted);
   font-style: italic;
-  font-size: 13px;
-  padding: 8px 16px;
-  border-left: 3px solid #555;
-  margin: 8px 0;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-left: 3px solid var(--border-color-system);
+  margin: var(--spacing-sm) 0;
 }
 
 /* Message content */
 .message-content {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 /* Message status indicator - inline after message content */
 .message-status-indicator {
-  margin-top: 8px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 12px;
-  color: #888;
+  margin-top: var(--spacing-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .message-status-indicator.live {
-  color: #9cdcfe; /* Thinking blue */
+  color: var(--text-thinking);
 }
 
 .message-status-indicator.final {
-  color: #888; /* Subtle gray */
+  color: var(--text-muted);
 }
 
 .status-spinner {
@@ -201,36 +281,34 @@ code {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+/* ==========================================================================
+   Status Indicators
+   ========================================================================== */
 
-/* Status indicators */
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background-color: #2d2d2d;
-  border-top: 1px solid #3e3e3e;
-  font-size: 14px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  font-size: var(--font-size-base);
 }
 
 .status-indicator.thinking {
-  color: #9cdcfe;
+  color: var(--text-thinking);
 }
 
 .status-indicator.streaming {
-  color: #4ec9b0;
+  color: var(--text-streaming);
 }
 
 .status-indicator.tool-execution {
-  color: #dcdcaa;
+  color: var(--text-tool);
 }
 
 .status-icon {
-  font-size: 16px;
+  font-size: var(--font-size-md);
 }
 
 .status-text {
@@ -238,50 +316,59 @@ code {
 }
 
 .status-detail {
-  margin-left: 4px;
-  color: #888;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 12px;
+  margin-left: var(--spacing-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+/* ==========================================================================
+   Error Messages
+   ========================================================================== */
 
 .error-message {
-  padding: 12px 16px;
-  background-color: #3e1f1f;
-  border-top: 1px solid: #ff5555;
-  color: #ff5555;
-  font-size: 14px;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--bg-error);
+  border-top: 1px solid var(--border-color-error);
+  color: var(--text-error);
+  font-size: var(--font-size-base);
 }
+
+/* ==========================================================================
+   Input Box
+   ========================================================================== */
 
 .input-box {
   display: flex;
-  gap: 8px;
-  padding: 16px;
-  background-color: #2d2d2d;
-  border-top: 1px solid #3e3e3e;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
 }
 
 .input-textarea {
   flex: 1;
   min-height: 40px;
   max-height: 200px;
-  padding: 10px 12px;
-  background-color: #1e1e1e;
-  border: 1px solid #3e3e3e;
-  border-radius: 6px;
-  color: #d4d4d4;
+  padding: 10px var(--spacing-md);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   resize: none;
   outline: none;
+  transition: border-color 0.2s ease;
 }
 
 .input-textarea:focus {
-  border-color: #569cd6;
+  border-color: var(--border-color-focus);
+}
+
+.input-textarea:focus-visible {
+  outline: 2px solid var(--border-color-focus);
+  outline-offset: 2px;
 }
 
 .input-textarea:disabled {
@@ -290,19 +377,24 @@ code {
 }
 
 .send-button {
-  padding: 10px 24px;
-  background-color: #569cd6;
+  padding: 10px var(--spacing-xl);
+  background-color: var(--button-primary);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   color: white;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s ease;
 }
 
 .send-button:hover:not(:disabled) {
-  background-color: #6aadee;
+  background-color: var(--button-primary-hover);
+}
+
+.send-button:focus-visible {
+  outline: 2px solid var(--border-color-focus);
+  outline-offset: 2px;
 }
 
 .send-button:disabled {
@@ -310,20 +402,24 @@ code {
   cursor: not-allowed;
 }
 
-/* Scrollbar for message list */
-.message-list::-webkit-scrollbar {
-  width: 10px;
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
-.message-list::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.message-list::-webkit-scrollbar-thumb {
-  background: #3e3e3e;
-  border-radius: 5px;
-}
-
-.message-list::-webkit-scrollbar-thumb:hover {
-  background: #4e4e4e;
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
