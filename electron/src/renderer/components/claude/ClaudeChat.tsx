@@ -10,11 +10,12 @@ import { useTabStore } from '../../stores/tabStore'
 interface ClaudeChatProps {
   agentId: string
   workingDir: string
+  onUserMessage?: () => void
 }
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
-export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) => {
+export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir, onUserMessage }) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({ type: 'idle' })
@@ -341,6 +342,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   }, [agentId])
 
   const handleSend = useCallback(async (content: string | MessageContent[]) => {
+    // Notify parent that user sent a message (to dismiss welcome overlay)
+    onUserMessage?.()
+
     // If already working, queue the message instead
     if (isWorking) {
       console.log('[ClaudeChat] Agent busy, queueing message')
@@ -349,7 +353,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
 
     await sendMessageInternal(content)
-  }, [isWorking, sendMessageInternal])
+  }, [isWorking, sendMessageInternal, onUserMessage])
 
   // Process queued messages when agent becomes idle
   useEffect(() => {

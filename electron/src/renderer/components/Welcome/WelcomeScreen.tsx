@@ -92,33 +92,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             </div>
           </div>
         )}
-
-        {/* Keyboard Shortcuts */}
-        <div style={{ marginTop: '48px', padding: '16px', backgroundColor: '#2d2d2d', borderRadius: '6px' }}>
-          <h3 style={{ fontSize: '13px', fontWeight: 600, margin: 0, marginBottom: '8px', color: '#8e8e8e' }}>
-            Keyboard Shortcuts
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: '#8e8e8e' }}>Create Project</span>
-              <kbd style={{ padding: '2px 6px', backgroundColor: '#1e1e1e', borderRadius: '3px', color: '#d4d4d4' }}>
-                {window.electron.platform === 'darwin' ? '⌘⇧N' : 'Ctrl+Shift+N'}
-              </kbd>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: '#8e8e8e' }}>Open Repository</span>
-              <kbd style={{ padding: '2px 6px', backgroundColor: '#1e1e1e', borderRadius: '3px', color: '#d4d4d4' }}>
-                {window.electron.platform === 'darwin' ? '⌘O' : 'Ctrl+O'}
-              </kbd>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: '#8e8e8e' }}>Clone Repository</span>
-              <kbd style={{ padding: '2px 6px', backgroundColor: '#1e1e1e', borderRadius: '3px', color: '#d4d4d4' }}>
-                {window.electron.platform === 'darwin' ? '⌘⇧G' : 'Ctrl+Shift+G'}
-              </kbd>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
