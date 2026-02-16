@@ -3,10 +3,15 @@ import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
+import { WelcomeScreen } from './components/Welcome/WelcomeScreen'
+import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
+import { CloneRepositoryModal } from './components/Welcome/CloneRepositoryModal'
 import { useTabStore } from './stores/tabStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useInputModeStore } from './stores/inputModeStore'
+import { useRecentStore } from './stores/recentStore'
 import { usePlatform } from './hooks/usePlatform'
+import * as path from 'path'
 
 function App() {
   const tabs = useTabStore((state) => state.tabs)
@@ -19,8 +24,11 @@ function App() {
 
   const { isMac, getModifierKey } = usePlatform()
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCloneModal, setShowCloneModal] = useState(false)
   const useDocker = useSettingsStore((state) => state.useDocker)
   const cycleMode = useInputModeStore((state) => state.cycleMode)
+  const addRecent = useRecentStore((state) => state.addRecent)
 
   // Handler for closing tabs with agent cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
@@ -85,12 +93,76 @@ function App() {
     handleNewClaudeTab()
   }, [handleNewClaudeTab])
 
-  // Create initial tab on mount
-  useEffect(() => {
-    if (tabs.length === 0) {
-      handleNewClaudeTab()
+  // Helper to start Claude chat in a directory
+  const startClaudeChatInDirectory = useCallback(async (workingDir: string) => {
+    const result = await window.electron.claude.start(workingDir, undefined, useDocker)
+
+    if (result.success && result.agentId) {
+      createClaudeTab(result.agentId, workingDir)
+
+      // Get git branch if it's a git repo
+      const branchResult = await window.electron.git.getBranch(workingDir)
+      const gitBranch = branchResult.success ? branchResult.branch : undefined
+
+      // Add to recent directories
+      addRecent(workingDir, gitBranch || undefined)
+    } else {
+      console.error('Failed to start Claude agent:', result.error)
+      alert(`Failed to start Claude Code agent.\n\nError: ${result.error}`)
     }
-  }, [tabs.length, handleNewClaudeTab])
+  }, [createClaudeTab, useDocker, addRecent])
+
+  // Welcome screen handlers
+  const handleOpenDirectory = useCallback(async () => {
+    const selectedPath = await window.electron.dialog.selectDirectory()
+    if (selectedPath) {
+      await startClaudeChatInDirectory(selectedPath)
+    }
+  }, [startClaudeChatInDirectory])
+
+  const handleCreateProject = useCallback(async (name: string, location: string, initGit: boolean) => {
+    const targetPath = path.join(location, name)
+
+    // Create directory
+    const createResult = await window.electron.dialog.createDirectory(targetPath)
+    if (!createResult.success) {
+      alert(`Failed to create directory: ${createResult.error}`)
+      return
+    }
+
+    // Initialize git if requested
+    if (initGit) {
+      const gitResult = await window.electron.git.init(targetPath)
+      if (!gitResult.success) {
+        console.error('Failed to initialize git:', gitResult.error)
+      }
+    }
+
+    // Start Claude chat in new directory
+    await startClaudeChatInDirectory(targetPath)
+  }, [startClaudeChatInDirectory])
+
+  const handleCloneRepo = useCallback(async (url: string, targetPath: string) => {
+    const cloneResult = await window.electron.git.clone(url, targetPath)
+
+    if (!cloneResult.success) {
+      throw new Error(cloneResult.error || 'Failed to clone repository')
+    }
+
+    // Start Claude chat in cloned directory
+    await startClaudeChatInDirectory(targetPath)
+  }, [startClaudeChatInDirectory])
+
+  const handleOpenRecentDirectory = useCallback(async (dirPath: string) => {
+    // Check if directory still exists
+    const exists = await window.electron.dialog.checkDirectory(dirPath)
+    if (!exists) {
+      alert('This directory no longer exists')
+      return
+    }
+
+    await startClaudeChatInDirectory(dirPath)
+  }, [startClaudeChatInDirectory])
 
   // Handle menu events
   useEffect(() => {
@@ -145,6 +217,18 @@ function App() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle Escape key for modals
+      if (e.key === 'Escape') {
+        if (showCreateModal) {
+          setShowCreateModal(false)
+          return
+        }
+        if (showCloneModal) {
+          setShowCloneModal(false)
+          return
+        }
+      }
+
       if (!getModifierKey(e)) return
 
       // Cmd/Ctrl+T - New Claude chat tab
@@ -203,6 +287,24 @@ function App() {
           cycleMode(currentTab.agentId)
         }
       }
+
+      // Cmd/Ctrl+Shift+N - Create Project
+      if (e.key === 'N' && e.shiftKey) {
+        e.preventDefault()
+        setShowCreateModal(true)
+      }
+
+      // Cmd/Ctrl+O - Open Repository
+      if (e.key === 'o' && !e.shiftKey) {
+        e.preventDefault()
+        handleOpenDirectory()
+      }
+
+      // Cmd/Ctrl+Shift+G - Clone Repository
+      if (e.key === 'G' && e.shiftKey) {
+        e.preventDefault()
+        setShowCloneModal(true)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -218,6 +320,11 @@ function App() {
     handleNewClaudeTab,
     navigateToPreviousTab,
     navigateToNextTab,
+    tabs,
+    cycleMode,
+    showCreateModal,
+    showCloneModal,
+    handleOpenDirectory,
   ])
 
   return (
@@ -230,49 +337,73 @@ function App() {
         backgroundColor: '#1e1e1e',
       }}
     >
-      {/* Tab bar */}
-      <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
+      {tabs.length === 0 ? (
+        // Welcome screen when no tabs are open
+        <WelcomeScreen
+          onCreateProject={() => setShowCreateModal(true)}
+          onOpenRepository={handleOpenDirectory}
+          onCloneRepository={() => setShowCloneModal(true)}
+          onOpenRecent={handleOpenRecentDirectory}
+        />
+      ) : (
+        <>
+          {/* Tab bar */}
+          <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
 
-      {/* Main content area */}
-      <div
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          display: 'flex',
-        }}
-      >
-        {/* Terminal views */}
-        <div
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            position: 'relative',
-          }}
-        >
-        {tabs.map((tab) => (
+          {/* Main content area */}
+          <div
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+              display: 'flex',
+            }}
+          >
+            {/* Terminal views */}
             <div
-              key={tab.id}
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                display: tab.isActive ? 'block' : 'none',
+                flex: 1,
+                overflow: 'hidden',
+                position: 'relative',
               }}
             >
-              {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
-                <ClaudeChat agentId={tab.agentId} workingDir={tab.workingDir} />
-              ) : (
-                <TerminalView terminalId={tab.id} />
-              )}
+            {tabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: tab.isActive ? 'block' : 'none',
+                  }}
+                >
+                  {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
+                    <ClaudeChat agentId={tab.agentId} workingDir={tab.workingDir} />
+                  ) : (
+                    <TerminalView terminalId={tab.id} />
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
-      {/* Preferences modal */}
+      {/* Modals */}
       <PreferencesModal isOpen={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
+      {showCreateModal && (
+        <CreateProjectModal
+          onClose={() => setShowCreateModal(false)}
+          onCreate={handleCreateProject}
+        />
+      )}
+      {showCloneModal && (
+        <CloneRepositoryModal
+          onClose={() => setShowCloneModal(false)}
+          onClone={handleCloneRepo}
+        />
+      )}
     </div>
   )
 }

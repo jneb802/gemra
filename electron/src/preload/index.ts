@@ -44,6 +44,20 @@ contextBridge.exposeInMainWorld('electron', {
   // Platform info
   platform: process.platform,
 
+  // Dialog operations
+  dialog: {
+    selectDirectory: () => ipcRenderer.invoke('dialog:select-directory'),
+    createDirectory: (path: string) => ipcRenderer.invoke('dialog:create-directory', path),
+    checkDirectory: (path: string) => ipcRenderer.invoke('dialog:check-directory', path),
+  },
+
+  // Git operations
+  git: {
+    clone: (url: string, targetPath: string) => ipcRenderer.invoke('git:clone', url, targetPath),
+    init: (path: string) => ipcRenderer.invoke('git:init', path),
+    getBranch: (path: string) => ipcRenderer.invoke('git:get-branch', path),
+  },
+
   // Claude Code operations
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) =>
@@ -103,6 +117,16 @@ export interface ElectronAPI {
   }
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string
+  dialog: {
+    selectDirectory: () => Promise<string | null>
+    createDirectory: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>
+    checkDirectory: (path: string) => Promise<boolean>
+  }
+  git: {
+    clone: (url: string, targetPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
+    init: (path: string) => Promise<{ success: boolean; error?: string }>
+    getBranch: (path: string) => Promise<{ success: boolean; branch: string | null }>
+  }
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>
     send: (agentId: string, content: string | MessageContent[]) => Promise<{ success: boolean; error?: string }>

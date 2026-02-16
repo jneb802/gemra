@@ -4,6 +4,8 @@ import { PtyManager } from './PtyManager'
 import { MenuBuilder } from './menu/MenuBuilder'
 import { setupTerminalIpc } from './ipc/terminal'
 import { setupClaudeIpc, cleanupClaudeAgents } from './ipc/claude'
+import { setupDialogIpc } from './ipc/dialog'
+import { setupGitIpc } from './ipc/git'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 try {
@@ -27,6 +29,8 @@ const createWindow = () => {
   // Setup IPC handlers
   setupTerminalIpc(ptyManager, mainWindow)
   setupClaudeIpc(mainWindow)
+  setupDialogIpc()
+  setupGitIpc()
 
   // Setup menu
   const menuBuilder = new MenuBuilder(mainWindow)
