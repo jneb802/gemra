@@ -125,22 +125,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           gap: '6px',
           cursor: 'pointer',
           fontFamily: 'Monaco, Menlo, Consolas, monospace',
-          color: '#9cdcfe',
-          padding: '4px 8px',
-          borderRadius: '3px',
-          backgroundColor: 'rgba(156, 220, 254, 0.1)',
-          transition: 'background-color 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(156, 220, 254, 0.15)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(156, 220, 254, 0.1)'
+          color: '#888',
         }}
       >
         <span>{getShortPath(workingDir)}</span>
         {showCopied && (
-          <span style={{ color: '#4ade80', marginLeft: '4px' }}>Copied</span>
+          <span style={{ marginLeft: '4px' }}>Copied</span>
         )}
       </div>
 
