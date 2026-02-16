@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { ACPClient } from './ACPClient'
-import { ACPMessage, DockerOptions } from '../../shared/types'
+import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { getProfile } from '../../shared/profiles'
 import { Logger } from '../../shared/utils/logger'
 
@@ -64,15 +64,15 @@ export class ClaudeAgent extends EventEmitter {
   }
 
   /**
-   * Send a prompt to the agent
+   * Send a prompt to the agent (supports text or multimodal content)
    */
-  async sendPrompt(prompt: string): Promise<void> {
-    this.logger.log('Sending prompt:', prompt)
+  async sendPrompt(content: string | MessageContent[]): Promise<void> {
+    this.logger.log('Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
     this.status = 'working'
     this.emit('status', 'working')
 
     try {
-      await this.client.sendPrompt(prompt)
+      await this.client.sendPrompt(content)
     } catch (error: any) {
       this.status = 'error'
       this.emit('error', error)

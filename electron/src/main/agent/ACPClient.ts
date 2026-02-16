@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { ACPMessage, DockerOptions } from '../../shared/types'
+import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { Logger } from '../../shared/utils/logger'
 
 export interface ACPClientOptions {
@@ -184,22 +184,22 @@ export class ACPClient extends EventEmitter {
   }
 
   /**
-   * Send a prompt to the agent
+   * Send a prompt to the agent (supports text or multimodal content)
    */
-  async sendPrompt(prompt: string): Promise<void> {
+  async sendPrompt(content: string | MessageContent[]): Promise<void> {
     if (!this.session) {
       throw new Error('Session not started')
     }
 
-    this.logger.log('Sending prompt:', prompt)
+    this.logger.log('Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
 
     // Transition to thinking phase when sending
     this.currentPhase = 'thinking'
     this.emit('agentStatus', { type: 'thinking' })
 
     try {
-      // Send the prompt
-      await this.session.send(prompt)
+      // Send the content (SDK supports both string and content blocks)
+      await this.session.send(content)
 
       // Stream the response
       for await (const message of this.session.stream()) {

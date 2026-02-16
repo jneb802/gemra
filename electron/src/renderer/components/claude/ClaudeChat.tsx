@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
-import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata } from '../../../shared/types'
+import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
 
@@ -29,7 +29,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
   const [currentTurnMetadata, setCurrentTurnMetadata] = useState<MessageMetadata | null>(null)
   const lastAssistantMessageIdRef = useRef<string | null>(null)
-  const [messageQueue, setMessageQueue] = useState<string[]>([])
+  const [messageQueue, setMessageQueue] = useState<Array<string | MessageContent[]>>([])
   const [showBranchMenu, setShowBranchMenu] = useState(false)
   const [branchList, setBranchList] = useState<string[]>([])
 
@@ -284,8 +284,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     return () => clearInterval(interval)
   }, [currentTurnMetadata?.isComplete])
 
-  const sendMessageInternal = useCallback(async (text: string) => {
-    console.log('[ClaudeChat] Sending message:', text)
+  const sendMessageInternal = useCallback(async (content: string | MessageContent[]) => {
+    console.log('[ClaudeChat] Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
 
     // Clear any previous error
     setError(null)
@@ -304,7 +304,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       {
         id: generateId.message(),
         role: 'user',
-        content: text,
+        content: content,
       },
     ])
 
@@ -313,7 +313,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Send to agent
     try {
-      const result = await window.electron.claude.send(agentId, text)
+      const result = await window.electron.claude.send(agentId, content)
       if (!result.success) {
         setError(result.error || 'Failed to send message')
         setIsWorking(false)
@@ -327,15 +327,15 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
   }, [agentId])
 
-  const handleSend = useCallback(async (text: string) => {
+  const handleSend = useCallback(async (content: string | MessageContent[]) => {
     // If already working, queue the message instead
     if (isWorking) {
       console.log('[ClaudeChat] Agent busy, queueing message')
-      setMessageQueue((prev) => [...prev, text])
+      setMessageQueue((prev) => [...prev, content])
       return
     }
 
-    await sendMessageInternal(text)
+    await sendMessageInternal(content)
   }, [isWorking, sendMessageInternal])
 
   // Process queued messages when agent becomes idle

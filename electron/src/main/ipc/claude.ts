@@ -4,6 +4,7 @@ import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
 import { getGitBranch, getGitStats, getGitBranches, checkoutBranch } from '../utils/gitUtils'
 import { Logger } from '../../shared/utils/logger'
+import type { MessageContent } from '../../shared/types'
 
 // Map of agent ID to agent instance
 const agents = new Map<string, ClaudeAgent>()
@@ -126,12 +127,12 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     }
   )
 
-  // Send a prompt to an agent
-  createIpcHandler('claude:send', async (agentId: string, prompt: string) => {
-    logger.log(`Sending prompt to agent ${agentId}:`, prompt)
+  // Send a prompt to an agent (supports text or multimodal content)
+  createIpcHandler('claude:send', async (agentId: string, content: string | MessageContent[]) => {
+    logger.log(`Sending content to agent ${agentId}:`, typeof content === 'string' ? content : `[${content.length} blocks]`)
 
     const agent = getAgentOrThrow(agentId)
-    await agent.sendPrompt(prompt)
+    await agent.sendPrompt(content)
     return {}
   })
 

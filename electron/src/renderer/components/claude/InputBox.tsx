@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { SlashCommandMenu, SlashCommand, SlashCommandMenuHandle } from './SlashCommandMenu'
+import { ImageAttachment, AttachedImage } from './ImageAttachment'
+import type { MessageContent } from '../../../shared/types'
 
 interface InputBoxProps {
-  onSend: (text: string) => void
+  onSend: (content: string | MessageContent[]) => void
   disabled: boolean
   customCommands: SlashCommand[]
   claudeCommands: SlashCommand[]
@@ -29,6 +31,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashQuery, setSlashQuery] = useState('')
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<SlashCommandMenuHandle>(null)
 
@@ -39,11 +42,117 @@ export const InputBox: React.FC<InputBoxProps> = ({
     }
   }, [])
 
-  const handleSend = () => {
-    if (!text.trim()) return
+  // Attach an image from a File object
+  const attachImage = async (file: File) => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      console.error('File is not an image:', file.type)
+      return
+    }
 
-    onSend(text)
+    // Validate file size (5MB limit for Claude API)
+    if (file.size > 5 * 1024 * 1024) {
+      console.error('Image too large (max 5MB):', file.size)
+      // TODO: Show user-friendly error
+      return
+    }
+
+    // Read file as data URL
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+
+      setAttachedImages((prev) => [
+        ...prev,
+        {
+          id: `img-${Date.now()}-${Math.random()}`,
+          name: file.name,
+          mimeType: file.type,
+          dataUrl: dataUrl,
+          size: file.size,
+        },
+      ])
+    }
+    reader.onerror = () => {
+      console.error('Failed to read file:', reader.error)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Handle paste events
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          await attachImage(file)
+        }
+      }
+    }
+  }
+
+  // Handle drag and drop
+  const handleDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const files = e.dataTransfer?.files
+    if (!files) return
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.type.startsWith('image/')) {
+        await attachImage(file)
+      }
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+  }
+
+  const handleSend = () => {
+    if (!text.trim() && attachedImages.length === 0) return
+
+    // Build message content
+    if (attachedImages.length === 0) {
+      // Text-only message
+      onSend(text)
+    } else {
+      // Multimodal message
+      const content: MessageContent[] = []
+
+      // Add images first
+      attachedImages.forEach((img) => {
+        // Extract base64 data (remove data URL prefix)
+        const base64Data = img.dataUrl.split(',')[1]
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.mimeType,
+            data: base64Data,
+          },
+        })
+      })
+
+      // Add text if present
+      if (text.trim()) {
+        content.push({
+          type: 'text',
+          text: text,
+        })
+      }
+
+      onSend(content)
+    }
+
+    // Clear state
     setText('')
+    setAttachedImages([])
 
     // Reset textarea height
     if (textareaRef.current) {
@@ -162,26 +271,53 @@ export const InputBox: React.FC<InputBoxProps> = ({
           onClose={() => setShowSlashMenu(false)}
         />
       )}
+
+      {/* Image attachments */}
+      {attachedImages.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
+            padding: '8px 12px',
+            borderBottom: '1px solid #3a3a3a',
+          }}
+        >
+          {attachedImages.map((img) => (
+            <ImageAttachment
+              key={img.id}
+              image={img}
+              onRemove={() => {
+                setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       <textarea
         ref={textareaRef}
         className="input-textarea"
         placeholder={
           disabled
             ? 'Type your next message... (will send after response)'
-            : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands)'
+            : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands, paste images)'
         }
         value={text}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
         rows={1}
       />
       <button
         className="send-button"
         onClick={handleSend}
-        disabled={!text.trim()}
+        disabled={!text.trim() && attachedImages.length === 0}
         title={disabled ? 'Message will be queued and sent after current response' : 'Send message'}
       >
-        {disabled && text.trim() ? 'Queue' : 'Send'}
+        {disabled && (text.trim() || attachedImages.length > 0) ? 'Queue' : 'Send'}
       </button>
     </div>
   )

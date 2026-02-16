@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/types'
-import type { PtyOptions, PtyData, PtyResize } from '@shared/types'
+import type { PtyOptions, PtyData, PtyResize, MessageContent } from '@shared/types'
 
 /**
  * Helper function to create IPC event listeners with automatic cleanup
@@ -49,8 +49,8 @@ contextBridge.exposeInMainWorld('electron', {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) =>
       ipcRenderer.invoke('claude:start', workingDir, profileId, useDocker),
 
-    send: (agentId: string, prompt: string) =>
-      ipcRenderer.invoke('claude:send', agentId, prompt),
+    send: (agentId: string, content: string | MessageContent[]) =>
+      ipcRenderer.invoke('claude:send', agentId, content),
 
     stop: (agentId: string) =>
       ipcRenderer.invoke('claude:stop', agentId),
@@ -102,7 +102,7 @@ export interface ElectronAPI {
   platform: string
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>
-    send: (agentId: string, prompt: string) => Promise<{ success: boolean; error?: string }>
+    send: (agentId: string, content: string | MessageContent[]) => Promise<{ success: boolean; error?: string }>
     stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
     getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>
     getGitStats: (workingDir: string) => Promise<{ success: boolean; filesChanged: number; insertions: number; deletions: number }>

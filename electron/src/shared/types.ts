@@ -74,9 +74,28 @@ export interface MessageMetadata {
   isComplete?: boolean       // Whether turn finished
 }
 
+// Multimodal message content blocks
+export interface TextContent {
+  type: 'text'
+  text: string
+}
+
+export interface ImageSource {
+  type: 'base64'
+  media_type: string  // e.g., 'image/png', 'image/jpeg'
+  data: string        // Base64-encoded image data (without data URL prefix)
+}
+
+export interface ImageContent {
+  type: 'image'
+  source: ImageSource
+}
+
+export type MessageContent = TextContent | ImageContent
+
 export interface ClaudeMessage {
   role: 'user' | 'assistant' | 'system'
-  content: string
+  content: string | MessageContent[]  // Support both text-only and multimodal
   id: string
   metadata?: MessageMetadata // Per-turn metadata
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import type { RowComponentProps } from 'react-window'
-import type { ClaudeMessage, MessageMetadata } from '../../../shared/types'
+import type { ClaudeMessage, MessageMetadata, MessageContent } from '../../../shared/types'
 import { MessageStatusIndicator } from './MessageStatusIndicator'
 
 export interface MessageItemProps {
@@ -27,6 +27,46 @@ export const MessageItem = ({
     currentTurnMetadata &&
     !currentTurnMetadata.isComplete
 
+  // Render message content (handles both string and multimodal)
+  const renderContent = () => {
+    if (typeof message.content === 'string') {
+      return <div className="message-content">{message.content}</div>
+    }
+
+    // Multimodal content (array of blocks)
+    return (
+      <div className="message-content">
+        {message.content.map((block: MessageContent, idx: number) => {
+          if (block.type === 'text') {
+            return (
+              <div key={idx} style={{ marginBottom: idx < message.content.length - 1 ? '8px' : 0 }}>
+                {block.text}
+              </div>
+            )
+          }
+
+          if (block.type === 'image') {
+            return (
+              <img
+                key={idx}
+                src={`data:${block.source.media_type};base64,${block.source.data}`}
+                alt="Attached image"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '8px',
+                  marginBottom: idx < message.content.length - 1 ? '8px' : 0,
+                }}
+              />
+            )
+          }
+
+          return null
+        })}
+      </div>
+    )
+  }
+
   return (
     <div style={style} {...ariaAttributes}>
       <div
@@ -34,7 +74,7 @@ export const MessageItem = ({
           isGroupedWithPrevious ? ' message-grouped' : ''
         }`}
       >
-        <div className="message-content">{message.content}</div>
+        {renderContent()}
 
         {/* Live status for streaming message */}
         {message.role === 'assistant' && isStreaming && currentTurnMetadata && (
