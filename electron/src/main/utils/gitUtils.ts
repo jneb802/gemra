@@ -59,11 +59,11 @@ export function getGitStats(workingDir: string) {
 }
 
 /**
- * Get list of all git branches
+ * Get list of all git branches sorted by most recent commit first
  */
 export function getGitBranches(workingDir: string): string[] {
   try {
-    const output = execGit('branch --format="%(refname:short)"', workingDir)
+    const output = execGit('branch --sort=-committerdate --format="%(refname:short)"', workingDir)
     return output.split('\n').filter((b) => b.trim())
   } catch (error) {
     console.error('Failed to get git branches:', error)
