@@ -116,22 +116,25 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       }}
     >
       {/* Working directory */}
-      <div
-        onClick={handleCopyPath}
-        title={`${workingDir}\n\nClick to copy path`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          cursor: 'pointer',
-          fontFamily: 'Monaco, Menlo, Consolas, monospace',
-          color: '#888',
-        }}
-      >
-        <span>{getShortPath(workingDir)}</span>
-        {showCopied && (
-          <span style={{ marginLeft: '4px' }}>Copied</span>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: '#666' }}>Directory:</span>
+        <div
+          onClick={handleCopyPath}
+          title={`${workingDir}\n\nClick to copy path`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            fontFamily: 'Monaco, Menlo, Consolas, monospace',
+            color: '#888',
+          }}
+        >
+          <span>{getShortPath(workingDir)}</span>
+          {showCopied && (
+            <span style={{ marginLeft: '4px' }}>Copied</span>
+          )}
+        </div>
       </div>
 
       <Separator />
