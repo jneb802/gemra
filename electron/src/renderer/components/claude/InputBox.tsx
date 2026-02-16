@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { SlashCommandMenu, SlashCommand, SlashCommandMenuHandle } from './SlashCommandMenu'
-import { ImageAttachment, AttachedImage } from './ImageAttachment'
+import { CompactImageChip, AttachedImage } from './ImageAttachment'
 import type { MessageContent } from '../../../shared/types'
 
 interface InputBoxProps {
@@ -272,32 +272,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
         />
       )}
 
-      {/* Image attachments */}
-      {attachedImages.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            flexWrap: 'wrap',
-            padding: '8px 12px',
-            borderBottom: '1px solid #3a3a3a',
-          }}
-        >
-          {attachedImages.map((img) => (
-            <ImageAttachment
-              key={img.id}
-              image={img}
-              onRemove={() => {
-                setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))
-              }}
-            />
-          ))}
-        </div>
-      )}
-
       <textarea
         ref={textareaRef}
         className="input-textarea"
+        style={{
+          paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
+        }}
         placeholder={
           disabled
             ? 'Type your next message... (will send after response)'
@@ -311,6 +291,15 @@ export const InputBox: React.FC<InputBoxProps> = ({
         onDragOver={handleDragOver}
         rows={1}
       />
+
+      {/* Compact image chip inside the input field */}
+      {attachedImages.length > 0 && (
+        <CompactImageChip
+          images={attachedImages}
+          onRemove={() => setAttachedImages([])}
+        />
+      )}
+
       <button
         className="send-button"
         onClick={handleSend}
