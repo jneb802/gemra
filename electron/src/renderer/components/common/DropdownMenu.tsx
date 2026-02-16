@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { MenuItem } from './MenuItem'
-import { useHoverStyle } from '../../hooks/useHoverStyle'
 
 export interface DropdownOption<T extends string> {
   id: T
@@ -25,7 +24,6 @@ export function DropdownMenu<T extends string>({
 }: DropdownMenuProps<T>) {
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const hoverProps = useHoverStyle()
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -44,40 +42,17 @@ export function DropdownMenu<T extends string>({
   const displayLabel = getLabel ? getLabel(value) : options.find(o => o.id === value)?.label || value
 
   return (
-    <div ref={menuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <span style={{ color: '#666' }}>{label}:</span>
+    <div ref={menuRef} className="dropdown-menu-container">
+      <span className="status-bar-label">{label}:</span>
       <button
         onClick={() => setShowMenu(!showMenu)}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          color: '#b0b0b0',
-          cursor: 'pointer',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          transition: 'background-color 0.15s ease',
-        }}
-        {...hoverProps}
+        className="dropdown-menu-trigger"
       >
         {displayLabel} ▾
       </button>
 
       {showMenu && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: '0',
-            marginBottom: '8px',
-            backgroundColor: '#2d2d2d',
-            border: '1px solid #3e3e3e',
-            borderRadius: '4px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-            minWidth: '200px',
-            zIndex: 1000,
-          }}
-        >
+        <div className="dropdown-menu-popup">
           {options.map((option) => (
             <MenuItem
               key={option.id}

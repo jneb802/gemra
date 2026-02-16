@@ -81,7 +81,6 @@ export const InputBox: React.FC<InputBoxProps> = ({
     // Validate file size (5MB limit for Claude API)
     if (file.size > 5 * 1024 * 1024) {
       console.error('Image too large (max 5MB):', file.size)
-      // TODO: Show user-friendly error
       return
     }
 
@@ -259,8 +258,6 @@ export const InputBox: React.FC<InputBoxProps> = ({
         case 'Enter':
           e.preventDefault()
           if (showBranchMenu) {
-            // Handle branch selection
-            const selectedBranch = branchCommands[menuRef.current ? 0 : 0] // Will be updated by menu
             menuRef.current?.executeSelected()
           } else {
             menuRef.current?.executeSelected()
@@ -317,7 +314,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   }
 
   return (
-    <div className="input-box-container" style={{ position: 'relative' }}>
+    <div className="input-box">
       {showBranchMenu && (
         <SlashCommandMenu
           ref={menuRef}
@@ -349,13 +346,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
       />
 
       {/* Middle row - Textarea with image chip */}
-      <div style={{ flex: 1, position: 'relative', display: 'flex', padding: '12px' }}>
+      <div className="input-box-textarea-row">
         <textarea
           ref={textareaRef}
           className="input-textarea"
           style={{
-            flex: 1,
-            paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
+            paddingRight: attachedImages.length > 0 ? '140px' : undefined
           }}
           placeholder={
             disabled
@@ -381,22 +377,14 @@ export const InputBox: React.FC<InputBoxProps> = ({
       </div>
 
       {/* Bottom row - Controls */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 12px',
-          borderTop: '1px solid var(--border-color)',
-        }}
-      >
+      <div className="input-box-controls">
         <IconModeToggle
           mode={currentMode}
           onModeChange={handleModeChange}
           disabled={disabled}
         />
 
-        <div style={{ flex: 1 }} />
+        <div className="input-box-spacer" />
 
         <ModelSelector
           model={model}

@@ -1,5 +1,4 @@
 import React from 'react'
-import { useHoverStyle } from '../../hooks/useHoverStyle'
 
 export interface MenuItemProps {
   label: string
@@ -18,38 +17,25 @@ export function MenuItem({
   disabled = false,
   selected = false,
 }: MenuItemProps) {
-  const hoverProps = useHoverStyle('#3e3e3e', selected ? '#3e3e3e' : 'transparent')
-
   return (
-    <div
+    <button
       onClick={disabled ? undefined : onClick}
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: description ? '8px 12px' : '6px 12px',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        color: '#d4d4d4',
-        fontSize: '13px',
-        backgroundColor: selected ? '#3e3e3e' : 'transparent',
-        transition: 'background-color 0.15s ease',
-      }}
-      {...(!disabled && hoverProps)}
+      disabled={disabled}
+      className={`menu-item ${selected ? 'selected' : ''}`}
     >
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: description ? 500 : 400 }}>{label}</div>
+      <div className="menu-item-content">
+        <div className="menu-item-label">{label}</div>
         {description && (
-          <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+          <div className="menu-item-description">
             {description}
           </div>
         )}
       </div>
       {shortcut && (
-        <span style={{ fontSize: '11px', color: '#808080', marginLeft: '24px' }}>
+        <span className="menu-item-shortcut">
           {shortcut}
         </span>
       )}
-    </div>
+    </button>
   )
 }
