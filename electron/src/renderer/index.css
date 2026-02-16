@@ -357,15 +357,6 @@ code {
    Input Box
    ========================================================================== */
 
-.input-box-container {
-  display: flex;
-  flex-direction: column;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  margin: 0 16px 16px 16px;
-}
-
 .input-textarea {
   width: 100%;
   min-height: 24px;
@@ -713,7 +704,9 @@ code {
   display: flex;
   flex-direction: column;
   background-color: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin: 0 16px 16px 16px;
 }
 
 .input-box-textarea-row {
