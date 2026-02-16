@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { InputMode } from '../types/inputMode'
 
 export interface TerminalSettings {
   fontFamily: string
@@ -9,6 +10,7 @@ export interface TerminalSettings {
   scrollback: number
   theme: 'dark' | 'light'
   useDocker: boolean
+  defaultInputMode: InputMode
 }
 
 interface SettingsState extends TerminalSettings {
@@ -26,6 +28,7 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   scrollback: 10000,
   theme: 'dark',
   useDocker: false,
+  defaultInputMode: 'auto',
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({

@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { SlashCommandMenu, SlashCommand, SlashCommandMenuHandle } from './SlashCommandMenu'
 import { CompactImageChip, AttachedImage } from './ImageAttachment'
+import { ModeToggle } from '../InputMode'
+import { useInputModeStore } from '../../stores/inputModeStore'
+import { detectInputType } from '../../utils/inputDetection'
 import type { MessageContent } from '../../../shared/types'
 
 interface InputBoxProps {
@@ -9,6 +12,8 @@ interface InputBoxProps {
   customCommands: SlashCommand[]
   claudeCommands: SlashCommand[]
   onExecuteCommand: (command: SlashCommand, category: 'custom' | 'claude', args?: string) => void
+  onExecuteCommandFromInput?: (command: string) => void
+  tabId?: string
   showBranchMenu?: boolean
   branchList?: string[]
   currentBranch?: string
@@ -22,6 +27,8 @@ export const InputBox: React.FC<InputBoxProps> = ({
   customCommands,
   claudeCommands,
   onExecuteCommand,
+  onExecuteCommandFromInput,
+  tabId,
   showBranchMenu = false,
   branchList = [],
   currentBranch = '',
@@ -34,6 +41,13 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<SlashCommandMenuHandle>(null)
+
+  // Input mode state
+  const globalMode = useInputModeStore((state) => state.globalMode)
+  const getTabMode = useInputModeStore((state) => state.getTabMode)
+  const setTabMode = useInputModeStore((state) => state.setTabMode)
+
+  const currentMode = tabId ? getTabMode(tabId) : globalMode
 
   // Autofocus on mount
   useEffect(() => {
@@ -117,6 +131,40 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const handleSend = () => {
     if (!text.trim() && attachedImages.length === 0) return
 
+    // Skip slash commands (handled separately)
+    if (text.trim().startsWith('/')) {
+      onSend(text)
+      setText('')
+      setAttachedImages([])
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
+      return
+    }
+
+    // Determine target based on mode
+    let target: 'command' | 'ai'
+    if (currentMode === 'auto') {
+      // Auto-detect only for text-only input
+      target = attachedImages.length === 0 ? detectInputType(text) : 'ai'
+    } else {
+      target = currentMode === 'command' ? 'command' : 'ai'
+    }
+
+    console.log('[InputBox] Mode:', currentMode, 'Target:', target, 'Input:', text.substring(0, 50))
+
+    // Route to command execution or Claude chat
+    if (target === 'command' && onExecuteCommandFromInput && attachedImages.length === 0) {
+      onExecuteCommandFromInput(text.trim())
+      setText('')
+      setAttachedImages([])
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
+      return
+    }
+
+    // Otherwise, send to Claude (AI mode or has images)
     // Build message content
     if (attachedImages.length === 0) {
       // Text-only message
@@ -248,6 +296,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
     onBranchSelect?.(command.name)
   }
 
+  const handleModeChange = (newMode: 'auto' | 'command' | 'ai') => {
+    if (tabId) {
+      setTabMode(tabId, newMode)
+    }
+  }
+
   return (
     <div className="input-box" style={{ position: 'relative' }}>
       {showBranchMenu && (
@@ -272,42 +326,56 @@ export const InputBox: React.FC<InputBoxProps> = ({
         />
       )}
 
-      <textarea
-        ref={textareaRef}
-        className="input-textarea"
-        style={{
-          paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
-        }}
-        placeholder={
-          disabled
-            ? 'Type your next message... (will send after response)'
-            : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands, paste images)'
-        }
-        value={text}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        onPaste={handlePaste}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        rows={1}
-      />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+        {/* Mode toggle */}
+        <div style={{ paddingTop: '8px' }}>
+          <ModeToggle
+            mode={currentMode}
+            onModeChange={handleModeChange}
+            disabled={disabled}
+          />
+        </div>
 
-      {/* Compact image chip inside the input field */}
-      {attachedImages.length > 0 && (
-        <CompactImageChip
-          images={attachedImages}
-          onRemove={() => setAttachedImages([])}
-        />
-      )}
+        {/* Textarea container */}
+        <div style={{ flex: 1, position: 'relative' }}>
+          <textarea
+            ref={textareaRef}
+            className="input-textarea"
+            style={{
+              paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
+            }}
+            placeholder={
+              disabled
+                ? 'Type your next message... (will send after response)'
+                : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands, paste images)'
+            }
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            rows={1}
+          />
 
-      <button
-        className="send-button"
-        onClick={handleSend}
-        disabled={!text.trim() && attachedImages.length === 0}
-        title={disabled ? 'Message will be queued and sent after current response' : 'Send message'}
-      >
-        {disabled && (text.trim() || attachedImages.length > 0) ? 'Queue' : 'Send'}
-      </button>
+          {/* Compact image chip inside the input field */}
+          {attachedImages.length > 0 && (
+            <CompactImageChip
+              images={attachedImages}
+              onRemove={() => setAttachedImages([])}
+            />
+          )}
+        </div>
+
+        <button
+          className="send-button"
+          onClick={handleSend}
+          disabled={!text.trim() && attachedImages.length === 0}
+          title={disabled ? 'Message will be queued and sent after current response' : 'Send message'}
+        >
+          {disabled && (text.trim() || attachedImages.length > 0) ? 'Queue' : 'Send'}
+        </button>
+      </div>
     </div>
   )
 }

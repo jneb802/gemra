@@ -5,6 +5,7 @@ import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { useTabStore } from './stores/tabStore'
 import { useSettingsStore } from './stores/settingsStore'
+import { useInputModeStore } from './stores/inputModeStore'
 import { usePlatform } from './hooks/usePlatform'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
   const { isMac, getModifierKey } = usePlatform()
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
   const useDocker = useSettingsStore((state) => state.useDocker)
+  const cycleMode = useInputModeStore((state) => state.cycleMode)
 
   // Handler for closing tabs with agent cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
@@ -191,6 +193,15 @@ function App() {
       if (isMac && e.key === ',') {
         e.preventDefault()
         setIsPreferencesOpen(true)
+      }
+
+      // Cmd/Ctrl+K - Cycle input mode (for Claude chat tabs)
+      if (e.key === 'k') {
+        e.preventDefault()
+        const currentTab = tabs.find((t) => t.id === activeTabId)
+        if (currentTab?.type === 'claude-chat' && currentTab.agentId) {
+          cycleMode(currentTab.agentId)
+        }
       }
     }
 

@@ -554,6 +554,18 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
   }
 
+  // Handle command execution from input (Command/AI mode)
+  const handleExecuteCommandFromInput = async (command: string) => {
+    console.log('[ClaudeChat] Executing command from input:', command)
+
+    // Show command being executed
+    addSystemMessage(`$ ${command}`)
+
+    // Send command to Claude with instruction to execute via Bash tool
+    const prompt = `Execute this shell command and show me the output:\n\n\`\`\`bash\n${command}\n\`\`\``
+    await handleSend(prompt)
+  }
+
   // Helper to get tool display name
   const getToolDisplayName = (toolName: string): string => {
     const toolMap: Record<string, string> = {
@@ -636,6 +648,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         customCommands={CUSTOM_COMMANDS}
         claudeCommands={claudeCommands}
         onExecuteCommand={handleExecuteCommand}
+        onExecuteCommandFromInput={handleExecuteCommandFromInput}
+        tabId={agentId}
         showBranchMenu={showBranchMenu}
         branchList={branchList}
         currentBranch={gitBranch}
