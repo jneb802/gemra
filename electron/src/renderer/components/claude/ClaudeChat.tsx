@@ -767,6 +767,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         model={model}
         onModelChange={setModel}
         onBranchClick={handleBranchClick}
+        agentMode={mode}
+        onAgentModeChange={setMode}
+        containerStatus={containerStatus}
+        containerError={containerError}
+        onContainerToggle={handleContainerToggle}
+        tokenUsage={tokenUsage}
       />
     </div>
   )

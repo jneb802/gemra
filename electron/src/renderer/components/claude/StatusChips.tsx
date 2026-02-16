@@ -1,5 +1,7 @@
 import React from 'react'
 import { StatusChip } from './StatusChip'
+import { ContainerStatusChip } from './ContainerStatusChip'
+import type { ContainerStatus } from '../../../shared/types'
 
 interface GitStats {
   filesChanged: number
@@ -11,14 +13,20 @@ interface StatusChipsProps {
   workingDir: string
   gitBranch: string
   gitStats: GitStats
+  containerStatus: ContainerStatus
+  containerError?: string
   onBranchClick: () => void
+  onContainerToggle: () => void
 }
 
 export const StatusChips: React.FC<StatusChipsProps> = ({
   workingDir,
   gitBranch,
   gitStats,
+  containerStatus,
+  containerError,
   onBranchClick,
+  onContainerToggle,
 }) => {
   // Format directory to show last two segments
   const formatDirectory = (path: string): string => {
@@ -74,6 +82,12 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
           title={`Uncommitted changes:\n${gitStats.filesChanged} files changed\n${gitStats.insertions} insertions\n${gitStats.deletions} deletions`}
         />
       )}
+
+      <ContainerStatusChip
+        status={containerStatus}
+        error={containerError}
+        onClick={onContainerToggle}
+      />
     </div>
   )
 }

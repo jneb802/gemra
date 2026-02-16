@@ -4,9 +4,11 @@ import { CompactImageChip, AttachedImage } from './ImageAttachment'
 import { IconModeToggle } from '../InputMode'
 import { StatusChips } from './StatusChips'
 import { ModelSelector } from './ModelSelector'
+import { AgentModeSelector } from './AgentModeSelector'
+import { CompactContextIndicator } from './CompactContextIndicator'
 import { useInputModeStore } from '../../stores/inputModeStore'
 import { detectInputType } from '../../utils/inputDetection'
-import type { MessageContent } from '../../../shared/types'
+import type { MessageContent, ContainerStatus } from '../../../shared/types'
 
 interface InputBoxProps {
   onSend: (content: string | MessageContent[]) => void
@@ -27,6 +29,12 @@ interface InputBoxProps {
   model: string
   onModelChange: (model: string) => void
   onBranchClick: () => void
+  agentMode: 'default' | 'acceptEdits' | 'plan'
+  onAgentModeChange: (mode: 'default' | 'acceptEdits' | 'plan') => void
+  containerStatus: ContainerStatus
+  containerError?: string
+  onContainerToggle: () => void
+  tokenUsage: { inputTokens: number; outputTokens: number }
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -48,6 +56,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
   model,
   onModelChange,
   onBranchClick,
+  agentMode,
+  onAgentModeChange,
+  containerStatus,
+  containerError,
+  onContainerToggle,
+  tokenUsage,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -345,7 +359,10 @@ export const InputBox: React.FC<InputBoxProps> = ({
         workingDir={workingDir}
         gitBranch={gitBranch}
         gitStats={gitStats}
+        containerStatus={containerStatus}
+        containerError={containerError}
         onBranchClick={onBranchClick}
+        onContainerToggle={onContainerToggle}
       />
 
       {/* Middle row - Textarea with image chip */}
@@ -396,7 +413,19 @@ export const InputBox: React.FC<InputBoxProps> = ({
           disabled={disabled}
         />
 
+        <AgentModeSelector
+          mode={agentMode}
+          onModeChange={onAgentModeChange}
+          disabled={disabled}
+        />
+
         <div style={{ flex: 1 }} />
+
+        <CompactContextIndicator
+          inputTokens={tokenUsage.inputTokens}
+          outputTokens={tokenUsage.outputTokens}
+          model={model}
+        />
 
         <ModelSelector
           model={model}
