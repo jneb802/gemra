@@ -43,6 +43,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     { name: 'new-chat', description: 'Start new chat session' },
     { name: 'git-status', description: 'Show git status' },
     { name: 'checkout', description: 'Checkout git branches' },
+    { name: 'branch', description: 'Create a new git branch', argumentHint: '<name>' },
   ]
 
   // Update git stats helper
@@ -470,6 +471,26 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           }
         }).catch((error) => {
           addSystemMessage(`Error fetching branches: ${error.message}`)
+        })
+        break
+      }
+
+      case 'branch': {
+        if (!args) {
+          addSystemMessage('Usage: /branch <name>')
+          return
+        }
+
+        // Create and checkout new branch
+        window.electron.claude.createBranch(workingDir, args, true).then((result) => {
+          if (result.success && result.branch) {
+            setGitBranch(result.branch)
+            addSystemMessage(`✓ Created and checked out branch: ${result.branch}`)
+          } else {
+            addSystemMessage(`✗ Failed to create branch: ${args}\n\n${result.error || 'Unknown error'}`)
+          }
+        }).catch((error) => {
+          addSystemMessage(`✗ Error creating branch: ${error.message}`)
         })
         break
       }
