@@ -54,15 +54,7 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
   const hasGitChanges = gitStats.filesChanged > 0
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '8px 12px',
-        backgroundColor: 'var(--bg-secondary)',
-      }}
-    >
+    <div className="status-chips-container">
       <StatusChip
         text={formatDirectory(workingDir)}
         onClick={handleDirectoryClick}

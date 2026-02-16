@@ -77,9 +77,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       case 'running':
         return 'Running'
       case 'error':
-        // Show truncated error message in label
         if (containerError) {
-          // Extract key phrase for compact display
           if (containerError.includes('not running')) {
             return 'Start Docker'
           } else if (containerError.includes('not installed')) {
@@ -100,57 +98,35 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const getContainerColor = () => {
     switch (containerStatus) {
       case 'disabled':
-        return '#b0b0b0'
+        return 'var(--text-secondary)'
       case 'building':
       case 'starting':
-        return '#f59e0b' // Orange
+        return 'var(--container-building)'
       case 'running':
-        return '#4ade80' // Green
+        return 'var(--container-running)'
       case 'error':
-        return '#f87171' // Red
+        return 'var(--container-error)'
       default:
-        return '#b0b0b0'
+        return 'var(--text-secondary)'
     }
   }
 
   const isContainerClickable = () => {
-    // Allow clicking on error state to retry
     return containerStatus === 'disabled' || containerStatus === 'running' || containerStatus === 'error'
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        height: '32px',
-        padding: '0 16px',
-        backgroundColor: '#252525',
-        borderTop: '1px solid #3e3e3e',
-        fontSize: '12px',
-        color: '#888',
-      }}
-    >
+    <div className="status-bar">
       {/* Working directory */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: '#666' }}>Directory:</span>
+      <div className="status-bar-section">
+        <span className="status-bar-label">Directory:</span>
         <div
           onClick={handleCopyPath}
           title={`${workingDir}\n\nClick to copy path`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            fontFamily: 'Monaco, Menlo, Consolas, monospace',
-            color: '#b0b0b0',
-          }}
+          className="status-bar-directory"
         >
           <span>{getShortPath(workingDir)}</span>
-          {showCopied && (
-            <span style={{ marginLeft: '4px' }}>Copied</span>
-          )}
+          {showCopied && <span>Copied</span>}
         </div>
       </div>
 
@@ -177,42 +153,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       <Separator />
 
       {/* Container status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: '#666' }}>Container:</span>
+      <div className="status-bar-section">
+        <span className="status-bar-label">Container:</span>
         <button
           onClick={isContainerClickable() ? onContainerToggle : undefined}
           disabled={!isContainerClickable()}
           title={containerError || undefined}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            color: getContainerColor(),
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: isContainerClickable() ? 'pointer' : 'default',
-            fontSize: '12px',
-            opacity: isContainerClickable() ? 1 : 0.6,
-          }}
+          className="status-bar-container"
+          style={{ color: getContainerColor() }}
         >
           {containerStatus === 'running' && (
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: getContainerColor()
-            }} />
+            <span
+              className="status-bar-container-indicator"
+              style={{ backgroundColor: getContainerColor() }}
+            />
           )}
           {(containerStatus === 'building' || containerStatus === 'starting') && (
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              border: '1.5px solid currentColor',
-              borderTopColor: 'transparent',
-              animation: 'spin 1s linear infinite'
-            }} />
+            <span className="status-bar-container-spinner" />
           )}
           {containerStatus === 'error' && '✕ '}
           {getContainerLabel()}
@@ -222,19 +179,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       <Separator />
 
       {/* Git branch */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: '#666' }}>Branch:</span>
+      <div className="status-bar-section">
+        <span className="status-bar-label">Branch:</span>
         <button
           onClick={onBranchClick}
-          style={{
-            color: '#b0b0b0',
-            fontFamily: 'Monaco, Menlo, Consolas, monospace',
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            fontSize: '12px',
-          }}
+          className="status-bar-branch"
           title="Click to checkout branch"
         >
           {gitBranch}
@@ -246,24 +195,24 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <>
           <Separator />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="status-bar-git-stats">
             {gitStats.filesChanged > 0 && (
-              <span style={{ color: '#b0b0b0' }}>
+              <span className="status-bar-value">
                 {gitStats.filesChanged} file{gitStats.filesChanged !== 1 ? 's' : ''}
               </span>
             )}
             {gitStats.insertions > 0 && (
-              <span style={{ color: '#4ade80' }}>+{gitStats.insertions}</span>
+              <span className="status-bar-git-additions">+{gitStats.insertions}</span>
             )}
             {gitStats.deletions > 0 && (
-              <span style={{ color: '#f87171' }}>-{gitStats.deletions}</span>
+              <span className="status-bar-git-deletions">-{gitStats.deletions}</span>
             )}
           </div>
         </>
       )}
 
       {/* Spacer to push context indicator to the right */}
-      <div style={{ flex: 1 }} />
+      <div className="status-bar-spacer" />
 
       <Separator />
 

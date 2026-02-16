@@ -67,8 +67,27 @@
   --radius-lg: 6px;
   --radius-xl: 8px;
 
+  /* Colors - Additional UI elements */
+  --bg-hover: #252525;
+  --bg-active: #3a3a3a;
+  --text-secondary: #b0b0b0;
+  --text-tertiary: #666;
+  --border-separator: #3e3e3e;
+
+  /* Container status colors */
+  --container-building: #f59e0b;
+  --container-running: #4ade80;
+  --container-error: #f87171;
+
+  /* Git colors */
+  --git-addition: #4ade80;
+  --git-deletion: #f87171;
+
   /* Other */
   --scrollbar-width: 10px;
+  --tab-height: 40px;
+  --status-bar-height: 32px;
+  --traffic-light-width: 90px;
 }
 
 /* ==========================================================================
@@ -423,4 +442,650 @@ code {
   100% {
     transform: rotate(360deg);
   }
+}
+
+/* ==========================================================================
+   App Layout
+   ========================================================================== */
+
+.app-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+}
+
+.app-terminal-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-tab-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+.app-tab-content.active {
+  display: block;
+}
+
+/* ==========================================================================
+   Tab Bar & Tab Items
+   ========================================================================== */
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  height: var(--tab-height);
+  -webkit-app-region: drag;
+}
+
+.tab-bar-spacer {
+  width: var(--traffic-light-width);
+  flex-shrink: 0;
+}
+
+.tab-bar-tabs {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: var(--tab-height);
+  padding: 0 var(--spacing-lg);
+  background-color: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+  min-width: 120px;
+  max-width: 200px;
+  transition: background-color 0.15s ease;
+}
+
+.tab-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.tab-item.active {
+  background-color: var(--bg-secondary);
+}
+
+.tab-item.active:hover {
+  background-color: var(--bg-secondary);
+}
+
+.tab-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.tab-item.active .tab-item-title {
+  color: #ffffff;
+}
+
+.tab-item-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.tab-item-close:hover {
+  opacity: 1;
+}
+
+.tab-bar-new-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tab-height);
+  height: var(--tab-height);
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition: background-color 0.15s ease;
+}
+
+.tab-bar-new-button:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* ==========================================================================
+   Status Bar
+   ========================================================================== */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  height: var(--status-bar-height);
+  padding: 0 var(--spacing-lg);
+  background-color: #252525;
+  border-top: 1px solid var(--border-color);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.status-bar-section {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.status-bar-label {
+  color: var(--text-tertiary);
+}
+
+.status-bar-value {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.status-bar-button {
+  background: none;
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  transition: background-color 0.15s ease;
+}
+
+.status-bar-button:hover {
+  background-color: var(--bg-active);
+}
+
+.status-bar-spacer {
+  flex: 1;
+}
+
+.status-bar-separator {
+  width: 1px;
+  height: 16px;
+  background-color: var(--border-separator);
+}
+
+.status-bar-directory {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.status-bar-branch {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+}
+
+.status-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.status-bar-container:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.status-bar-container-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-bar-container-spinner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+.status-bar-git-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.status-bar-git-additions {
+  color: var(--git-addition);
+}
+
+.status-bar-git-deletions {
+  color: var(--git-deletion);
+}
+
+/* ==========================================================================
+   Input Box
+   ========================================================================== */
+
+.input-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.input-box-textarea-row {
+  flex: 1;
+  position: relative;
+  display: flex;
+  padding: var(--spacing-md);
+}
+
+.input-textarea {
+  flex: 1;
+  min-height: 80px;
+  padding: 10px var(--spacing-md);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.input-box-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.input-box-spacer {
+  flex: 1;
+}
+
+/* ==========================================================================
+   Dropdown Menu
+   ========================================================================== */
+
+.dropdown-menu-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dropdown-menu-trigger {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  transition: background-color 0.15s ease;
+}
+
+.dropdown-menu-trigger:hover {
+  background-color: var(--bg-active);
+}
+
+.dropdown-menu-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: var(--spacing-sm);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  min-width: 200px;
+  z-index: 1000;
+}
+
+/* ==========================================================================
+   Menu Item
+   ========================================================================== */
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background-color: var(--bg-active);
+}
+
+.menu-item.selected {
+  background-color: var(--bg-active);
+}
+
+.menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.menu-item-content {
+  flex: 1;
+}
+
+.menu-item-label {
+  font-weight: 500;
+}
+
+.menu-item-description {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.menu-item-shortcut {
+  font-size: 11px;
+  color: #808080;
+  margin-left: var(--spacing-xl);
+}
+
+/* ==========================================================================
+   Mode Toggle
+   ========================================================================== */
+
+.mode-toggle-container {
+  position: relative;
+  display: inline-block;
+}
+
+.mode-toggle-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bg-user-message);
+  border: 1px solid var(--bg-active);
+  border-radius: var(--radius-sm);
+  color: #e0e0e0;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.mode-toggle-button:hover:not(:disabled) {
+  background-color: var(--bg-active);
+}
+
+.mode-toggle-button.open {
+  background-color: var(--bg-active);
+}
+
+.mode-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mode-toggle-icon {
+  font-size: var(--font-size-base);
+}
+
+.mode-toggle-arrow {
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.mode-toggle-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: var(--spacing-xs);
+  background-color: var(--bg-user-message);
+  border: 1px solid var(--bg-active);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 140px;
+  z-index: 1000;
+}
+
+.mode-toggle-options {
+  padding: var(--spacing-xs);
+}
+
+.mode-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 6px 10px;
+  background-color: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #e0e0e0;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.mode-toggle-option:hover {
+  background-color: var(--bg-active);
+}
+
+.mode-toggle-option.selected {
+  background-color: var(--bg-active);
+}
+
+.mode-toggle-option-icon {
+  font-size: var(--font-size-md);
+}
+
+.mode-toggle-option-label {
+  flex: 1;
+}
+
+.mode-toggle-option-check {
+  font-size: var(--font-size-xs);
+  color: #4a9eff;
+}
+
+.mode-toggle-hint {
+  padding: 6px 10px;
+  border-top: 1px solid var(--bg-active);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Status Chip
+   ========================================================================== */
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bg-user-message);
+  border: 1px solid var(--bg-active);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  cursor: default;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.status-chip.clickable {
+  cursor: pointer;
+}
+
+.status-chip.clickable:hover {
+  background-color: var(--bg-active);
+}
+
+.status-chip-icon {
+  font-size: var(--font-size-base);
+  line-height: 1;
+}
+
+/* ==========================================================================
+   Status Chips Container
+   ========================================================================== */
+
+.status-chips-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   Slash Command Menu
+   ========================================================================== */
+
+.slash-command-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: var(--spacing-sm);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.slash-command-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  padding: var(--spacing-sm) var(--spacing-md);
+  gap: var(--spacing-lg);
+}
+
+.slash-command-tab {
+  background: transparent;
+  border: none;
+  color: #808080;
+  cursor: pointer;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.slash-command-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--git-addition);
+}
+
+.slash-command-list {
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+.slash-command-empty {
+  padding: var(--spacing-lg);
+  color: #808080;
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.slash-command-hint {
+  border-top: 1px solid var(--border-color);
+  padding: 6px var(--spacing-md);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+/* ==========================================================================
+   Circular Progress
+   ========================================================================== */
+
+.circular-progress {
+  transform: rotate(-90deg);
+  transition: all 0.3s ease;
+}
+
+.circular-progress-bg {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 2;
+}
+
+.circular-progress-bar {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease;
+}
+
+/* ==========================================================================
+   Common Utilities
+   ========================================================================== */
+
+.separator {
+  width: 1px;
+  height: 16px;
+  background-color: var(--border-separator);
 }

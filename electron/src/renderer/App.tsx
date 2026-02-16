@@ -304,46 +304,18 @@ function App() {
   ])
 
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#1e1e1e',
-      }}
-    >
+    <div className="app-root">
       {/* Tab bar */}
       <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
 
       {/* Main content area */}
-      <div
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          display: 'flex',
-          position: 'relative',
-        }}
-      >
+      <div className="app-content">
         {/* Terminal views */}
-        <div
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            position: 'relative',
-          }}
-        >
-        {tabs.map((tab) => (
+        <div className="app-terminal-container">
+          {tabs.map((tab) => (
             <div
               key={tab.id}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                display: tab.isActive ? 'block' : 'none',
-              }}
+              className={`app-tab-content ${tab.isActive ? 'active' : ''}`}
             >
               {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
                 <ClaudeChat

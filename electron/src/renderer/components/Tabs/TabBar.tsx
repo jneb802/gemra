@@ -12,29 +12,12 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
   const setActiveTab = useTabStore((state) => state.setActiveTab)
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        backgroundColor: '#1e1e1e',
-        borderBottom: '1px solid #3e3e3e',
-        height: '40px',
-        WebkitAppRegion: 'drag',
-      } as React.CSSProperties}
-    >
+    <div className="tab-bar">
       {/* macOS traffic light spacing */}
-      <div style={{ width: '90px', flexShrink: 0 }} />
+      <div className="tab-bar-spacer" />
 
       {/* Tab items */}
-      <div
-        style={{
-          display: 'flex',
-          flex: 1,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          WebkitAppRegion: 'no-drag',
-        } as React.CSSProperties}
-      >
+      <div className="tab-bar-tabs">
         {tabs.map((tab) => (
           <TabItem
             key={tab.id}
@@ -49,26 +32,7 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
       <button
         onClick={onNewTab}
         title="New Tab"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '40px',
-          height: '40px',
-          padding: 0,
-          border: 'none',
-          backgroundColor: 'transparent',
-          cursor: 'pointer',
-          flexShrink: 0,
-          WebkitAppRegion: 'no-drag',
-          transition: 'background-color 0.15s ease',
-        } as React.CSSProperties}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#2d2d2d'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent'
-        }}
+        className="tab-bar-new-button"
       >
         <Plus size={16} color="#b0b0b0" />
       </button>
