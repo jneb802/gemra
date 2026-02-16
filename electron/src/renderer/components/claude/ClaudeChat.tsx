@@ -42,7 +42,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     { name: 'new-terminal', description: 'Open new terminal tab' },
     { name: 'new-chat', description: 'Start new chat session' },
     { name: 'git-status', description: 'Show git status' },
-    { name: 'branch', description: 'List and switch git branches' },
+    { name: 'checkout', description: 'Checkout git branches' },
   ]
 
   // Update git stats helper
@@ -444,7 +444,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         })
         break
 
-      case 'branch': {
+      case 'checkout': {
         // If args provided, checkout that branch directly
         if (args) {
           window.electron.claude.checkoutBranch(workingDir, args).then((result) => {
