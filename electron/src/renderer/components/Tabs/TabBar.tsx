@@ -23,7 +23,7 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
       } as React.CSSProperties}
     >
       {/* macOS traffic light spacing */}
-      <div style={{ width: '72px', flexShrink: 0 }} />
+      <div style={{ width: '90px', flexShrink: 0 }} />
 
       {/* Tab items */}
       <div
