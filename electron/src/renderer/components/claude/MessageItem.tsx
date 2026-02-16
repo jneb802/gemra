@@ -2,8 +2,6 @@ import React from 'react'
 import type { RowComponentProps } from 'react-window'
 import type { ClaudeMessage, MessageMetadata, MessageContent } from '../../../shared/types'
 import { MessageStatusIndicator } from './MessageStatusIndicator'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 
 export interface MessageItemProps {
   messages: ClaudeMessage[]
@@ -49,13 +47,7 @@ export const MessageItem = ({
       // Don't render if content is empty after sanitization
       if (!sanitized) return null
 
-      return (
-        <div className="message-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {sanitized}
-          </ReactMarkdown>
-        </div>
-      )
+      return <div className="message-content">{sanitized}</div>
     }
 
     // Multimodal content (array of blocks)
@@ -69,9 +61,7 @@ export const MessageItem = ({
 
             return (
               <div key={idx} style={{ marginBottom: idx < message.content.length - 1 ? '8px' : 0 }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {sanitized}
-                </ReactMarkdown>
+                {sanitized}
               </div>
             )
           }
