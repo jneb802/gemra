@@ -84,7 +84,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const getContainerColor = () => {
     switch (containerStatus) {
       case 'disabled':
-        return '#888'
+        return '#b0b0b0'
       case 'building':
       case 'starting':
         return '#f59e0b' // Orange
@@ -93,7 +93,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       case 'error':
         return '#f87171' // Red
       default:
-        return '#888'
+        return '#b0b0b0'
     }
   }
 
@@ -127,7 +127,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             gap: '6px',
             cursor: 'pointer',
             fontFamily: 'Monaco, Menlo, Consolas, monospace',
-            color: '#888',
+            color: '#b0b0b0',
           }}
         >
           <span>{getShortPath(workingDir)}</span>
