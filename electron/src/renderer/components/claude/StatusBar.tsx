@@ -138,10 +138,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           e.currentTarget.style.backgroundColor = 'rgba(156, 220, 254, 0.1)'
         }}
       >
-        <span>📁</span>
         <span>{getShortPath(workingDir)}</span>
         {showCopied && (
-          <span style={{ color: '#4ade80', marginLeft: '4px' }}>✓ Copied</span>
+          <span style={{ color: '#4ade80', marginLeft: '4px' }}>Copied</span>
         )}
       </div>
 
