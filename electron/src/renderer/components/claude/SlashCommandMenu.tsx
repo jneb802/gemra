@@ -13,6 +13,8 @@ interface SlashCommandMenuProps {
   claudeCommands: SlashCommand[]
   onSelectCommand: (command: SlashCommand, category: 'custom' | 'claude') => void
   onClose: () => void
+  customTabLabel?: string
+  claudeTabLabel?: string
 }
 
 export interface SlashCommandMenuHandle {
@@ -22,7 +24,7 @@ export interface SlashCommandMenuHandle {
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
-  ({ query, customCommands, claudeCommands, onSelectCommand, onClose }, ref) => {
+  ({ query, customCommands, claudeCommands, onSelectCommand, onClose, customTabLabel = 'Custom Commands', claudeTabLabel = 'Claude Commands' }, ref) => {
     const [activeTab, setActiveTab] = useState<'custom' | 'claude'>('custom')
     const [selectedIndex, setSelectedIndex] = useState(0)
 
@@ -112,7 +114,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
               transition: 'all 0.15s ease',
             }}
           >
-            Custom Commands
+            {customTabLabel}
           </button>
           <button
             onClick={() => {
@@ -131,7 +133,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
               transition: 'all 0.15s ease',
             }}
           >
-            Claude Commands
+            {claudeTabLabel}
           </button>
         </div>
 

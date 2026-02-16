@@ -149,6 +149,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           claudeCommands={[]}
           onSelectCommand={handleBranchCommandSelect}
           onClose={() => onCloseBranchMenu?.()}
+          customTabLabel="Branches"
         />
       )}
       {showSlashMenu && !showBranchMenu && (
