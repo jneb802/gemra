@@ -7,6 +7,11 @@ interface InputBoxProps {
   customCommands: SlashCommand[]
   claudeCommands: SlashCommand[]
   onExecuteCommand: (command: SlashCommand, category: 'custom' | 'claude', args?: string) => void
+  showBranchMenu?: boolean
+  branchList?: string[]
+  currentBranch?: string
+  onBranchSelect?: (branch: string) => void
+  onCloseBranchMenu?: () => void
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -15,6 +20,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
   customCommands,
   claudeCommands,
   onExecuteCommand,
+  showBranchMenu = false,
+  branchList = [],
+  currentBranch = '',
+  onBranchSelect,
+  onCloseBranchMenu,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -56,9 +66,15 @@ export const InputBox: React.FC<InputBoxProps> = ({
     }
   }
 
+  // Convert branches to SlashCommand format for the menu
+  const branchCommands: SlashCommand[] = branchList.map((branch) => ({
+    name: branch,
+    description: branch === currentBranch ? '(current branch)' : `Switch to ${branch}`,
+  }))
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Menu navigation when visible
-    if (showSlashMenu) {
+    // Menu navigation when visible (either slash menu or branch menu)
+    if (showSlashMenu || showBranchMenu) {
       switch (e.key) {
         case 'Tab':
           e.preventDefault()
@@ -71,13 +87,23 @@ export const InputBox: React.FC<InputBoxProps> = ({
           return
         case 'Enter':
           e.preventDefault()
-          menuRef.current?.executeSelected()
-          setText('')
-          setShowSlashMenu(false)
+          if (showBranchMenu) {
+            // Handle branch selection
+            const selectedBranch = branchCommands[menuRef.current ? 0 : 0] // Will be updated by menu
+            menuRef.current?.executeSelected()
+          } else {
+            menuRef.current?.executeSelected()
+            setText('')
+            setShowSlashMenu(false)
+          }
           return
         case 'Escape':
           e.preventDefault()
-          setShowSlashMenu(false)
+          if (showBranchMenu) {
+            onCloseBranchMenu?.()
+          } else {
+            setShowSlashMenu(false)
+          }
           return
       }
     }
@@ -109,9 +135,23 @@ export const InputBox: React.FC<InputBoxProps> = ({
     }
   }
 
+  const handleBranchCommandSelect = (command: SlashCommand, category: 'custom' | 'claude') => {
+    onBranchSelect?.(command.name)
+  }
+
   return (
     <div className="input-box" style={{ position: 'relative' }}>
-      {showSlashMenu && (
+      {showBranchMenu && (
+        <SlashCommandMenu
+          ref={menuRef}
+          query=""
+          customCommands={branchCommands}
+          claudeCommands={[]}
+          onSelectCommand={handleBranchCommandSelect}
+          onClose={() => onCloseBranchMenu?.()}
+        />
+      )}
+      {showSlashMenu && !showBranchMenu && (
         <SlashCommandMenu
           ref={menuRef}
           query={slashQuery}

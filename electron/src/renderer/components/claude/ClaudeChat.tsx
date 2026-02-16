@@ -30,6 +30,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [currentTurnMetadata, setCurrentTurnMetadata] = useState<MessageMetadata | null>(null)
   const lastAssistantMessageIdRef = useRef<string | null>(null)
   const [messageQueue, setMessageQueue] = useState<string[]>([])
+  const [showBranchMenu, setShowBranchMenu] = useState(false)
+  const [branchList, setBranchList] = useState<string[]>([])
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -458,18 +460,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           return
         }
 
-        // No args - fetch and display branch list
+        // No args - fetch branches and show in menu
         window.electron.claude.getGitBranches(workingDir).then((result) => {
           if (result.success && result.branches.length > 0) {
-            const currentBranch = gitBranch
-            let branchList = '**Available Branches:**\n\n'
-            result.branches.forEach((branch) => {
-              const isCurrent = branch === currentBranch
-              const prefix = isCurrent ? '→ ' : '  '
-              branchList += `${prefix}\`${branch}\`${isCurrent ? ' (current)' : ''}\n`
-            })
-            branchList += '\nType `/branch <name>` to switch branches.'
-            addSystemMessage(branchList)
+            setBranchList(result.branches)
+            setShowBranchMenu(true)
           } else {
             addSystemMessage('No branches found')
           }
@@ -491,6 +486,22 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Send as regular message - SDK handles interpretation
     handleSend(commandText)
+  }
+
+  // Handle branch selection
+  const handleBranchSelect = (branch: string) => {
+    window.electron.claude.checkoutBranch(workingDir, branch).then((result) => {
+      if (result.success) {
+        setGitBranch(result.branch)
+        addSystemMessage(`✓ Checked out branch: ${result.branch}`)
+      } else {
+        addSystemMessage(`✗ Failed to checkout branch: ${branch}`)
+      }
+    }).catch((error) => {
+      addSystemMessage(`✗ Error checking out branch: ${error.message}`)
+    })
+    setShowBranchMenu(false)
+    setBranchList([])
   }
 
   // Handle command execution from InputBox
@@ -589,6 +600,14 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         customCommands={CUSTOM_COMMANDS}
         claudeCommands={claudeCommands}
         onExecuteCommand={handleExecuteCommand}
+        showBranchMenu={showBranchMenu}
+        branchList={branchList}
+        currentBranch={gitBranch}
+        onBranchSelect={handleBranchSelect}
+        onCloseBranchMenu={() => {
+          setShowBranchMenu(false)
+          setBranchList([])
+        }}
       />
     </div>
   )
