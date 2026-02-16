@@ -371,21 +371,27 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       return
     }
 
-    // Only allow toggle when disabled or running
-    if (containerStatus !== 'disabled' && containerStatus !== 'running') {
-      console.log('[ClaudeChat] Cannot toggle during build/start/error states')
+    // Only allow toggle when disabled, running, or error (error = retry)
+    if (containerStatus !== 'disabled' && containerStatus !== 'running' && containerStatus !== 'error') {
+      console.log('[ClaudeChat] Cannot toggle during build/start states')
       return
     }
 
     setIsTogglingContainer(true)
 
     try {
-      // Determine new Docker state (toggle it)
-      const newDockerState = containerStatus === 'disabled'
+      // Determine new Docker state
+      // If error, retry with Docker enabled (assumes user fixed the issue)
+      // Otherwise, toggle the current state
+      const newDockerState = containerStatus === 'error' ? true : containerStatus === 'disabled'
       const modeText = newDockerState ? 'container' : 'host'
 
       // Add system message about restart
-      addSystemMessage(`🔄 Restarting agent in ${modeText} mode...`)
+      if (containerStatus === 'error') {
+        addSystemMessage(`🔄 Retrying container mode...`)
+      } else {
+        addSystemMessage(`🔄 Restarting agent in ${modeText} mode...`)
+      }
 
       // Stop current agent
       console.log('[ClaudeChat] Stopping current agent:', currentAgentIdRef.current)
@@ -725,6 +731,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         onModelChange={setModel}
         onContainerToggle={handleContainerToggle}
         onBranchClick={handleBranchClick}
+        style={{ display: 'none' }}
       />
 
       <InputBox
@@ -743,6 +750,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
           setShowBranchMenu(false)
           setBranchList([])
         }}
+        workingDir={workingDir}
+        gitBranch={gitBranch}
+        gitStats={gitStats}
+        model={model}
+        onModelChange={setModel}
+        onBranchClick={handleBranchClick}
       />
     </div>
   )

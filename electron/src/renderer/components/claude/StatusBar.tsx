@@ -77,6 +77,20 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       case 'running':
         return 'Running'
       case 'error':
+        // Show truncated error message in label
+        if (containerError) {
+          // Extract key phrase for compact display
+          if (containerError.includes('not running')) {
+            return 'Start Docker'
+          } else if (containerError.includes('not installed')) {
+            return 'Install Docker'
+          } else if (containerError.includes('OrbStack')) {
+            return 'Start OrbStack'
+          } else if (containerError.includes('Docker Desktop')) {
+            return 'Start Docker Desktop'
+          }
+          return 'Error'
+        }
         return 'Error'
       default:
         return 'Unknown'
@@ -100,7 +114,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   }
 
   const isContainerClickable = () => {
-    return containerStatus === 'disabled' || containerStatus === 'running'
+    // Allow clicking on error state to retry
+    return containerStatus === 'disabled' || containerStatus === 'running' || containerStatus === 'error'
   }
 
   return (

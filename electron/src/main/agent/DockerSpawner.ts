@@ -119,28 +119,93 @@ export function spawnDockerProcess(
 }
 
 /**
- * Check if Docker is available on the system
+ * Check if Docker is installed
  */
-export async function checkDockerAvailable(): Promise<{ available: boolean; error?: string }> {
+async function checkDockerInstalled(): Promise<{ installed: boolean; error?: string }> {
   return new Promise((resolve) => {
     const checkProcess = spawn('docker', ['--version'], { stdio: 'ignore' })
 
     checkProcess.on('error', (error) => {
       resolve({
-        available: false,
-        error: `Docker not found: ${error.message}`,
+        installed: false,
+        error: 'Docker not installed. Please install Docker Desktop or OrbStack.',
       })
     })
 
     checkProcess.on('close', (code) => {
       if (code === 0) {
-        resolve({ available: true })
+        resolve({ installed: true })
       } else {
         resolve({
-          available: false,
-          error: 'Docker command failed. Is Docker daemon running?',
+          installed: false,
+          error: 'Docker command failed.',
         })
       }
     })
   })
+}
+
+/**
+ * Check if Docker daemon is running
+ */
+async function checkDockerDaemonRunning(): Promise<{ running: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const checkProcess = spawn('docker', ['info'], { stdio: 'pipe' })
+
+    let stderr = ''
+
+    checkProcess.stderr?.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    checkProcess.on('error', (error) => {
+      resolve({
+        running: false,
+        error: 'Docker daemon is not running.',
+      })
+    })
+
+    checkProcess.on('close', (code) => {
+      if (code === 0) {
+        resolve({ running: true })
+      } else {
+        // Parse error message to provide better guidance
+        let errorMessage = 'Docker daemon is not running.'
+
+        if (stderr.includes('Cannot connect to the Docker daemon')) {
+          if (stderr.includes('orbstack')) {
+            errorMessage = 'OrbStack is not running. Please start OrbStack from your Applications folder.'
+          } else if (stderr.includes('docker.sock')) {
+            errorMessage = 'Docker Desktop is not running. Please start Docker Desktop from your Applications folder.'
+          } else {
+            errorMessage = 'Docker daemon is not running. Please start Docker Desktop or OrbStack.'
+          }
+        }
+
+        resolve({
+          running: false,
+          error: errorMessage,
+        })
+      }
+    })
+  })
+}
+
+/**
+ * Check if Docker is available and running on the system
+ */
+export async function checkDockerAvailable(): Promise<{ available: boolean; error?: string }> {
+  // First check if Docker is installed
+  const installed = await checkDockerInstalled()
+  if (!installed.installed) {
+    return { available: false, error: installed.error }
+  }
+
+  // Then check if daemon is running
+  const daemonRunning = await checkDockerDaemonRunning()
+  if (!daemonRunning.running) {
+    return { available: false, error: daemonRunning.error }
+  }
+
+  return { available: true }
 }

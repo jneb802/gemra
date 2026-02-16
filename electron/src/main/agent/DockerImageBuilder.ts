@@ -52,6 +52,8 @@ export class DockerImageBuilder extends EventEmitter {
         }
       )
 
+      let stderrOutput = ''
+
       // Forward build output
       buildProcess.stdout.on('data', (data) => {
         const output = data.toString()
@@ -61,6 +63,7 @@ export class DockerImageBuilder extends EventEmitter {
 
       buildProcess.stderr.on('data', (data) => {
         const output = data.toString()
+        stderrOutput += output
         this.emit('progress', output)
         this.logger.log(output.trim())
       })
@@ -75,7 +78,22 @@ export class DockerImageBuilder extends EventEmitter {
           this.logger.log(`Image ${tag} built successfully`)
           resolve()
         } else {
-          const error = new Error(`Docker build failed with exit code ${code}`)
+          // Parse stderr for user-friendly error messages
+          let errorMessage = `Docker build failed with exit code ${code}`
+
+          if (stderrOutput.includes('Cannot connect to the Docker daemon')) {
+            if (stderrOutput.includes('orbstack')) {
+              errorMessage = 'Cannot connect to Docker daemon. OrbStack is not running. Please start OrbStack.'
+            } else if (stderrOutput.includes('docker.sock')) {
+              errorMessage = 'Cannot connect to Docker daemon. Docker Desktop is not running. Please start Docker Desktop.'
+            } else {
+              errorMessage = 'Cannot connect to Docker daemon. Please start Docker Desktop or OrbStack.'
+            }
+          } else if (stderrOutput.includes('docker build') && stderrOutput.includes('DEPRECATED')) {
+            errorMessage = 'Docker build failed. Try updating Docker or ignoring the buildx warning.'
+          }
+
+          const error = new Error(errorMessage)
           this.logger.error(error.message)
           reject(error)
         }
