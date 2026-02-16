@@ -3,7 +3,6 @@ import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
-import { WelcomeScreen } from './components/Welcome/WelcomeScreen'
 import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
 import { CloneRepositoryModal } from './components/Welcome/CloneRepositoryModal'
 import { useTabStore } from './stores/tabStore'
@@ -26,7 +25,6 @@ function App() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCloneModal, setShowCloneModal] = useState(false)
-  const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(true)
   const useDocker = useSettingsStore((state) => state.useDocker)
   const cycleMode = useInputModeStore((state) => state.cycleMode)
   const addRecent = useRecentStore((state) => state.addRecent)
@@ -96,7 +94,7 @@ function App() {
   }, [handleNewClaudeTab])
 
   // Helper to start Claude chat in a directory
-  const startClaudeChatInDirectory = useCallback(async (workingDir: string, hideOverlay = true) => {
+  const startClaudeChatInDirectory = useCallback(async (workingDir: string) => {
     const result = await window.electron.claude.start(workingDir, undefined, useDocker)
 
     if (result.success && result.agentId) {
@@ -108,11 +106,6 @@ function App() {
 
       // Add to recent directories
       addRecent(workingDir, gitBranch || undefined)
-
-      // Hide welcome overlay when switching to a directory
-      if (hideOverlay) {
-        setShowWelcomeOverlay(false)
-      }
     } else {
       console.error('Failed to start Claude agent:', result.error)
       alert(`Failed to start Claude Code agent.\n\nError: ${result.error}`)
@@ -123,7 +116,7 @@ function App() {
   useEffect(() => {
     if (tabs.length === 0) {
       const lastUsedDir = recentItems[0]?.path || '/Users/benjmarston/Develop/gemra'
-      startClaudeChatInDirectory(lastUsedDir, false) // Don't hide overlay on initial load
+      startClaudeChatInDirectory(lastUsedDir)
     }
   }, []) // Only run once on mount
 
@@ -232,17 +225,6 @@ function App() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Escape key for modals
-      if (e.key === 'Escape') {
-        if (showCreateModal) {
-          setShowCreateModal(false)
-          return
-        }
-        if (showCloneModal) {
-          setShowCloneModal(false)
-          return
-        }
-      }
 
       if (!getModifierKey(e)) return
 
@@ -319,8 +301,6 @@ function App() {
     navigateToNextTab,
     tabs,
     cycleMode,
-    showCreateModal,
-    showCloneModal,
   ])
 
   return (
@@ -369,7 +349,10 @@ function App() {
                 <ClaudeChat
                   agentId={tab.agentId}
                   workingDir={tab.workingDir}
-                  onUserMessage={() => setShowWelcomeOverlay(false)}
+                  onCreateProject={() => setShowCreateModal(true)}
+                  onOpenRepository={handleOpenDirectory}
+                  onCloneRepository={() => setShowCloneModal(true)}
+                  onOpenRecent={handleOpenRecentDirectory}
                 />
               ) : (
                 <TerminalView terminalId={tab.id} />
@@ -377,28 +360,6 @@ function App() {
             </div>
           ))}
         </div>
-
-        {/* Welcome screen overlay */}
-        {showWelcomeOverlay && tabs.length > 0 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 100,
-              pointerEvents: 'all',
-            }}
-          >
-            <WelcomeScreen
-              onCreateProject={() => setShowCreateModal(true)}
-              onOpenRepository={handleOpenDirectory}
-              onCloneRepository={() => setShowCloneModal(true)}
-              onOpenRecent={handleOpenRecentDirectory}
-            />
-          </div>
-        )}
       </div>
 
       {/* Modals */}

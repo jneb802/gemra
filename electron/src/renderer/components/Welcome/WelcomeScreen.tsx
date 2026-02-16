@@ -22,11 +22,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   return (
     <div
       style={{
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '100vh',
         backgroundColor: '#1e1e1e',
         color: '#d4d4d4',
         padding: '40px',
