@@ -1,6 +1,9 @@
 import { EventEmitter } from 'events'
 import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { Logger } from '../../shared/utils/logger'
+import { spawnDockerProcess, checkDockerAvailable } from './DockerSpawner'
+import { DockerImageBuilder } from './DockerImageBuilder'
+import type { SDKSpawnOptions } from './DockerSpawner'
 
 export interface ACPClientOptions {
   workingDirectory: string
@@ -26,16 +29,21 @@ export class ACPClient extends EventEmitter {
    * Start the Claude Agent SDK session
    */
   async start(): Promise<void> {
-    if (this.options.dockerOptions?.enabled) {
-      // Docker mode not supported with SDK - fall back to direct mode
-      this.logger.log('Docker mode not supported with SDK, using direct mode')
-      this.emit('containerStatus', { status: 'disabled' })
-    } else {
-      this.emit('containerStatus', { status: 'disabled' })
-    }
-
     this.logger.log('Starting Claude Agent SDK session...')
 
+    // Handle Docker mode
+    if (this.options.dockerOptions?.enabled) {
+      await this.startWithDocker()
+    } else {
+      this.emit('containerStatus', { status: 'disabled' })
+      await this.startDirect()
+    }
+  }
+
+  /**
+   * Start session in direct mode (no Docker)
+   */
+  private async startDirect(): Promise<void> {
     try {
       // Dynamic import of ES module SDK
       const sdk = await import('@anthropic-ai/claude-agent-sdk')
@@ -72,9 +80,147 @@ export class ACPClient extends EventEmitter {
       })
 
       this.isActive = true
-      this.logger.log('Session created successfully')
+      this.logger.log('Session created successfully (direct mode)')
     } catch (error) {
       this.logger.error('Failed to start SDK session:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Start session in Docker mode
+   */
+  private async startWithDocker(): Promise<void> {
+    try {
+      this.logger.log('Starting in Docker mode...')
+
+      // Check if Docker is available
+      const dockerCheck = await checkDockerAvailable()
+      if (!dockerCheck.available) {
+        this.logger.error('Docker not available:', dockerCheck.error)
+        this.emit('containerStatus', { status: 'error', error: dockerCheck.error })
+        throw new Error(dockerCheck.error)
+      }
+
+      // Ensure Docker image exists
+      const imageName = this.options.dockerOptions?.imageName || 'gemra-claude:latest'
+      const builder = new DockerImageBuilder()
+
+      // Check if image exists
+      const imageExists = await builder.imageExists(imageName)
+
+      if (!imageExists) {
+        this.logger.log(`Docker image ${imageName} not found, building...`)
+        this.emit('containerStatus', { status: 'building' })
+
+        // Forward build progress
+        builder.on('progress', (output) => {
+          this.logger.log('[Docker Build]', output.trim())
+        })
+
+        // Build the image
+        const { app } = await import('electron')
+        const path = await import('path')
+
+        // Get project root (working directory should be project root)
+        const projectRoot = this.options.workingDirectory
+        const dockerfilePath = path.join(projectRoot, 'Dockerfile.claude')
+
+        const buildResult = await builder.ensureImage(imageName, dockerfilePath, projectRoot)
+
+        if (!buildResult.success) {
+          this.logger.error('Failed to build Docker image:', buildResult.error)
+          this.emit('containerStatus', { status: 'error', error: buildResult.error })
+          throw new Error(`Docker build failed: ${buildResult.error}`)
+        }
+
+        this.logger.log('Docker image built successfully')
+      }
+
+      // Dynamic import of ES module SDK
+      const sdk = await import('@anthropic-ai/claude-agent-sdk')
+      const { app } = await import('electron')
+      const path = await import('path')
+
+      // Get path to SDK CLI executable
+      let appPath = app.getAppPath()
+      if (app.isPackaged && appPath.endsWith('.asar')) {
+        appPath = appPath.replace('.asar', '.asar.unpacked')
+      }
+      const cliPath = path.join(
+        appPath,
+        'node_modules',
+        '@anthropic-ai',
+        'claude-agent-sdk',
+        'cli.js'
+      )
+
+      this.logger.log(`Using SDK CLI from: ${cliPath}`)
+      this.emit('containerStatus', { status: 'starting' })
+
+      // Create session with custom Docker spawn
+      this.session = sdk.unstable_v2_createSession({
+        model: 'claude-sonnet-4-5-20250929',
+        pathToClaudeCodeExecutable: cliPath,
+        executable: 'node',
+        workingDirectory: this.options.workingDirectory,
+        env: {
+          ...process.env,
+          ...this.options.customEnv,
+          PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
+        },
+
+        // Custom spawn function to use Docker
+        spawnClaudeCodeProcess: (options: SDKSpawnOptions) => {
+          this.logger.log('Spawning Claude CLI in Docker container...')
+
+          try {
+            const dockerProcess = spawnDockerProcess(options, {
+              imageName,
+              workingDir: this.options.workingDirectory,
+              cliPath,
+              env: this.options.customEnv,
+            })
+
+            // Track container lifecycle
+            dockerProcess.on('spawn', () => {
+              this.logger.log('Docker container spawned successfully')
+              this.emit('containerStatus', { status: 'running' })
+            })
+
+            dockerProcess.on('error', (error) => {
+              this.logger.error('Docker container error:', error)
+              this.emit('containerStatus', {
+                status: 'error',
+                error: error.message,
+              })
+            })
+
+            dockerProcess.on('exit', (code, signal) => {
+              this.logger.log(`Docker container exited (code: ${code}, signal: ${signal})`)
+              // Don't emit disabled here - let the session close handler do it
+            })
+
+            return dockerProcess
+          } catch (error) {
+            this.logger.error('Failed to spawn Docker container:', error)
+            this.emit('containerStatus', {
+              status: 'error',
+              error: error instanceof Error ? error.message : String(error),
+            })
+            throw error
+          }
+        },
+      })
+
+      this.isActive = true
+      this.logger.log('Session created successfully (Docker mode)')
+    } catch (error) {
+      this.logger.error('Failed to start Docker session:', error)
+      this.emit('containerStatus', {
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      })
       throw error
     }
   }

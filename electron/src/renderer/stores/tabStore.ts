@@ -28,6 +28,7 @@ interface TabState {
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTabTitle: (id: string, title: string) => void
+  updateTabAgent: (id: string, agentId: string) => void
   getActiveTab: () => Tab | undefined
   getTabByIndex: (index: number) => Tab | undefined
 }
@@ -109,6 +110,14 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === id ? { ...tab, title } : tab
+      ),
+    }))
+  },
+
+  updateTabAgent: (id: string, agentId: string) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id ? { ...tab, agentId } : tab
       ),
     }))
   },

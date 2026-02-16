@@ -108,22 +108,30 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
         `Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'} (Docker: ${useDocker})`
       )
 
-      const agent = new ClaudeAgent(agentId, {
-        workingDirectory: workingDir,
-        profileId: profileId,
-        dockerOptions: useDocker ? { enabled: true } : undefined,
-      })
+      try {
+        const agent = new ClaudeAgent(agentId, {
+          workingDirectory: workingDir,
+          profileId: profileId,
+          dockerOptions: useDocker ? { enabled: true } : undefined,
+        })
 
-      // Forward agent events to renderer
-      forwardAgentEvents(agent, agentId, mainWindow)
+        // Forward agent events to renderer
+        forwardAgentEvents(agent, agentId, mainWindow)
 
-      // Start the agent
-      await agent.start()
+        // Start the agent
+        await agent.start()
 
-      // Store agent instance
-      agents.set(agentId, agent)
+        // Store agent instance
+        agents.set(agentId, agent)
 
-      return { agentId }
+        return { success: true, agentId }
+      } catch (error) {
+        logger.error(`Failed to start agent ${agentId}:`, error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
     }
   )
 

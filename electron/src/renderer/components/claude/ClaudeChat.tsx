@@ -5,6 +5,7 @@ import { StatusBar } from './StatusBar'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
+import { useTabStore } from '../../stores/tabStore'
 
 interface ClaudeChatProps {
   agentId: string
@@ -32,6 +33,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [messageQueue, setMessageQueue] = useState<Array<string | MessageContent[]>>([])
   const [showBranchMenu, setShowBranchMenu] = useState(false)
   const [branchList, setBranchList] = useState<string[]>([])
+  const [isTogglingContainer, setIsTogglingContainer] = useState(false)
+
+  // Store references
+  const updateTabAgent = useTabStore((state) => state.updateTabAgent)
+  const tabs = useTabStore((state) => state.tabs)
+  const currentAgentIdRef = useRef<string>(agentId)
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -58,6 +65,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
   }
 
+  // Sync currentAgentIdRef with prop changes
+  useEffect(() => {
+    currentAgentIdRef.current = agentId
+  }, [agentId])
+
   useEffect(() => {
     console.log('[ClaudeChat] Mounted with agentId:', agentId)
 
@@ -83,7 +95,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for text responses from Claude
     const unlistenText = window.electron.claude.onText((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Received text:', data.text)
 
         // Add or append to assistant message
@@ -120,7 +132,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for status changes
     const unlistenStatus = window.electron.claude.onStatus((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Status changed:', data.status)
         setIsWorking(data.status === 'working')
       }
@@ -128,7 +140,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for token usage
     const unlistenUsage = window.electron.claude.onUsage((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Token usage:', data.usage)
         setTokenUsage((prev) => ({
           inputTokens: prev.inputTokens + data.usage.inputTokens,
@@ -184,7 +196,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for agent status updates (thinking, tool execution, streaming)
     const unlistenAgentStatus = window.electron.claude.onAgentStatus((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Agent status:', data.status)
         setAgentStatus(data.status)
 
@@ -217,7 +229,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for tool executions
     const unlistenToolExecution = window.electron.claude.onToolExecution((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Tool execution:', data.tool)
         setCurrentTool(data.tool)
       }
@@ -225,7 +237,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for errors
     const unlistenError = window.electron.claude.onError((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.error('[ClaudeChat] Error:', data.error)
         setError(data.error)
         setIsWorking(false)
@@ -235,7 +247,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
     // Listen for container status changes
     const unlistenContainer = window.electron.claude.onContainerStatus((data) => {
-      if (data.agentId === agentId) {
+      if (data.agentId === currentAgentIdRef.current) {
         console.log('[ClaudeChat] Container status:', data.status, data.error)
         setContainerStatus(data.status as ContainerStatus)
         setContainerError(data.error)
@@ -350,11 +362,84 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
   }, [isWorking, messageQueue, sendMessageInternal])
 
-  const handleContainerToggle = () => {
+  const handleContainerToggle = useCallback(async () => {
     console.log('[ClaudeChat] Container toggle clicked - current status:', containerStatus)
-    // TODO: Implement agent restart with toggled Docker mode
-    // For now, this is a placeholder
-  }
+
+    // Prevent multiple toggles at once
+    if (isTogglingContainer || isWorking) {
+      console.log('[ClaudeChat] Toggle already in progress or agent is working')
+      return
+    }
+
+    // Only allow toggle when disabled or running
+    if (containerStatus !== 'disabled' && containerStatus !== 'running') {
+      console.log('[ClaudeChat] Cannot toggle during build/start/error states')
+      return
+    }
+
+    setIsTogglingContainer(true)
+
+    try {
+      // Determine new Docker state (toggle it)
+      const newDockerState = containerStatus === 'disabled'
+      const modeText = newDockerState ? 'container' : 'host'
+
+      // Add system message about restart
+      addSystemMessage(`🔄 Restarting agent in ${modeText} mode...`)
+
+      // Stop current agent
+      console.log('[ClaudeChat] Stopping current agent:', currentAgentIdRef.current)
+      await window.electron.claude.stop(currentAgentIdRef.current)
+
+      // Small delay to ensure cleanup
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Start new agent with toggled Docker state
+      console.log('[ClaudeChat] Starting new agent with Docker:', newDockerState)
+      const result = await window.electron.claude.start(workingDir, undefined, newDockerState)
+
+      if (result.success && result.agentId) {
+        console.log('[ClaudeChat] New agent started:', result.agentId)
+
+        // Update agent ID reference
+        currentAgentIdRef.current = result.agentId
+
+        // Update the tab's agent ID in store
+        const currentTab = tabs.find((t) => t.agentId === agentId)
+        if (currentTab) {
+          updateTabAgent(currentTab.id, result.agentId)
+        }
+
+        // Add success message
+        addSystemMessage(`✓ Agent restarted in ${modeText} mode`)
+
+        // Note: The new agent's container status will be emitted via IPC events
+        // and picked up by the useEffect listener
+      } else {
+        console.error('[ClaudeChat] Failed to start new agent:', result.error)
+        addSystemMessage(`✗ Failed to restart agent: ${result.error || 'Unknown error'}`)
+        setContainerStatus('error')
+        setContainerError(result.error)
+      }
+    } catch (error) {
+      console.error('[ClaudeChat] Container toggle error:', error)
+      addSystemMessage(
+        `✗ Error toggling container: ${error instanceof Error ? error.message : String(error)}`
+      )
+      setContainerStatus('error')
+      setContainerError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsTogglingContainer(false)
+    }
+  }, [
+    containerStatus,
+    isTogglingContainer,
+    isWorking,
+    workingDir,
+    agentId,
+    tabs,
+    updateTabAgent,
+  ])
 
   // Helper to add system messages
   const addSystemMessage = (content: string) => {
