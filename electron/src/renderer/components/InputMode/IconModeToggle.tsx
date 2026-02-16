@@ -1,6 +1,7 @@
 import React from 'react'
 import type { InputMode } from '../../types/inputMode'
-import { MODE_ICONS } from '../../types/inputMode'
+import { BashIcon } from '../icons/BashIcon'
+import { GemIcon } from '../icons/GemIcon'
 
 interface IconModeToggleProps {
   mode: InputMode
@@ -56,7 +57,6 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           border: '1px solid #3a3a3a',
           borderRadius: '4px',
           color: '#e0e0e0',
-          fontSize: '16px',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
           transition: 'background-color 0.15s ease',
@@ -73,7 +73,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           }
         }}
       >
-        {MODE_ICONS.command}
+        <BashIcon size={18} color="#e0e0e0" />
       </button>
 
       {/* AI button */}
@@ -91,43 +91,42 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: isAi ? '#3a3a3a' : 'transparent',
+          backgroundColor: isAi ? (isAuto ? 'transparent' : '#d4a02e') : 'transparent',
           border: '1px solid #3a3a3a',
           borderRadius: '4px',
-          color: '#e0e0e0',
-          fontSize: '16px',
+          color: isAi && !isAuto ? '#1a1a1a' : '#d4a02e',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
-          transition: 'background-color 0.15s ease',
+          transition: 'all 0.15s ease',
           padding: 0,
           position: 'relative',
         }}
         onMouseEnter={(e) => {
           if (!disabled) {
-            e.currentTarget.style.backgroundColor = '#3a3a3a'
+            if (isAuto) {
+              e.currentTarget.style.backgroundColor = '#3a3a3a'
+              e.currentTarget.style.color = '#d4a02e'
+            } else if (isAi) {
+              e.currentTarget.style.backgroundColor = '#e5b13e'
+            }
           }
         }}
         onMouseLeave={(e) => {
-          if (!disabled && !isAi) {
-            e.currentTarget.style.backgroundColor = 'transparent'
+          if (!disabled) {
+            if (isAuto) {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = '#d4a02e'
+            } else if (isAi) {
+              e.currentTarget.style.backgroundColor = '#d4a02e'
+              e.currentTarget.style.color = '#1a1a1a'
+            } else {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = '#d4a02e'
+            }
           }
         }}
       >
-        {MODE_ICONS.ai}
-        {/* Show Auto indicator */}
-        {isAuto && (
-          <span
-            style={{
-              position: 'absolute',
-              top: '2px',
-              right: '2px',
-              fontSize: '10px',
-              lineHeight: 1,
-            }}
-          >
-            {MODE_ICONS.auto}
-          </span>
-        )}
+        <GemIcon size={18} color="currentColor" />
       </button>
     </div>
   )
