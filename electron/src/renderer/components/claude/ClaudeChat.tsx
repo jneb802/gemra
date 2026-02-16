@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { StatusBar } from './StatusBar'
+import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
@@ -10,11 +11,24 @@ import { useTabStore } from '../../stores/tabStore'
 interface ClaudeChatProps {
   agentId: string
   workingDir: string
+  onUserMessage?: () => void
+  onCreateProject: () => void
+  onOpenRepository: () => void
+  onCloneRepository: () => void
+  onOpenRecent: (path: string) => void
 }
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
-export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) => {
+export const ClaudeChat: React.FC<ClaudeChatProps> = ({
+  agentId,
+  workingDir,
+  onUserMessage,
+  onCreateProject,
+  onOpenRepository,
+  onCloneRepository,
+  onOpenRecent
+}) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({ type: 'idle' })
@@ -341,6 +355,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   }, [agentId])
 
   const handleSend = useCallback(async (content: string | MessageContent[]) => {
+    // Notify parent that user sent a message (to dismiss welcome overlay)
+    onUserMessage?.()
+
     // If already working, queue the message instead
     if (isWorking) {
       console.log('[ClaudeChat] Agent busy, queueing message')
@@ -349,7 +366,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     }
 
     await sendMessageInternal(content)
-  }, [isWorking, sendMessageInternal])
+  }, [isWorking, sendMessageInternal, onUserMessage])
 
   // Process queued messages when agent becomes idle
   useEffect(() => {
@@ -675,11 +692,21 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
 
   return (
     <div className="claude-chat">
-      <MessageList
-        messages={messages}
-        isStreaming={agentStatus.type === 'streaming'}
-        currentTurnMetadata={currentTurnMetadata}
-      />
+      {/* Show welcome screen when there are no messages */}
+      {messages.length === 0 ? (
+        <WelcomeScreen
+          onCreateProject={onCreateProject}
+          onOpenRepository={onOpenRepository}
+          onCloneRepository={onCloneRepository}
+          onOpenRecent={onOpenRecent}
+        />
+      ) : (
+        <MessageList
+          messages={messages}
+          isStreaming={agentStatus.type === 'streaming'}
+          currentTurnMetadata={currentTurnMetadata}
+        />
+      )}
 
       {/* Status indicator */}
       {agentStatus.type === 'thinking' && (
@@ -718,22 +745,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         </div>
       )}
 
-      <StatusBar
-        mode={mode}
-        model={model}
-        gitBranch={gitBranch}
-        gitStats={gitStats}
-        tokenUsage={tokenUsage}
-        containerStatus={containerStatus}
-        containerError={containerError}
-        workingDir={workingDir}
-        onModeChange={setMode}
-        onModelChange={setModel}
-        onContainerToggle={handleContainerToggle}
-        onBranchClick={handleBranchClick}
-        style={{ display: 'none' }}
-      />
-
       <InputBox
         onSend={handleSend}
         disabled={isWorking}
@@ -756,6 +767,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         model={model}
         onModelChange={setModel}
         onBranchClick={handleBranchClick}
+        agentMode={mode}
+        onAgentModeChange={setMode}
+        containerStatus={containerStatus}
+        containerError={containerError}
+        onContainerToggle={handleContainerToggle}
+        tokenUsage={tokenUsage}
       />
     </div>
   )

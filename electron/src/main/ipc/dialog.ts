@@ -1,36 +1,25 @@
-import { ipcMain, dialog } from 'electron'
+import { dialog } from 'electron'
 import * as fs from 'fs'
-import * as path from 'path'
+import { createIpcHandler } from '../utils/ipcUtils'
 
 export function setupDialogIpc() {
   // Select directory dialog
-  ipcMain.handle('dialog:select-directory', async () => {
+  createIpcHandler('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory']
     })
-    return result.canceled ? null : result.filePaths[0]
+    return { path: result.canceled ? null : result.filePaths[0] }
   })
 
   // Create directory
-  ipcMain.handle('dialog:create-directory', async (_, dirPath: string) => {
-    try {
-      await fs.promises.mkdir(dirPath, { recursive: true })
-      return { success: true, path: dirPath }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
-    }
+  createIpcHandler('dialog:create-directory', async (dirPath: string) => {
+    await fs.promises.mkdir(dirPath, { recursive: true })
+    return { path: dirPath }
   })
 
   // Check if directory exists
-  ipcMain.handle('dialog:check-directory', async (_, dirPath: string) => {
-    try {
-      const stats = await fs.promises.stat(dirPath)
-      return stats.isDirectory()
-    } catch {
-      return false
-    }
+  createIpcHandler('dialog:check-directory', async (dirPath: string) => {
+    const stats = await fs.promises.stat(dirPath)
+    return { exists: stats.isDirectory() }
   })
 }

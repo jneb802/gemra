@@ -3,7 +3,6 @@ import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
-import { WelcomeScreen } from './components/Welcome/WelcomeScreen'
 import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
 import { CloneRepositoryModal } from './components/Welcome/CloneRepositoryModal'
 import { useTabStore } from './stores/tabStore'
@@ -29,6 +28,7 @@ function App() {
   const useDocker = useSettingsStore((state) => state.useDocker)
   const cycleMode = useInputModeStore((state) => state.cycleMode)
   const addRecent = useRecentStore((state) => state.addRecent)
+  const recentItems = useRecentStore((state) => state.getRecent())
 
   // Handler for closing tabs with agent cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
@@ -112,11 +112,19 @@ function App() {
     }
   }, [createClaudeTab, useDocker, addRecent])
 
+  // Create initial tab on mount with last used directory
+  useEffect(() => {
+    if (tabs.length === 0) {
+      const lastUsedDir = recentItems[0]?.path || '/Users/benjmarston/Develop/gemra'
+      startClaudeChatInDirectory(lastUsedDir)
+    }
+  }, []) // Only run once on mount
+
   // Welcome screen handlers
   const handleOpenDirectory = useCallback(async () => {
-    const selectedPath = await window.electron.dialog.selectDirectory()
-    if (selectedPath) {
-      await startClaudeChatInDirectory(selectedPath)
+    const result = await window.electron.dialog.selectDirectory()
+    if (result.success && result.path) {
+      await startClaudeChatInDirectory(result.path)
     }
   }, [startClaudeChatInDirectory])
 
@@ -155,8 +163,8 @@ function App() {
 
   const handleOpenRecentDirectory = useCallback(async (dirPath: string) => {
     // Check if directory still exists
-    const exists = await window.electron.dialog.checkDirectory(dirPath)
-    if (!exists) {
+    const result = await window.electron.dialog.checkDirectory(dirPath)
+    if (!result.success || !result.exists) {
       alert('This directory no longer exists')
       return
     }
@@ -217,17 +225,6 @@ function App() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Escape key for modals
-      if (e.key === 'Escape') {
-        if (showCreateModal) {
-          setShowCreateModal(false)
-          return
-        }
-        if (showCloneModal) {
-          setShowCloneModal(false)
-          return
-        }
-      }
 
       if (!getModifierKey(e)) return
 
@@ -287,24 +284,6 @@ function App() {
           cycleMode(currentTab.agentId)
         }
       }
-
-      // Cmd/Ctrl+Shift+N - Create Project
-      if (e.key === 'N' && e.shiftKey) {
-        e.preventDefault()
-        setShowCreateModal(true)
-      }
-
-      // Cmd/Ctrl+O - Open Repository
-      if (e.key === 'o' && !e.shiftKey) {
-        e.preventDefault()
-        handleOpenDirectory()
-      }
-
-      // Cmd/Ctrl+Shift+G - Clone Repository
-      if (e.key === 'G' && e.shiftKey) {
-        e.preventDefault()
-        setShowCloneModal(true)
-      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -322,46 +301,38 @@ function App() {
     navigateToNextTab,
     tabs,
     cycleMode,
-    showCreateModal,
-    showCloneModal,
-    handleOpenDirectory,
   ])
 
   return (
     <div className="app-root">
-      {tabs.length === 0 ? (
-        // Welcome screen when no tabs are open
-        <WelcomeScreen
-          onCreateProject={() => setShowCreateModal(true)}
-          onOpenRepository={handleOpenDirectory}
-          onCloneRepository={() => setShowCloneModal(true)}
-          onOpenRecent={handleOpenRecentDirectory}
-        />
-      ) : (
-        <>
-          {/* Tab bar */}
-          <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
+      {/* Tab bar */}
+      <TabBar onNewTab={handleNewTab} onCloseTab={handleCloseTab} />
 
-          {/* Main content area */}
-          <div className="app-content">
-            {/* Terminal views */}
-            <div className="app-terminal-container">
-              {tabs.map((tab) => (
-                <div
-                  key={tab.id}
-                  className={`app-tab-content ${tab.isActive ? 'active' : ''}`}
-                >
-                  {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
-                    <ClaudeChat agentId={tab.agentId} workingDir={tab.workingDir} />
-                  ) : (
-                    <TerminalView terminalId={tab.id} />
-                  )}
-                </div>
-              ))}
+      {/* Main content area */}
+      <div className="app-content">
+        {/* Terminal views */}
+        <div className="app-terminal-container">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`app-tab-content ${tab.isActive ? 'active' : ''}`}
+            >
+              {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
+                <ClaudeChat
+                  agentId={tab.agentId}
+                  workingDir={tab.workingDir}
+                  onCreateProject={() => setShowCreateModal(true)}
+                  onOpenRepository={handleOpenDirectory}
+                  onCloneRepository={() => setShowCloneModal(true)}
+                  onOpenRecent={handleOpenRecentDirectory}
+                />
+              ) : (
+                <TerminalView terminalId={tab.id} />
+              )}
             </div>
-          </div>
-        </>
-      )}
+          ))}
+        </div>
+      </div>
 
       {/* Modals */}
       <PreferencesModal isOpen={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
