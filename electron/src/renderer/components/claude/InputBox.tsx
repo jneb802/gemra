@@ -432,15 +432,6 @@ export const InputBox: React.FC<InputBoxProps> = ({
           onModelChange={onModelChange}
           disabled={disabled}
         />
-
-        <button
-          className="send-button"
-          onClick={handleSend}
-          disabled={!text.trim() && attachedImages.length === 0}
-          title={disabled ? 'Message will be queued and sent after current response' : 'Send message'}
-        >
-          {disabled && (text.trim() || attachedImages.length > 0) ? 'Queue' : 'Send'}
-        </button>
       </div>
     </div>
   )
