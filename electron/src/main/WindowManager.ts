@@ -32,6 +32,9 @@ export class WindowManager {
       this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
     }
 
+    // Maximize window on startup
+    this.mainWindow.maximize()
+
     // Open external links in browser
     this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('http:') || url.startsWith('https:')) {
