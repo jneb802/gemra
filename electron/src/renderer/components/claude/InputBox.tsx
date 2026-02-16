@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { SlashCommandMenu, SlashCommand, SlashCommandMenuHandle } from './SlashCommandMenu'
 import { CompactImageChip, AttachedImage } from './ImageAttachment'
-import { ModeToggle } from '../InputMode'
+import { IconModeToggle } from '../InputMode'
+import { StatusChips } from './StatusChips'
+import { ModelSelector } from './ModelSelector'
 import { useInputModeStore } from '../../stores/inputModeStore'
 import { detectInputType } from '../../utils/inputDetection'
 import type { MessageContent } from '../../../shared/types'
@@ -19,6 +21,12 @@ interface InputBoxProps {
   currentBranch?: string
   onBranchSelect?: (branch: string) => void
   onCloseBranchMenu?: () => void
+  workingDir: string
+  gitBranch: string
+  gitStats: { filesChanged: number; insertions: number; deletions: number }
+  model: string
+  onModelChange: (model: string) => void
+  onBranchClick: () => void
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -34,6 +42,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
   currentBranch = '',
   onBranchSelect,
   onCloseBranchMenu,
+  workingDir,
+  gitBranch,
+  gitStats,
+  model,
+  onModelChange,
+  onBranchClick,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -303,7 +317,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   }
 
   return (
-    <div className="input-box" style={{ position: 'relative' }}>
+    <div className="input-box-container" style={{ position: 'relative' }}>
       {showBranchMenu && (
         <SlashCommandMenu
           ref={menuRef}
@@ -326,46 +340,69 @@ export const InputBox: React.FC<InputBoxProps> = ({
         />
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-        {/* Mode toggle */}
-        <div style={{ paddingTop: '8px' }}>
-          <ModeToggle
-            mode={currentMode}
-            onModeChange={handleModeChange}
-            disabled={disabled}
-          />
-        </div>
+      {/* Top row - Status chips */}
+      <StatusChips
+        workingDir={workingDir}
+        gitBranch={gitBranch}
+        gitStats={gitStats}
+        onBranchClick={onBranchClick}
+      />
 
-        {/* Textarea container */}
-        <div style={{ flex: 1, position: 'relative' }}>
-          <textarea
-            ref={textareaRef}
-            className="input-textarea"
-            style={{
-              paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
-            }}
-            placeholder={
-              disabled
-                ? 'Type your next message... (will send after response)'
-                : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands, paste images)'
-            }
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            rows={1}
-          />
+      {/* Middle row - Textarea with image chip */}
+      <div style={{ flex: 1, position: 'relative', display: 'flex', padding: '12px' }}>
+        <textarea
+          ref={textareaRef}
+          className="input-textarea"
+          style={{
+            flex: 1,
+            paddingRight: attachedImages.length > 0 ? '140px' : '12px', // Add space for chip
+          }}
+          placeholder={
+            disabled
+              ? 'Type your next message... (will send after response)'
+              : 'Type your message... (Enter to send, Shift+Enter for new line, / for commands, paste images)'
+          }
+          value={text}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          rows={1}
+        />
 
-          {/* Compact image chip inside the input field */}
-          {attachedImages.length > 0 && (
-            <CompactImageChip
-              images={attachedImages}
-              onRemove={() => setAttachedImages([])}
-            />
-          )}
-        </div>
+        {/* Compact image chip inside the input field */}
+        {attachedImages.length > 0 && (
+          <CompactImageChip
+            images={attachedImages}
+            onRemove={() => setAttachedImages([])}
+          />
+        )}
+      </div>
+
+      {/* Bottom row - Controls */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          borderTop: '1px solid var(--border-color)',
+        }}
+      >
+        <IconModeToggle
+          mode={currentMode}
+          onModeChange={handleModeChange}
+          disabled={disabled}
+        />
+
+        <div style={{ flex: 1 }} />
+
+        <ModelSelector
+          model={model}
+          onModelChange={onModelChange}
+          disabled={disabled}
+        />
 
         <button
           className="send-button"
