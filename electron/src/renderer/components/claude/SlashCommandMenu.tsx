@@ -71,48 +71,15 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     }))
 
     return (
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: 0,
-          right: 0,
-          marginBottom: '8px',
-          backgroundColor: '#2d2d2d',
-          border: '1px solid #3e3e3e',
-          borderRadius: '4px',
-          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-          maxHeight: '400px',
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 1000,
-        }}
-      >
+      <div className="slash-command-menu">
         {/* Tab header */}
-        <div
-          style={{
-            display: 'flex',
-            borderBottom: '1px solid #3e3e3e',
-            padding: '8px 12px',
-            gap: '16px',
-          }}
-        >
+        <div className="slash-command-tabs">
           <button
             onClick={() => {
               setActiveTab('custom')
               setSelectedIndex(0)
             }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: activeTab === 'custom' ? '#d4d4d4' : '#808080',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              fontSize: '12px',
-              fontWeight: 500,
-              borderBottom: activeTab === 'custom' ? '2px solid #4ade80' : '2px solid transparent',
-              transition: 'all 0.15s ease',
-            }}
+            className={`slash-command-tab ${activeTab === 'custom' ? 'active' : ''}`}
           >
             {customTabLabel}
           </button>
@@ -121,33 +88,16 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
               setActiveTab('claude')
               setSelectedIndex(0)
             }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: activeTab === 'claude' ? '#d4d4d4' : '#808080',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              fontSize: '12px',
-              fontWeight: 500,
-              borderBottom: activeTab === 'claude' ? '2px solid #4ade80' : '2px solid transparent',
-              transition: 'all 0.15s ease',
-            }}
+            className={`slash-command-tab ${activeTab === 'claude' ? 'active' : ''}`}
           >
             {claudeTabLabel}
           </button>
         </div>
 
         {/* Command list */}
-        <div style={{ overflowY: 'auto', maxHeight: '350px' }}>
+        <div className="slash-command-list">
           {filteredCommands.length === 0 ? (
-            <div
-              style={{
-                padding: '16px',
-                color: '#808080',
-                fontSize: '13px',
-                textAlign: 'center',
-              }}
-            >
+            <div className="slash-command-empty">
               {query ? 'No matching commands' : 'No commands available'}
             </div>
           ) : (
@@ -167,16 +117,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         </div>
 
         {/* Keyboard hint */}
-        <div
-          style={{
-            borderTop: '1px solid #3e3e3e',
-            padding: '6px 12px',
-            fontSize: '11px',
-            color: '#666',
-            display: 'flex',
-            gap: '12px',
-          }}
-        >
+        <div className="slash-command-hint">
           <span>Tab: switch tabs</span>
           <span>↑↓: navigate</span>
           <span>Enter: execute</span>

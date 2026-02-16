@@ -22,34 +22,24 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({ percentage, 
     <svg
       width={size}
       height={size}
-      style={{
-        transform: 'rotate(-90deg)',
-        transition: 'all 0.3s ease',
-      }}
+      className="circular-progress"
     >
       {/* Background circle */}
       <circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        fill="none"
-        stroke="#3e3e3e"
-        strokeWidth="2"
+        className="circular-progress-bg"
       />
       {/* Progress circle */}
       <circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        fill="none"
+        className="circular-progress-bar"
         stroke={color}
-        strokeWidth="2"
         strokeDasharray={circumference}
         strokeDashoffset={offset}
-        strokeLinecap="round"
-        style={{
-          transition: 'stroke-dashoffset 0.3s ease, stroke 0.3s ease',
-        }}
       />
     </svg>
   )
