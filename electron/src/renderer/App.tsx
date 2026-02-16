@@ -122,13 +122,19 @@ function App() {
 
   // Welcome screen handlers
   const handleOpenDirectory = useCallback(async () => {
+    const currentTabId = activeTabId
     const result = await window.electron.dialog.selectDirectory()
     if (result.success && result.path) {
       await startClaudeChatInDirectory(result.path)
+      // Close the welcome screen tab after opening
+      if (currentTabId) {
+        handleCloseTab(currentTabId)
+      }
     }
-  }, [startClaudeChatInDirectory])
+  }, [startClaudeChatInDirectory, activeTabId, handleCloseTab])
 
   const handleCreateProject = useCallback(async (name: string, location: string, initGit: boolean) => {
+    const currentTabId = activeTabId
     const targetPath = path.join(location, name)
 
     // Create directory
@@ -148,9 +154,14 @@ function App() {
 
     // Start Claude chat in new directory
     await startClaudeChatInDirectory(targetPath)
-  }, [startClaudeChatInDirectory])
+    // Close the welcome screen tab after creating project
+    if (currentTabId) {
+      handleCloseTab(currentTabId)
+    }
+  }, [startClaudeChatInDirectory, activeTabId, handleCloseTab])
 
   const handleCloneRepo = useCallback(async (url: string, targetPath: string) => {
+    const currentTabId = activeTabId
     const cloneResult = await window.electron.git.clone(url, targetPath)
 
     if (!cloneResult.success) {
@@ -159,9 +170,14 @@ function App() {
 
     // Start Claude chat in cloned directory
     await startClaudeChatInDirectory(targetPath)
-  }, [startClaudeChatInDirectory])
+    // Close the welcome screen tab after cloning
+    if (currentTabId) {
+      handleCloseTab(currentTabId)
+    }
+  }, [startClaudeChatInDirectory, activeTabId, handleCloseTab])
 
   const handleOpenRecentDirectory = useCallback(async (dirPath: string) => {
+    const currentTabId = activeTabId
     // Check if directory still exists
     const result = await window.electron.dialog.checkDirectory(dirPath)
     if (!result.success || !result.exists) {
@@ -170,7 +186,11 @@ function App() {
     }
 
     await startClaudeChatInDirectory(dirPath)
-  }, [startClaudeChatInDirectory])
+    // Close the welcome screen tab after opening recent
+    if (currentTabId) {
+      handleCloseTab(currentTabId)
+    }
+  }, [startClaudeChatInDirectory, activeTabId, handleCloseTab])
 
   // Handle menu events
   useEffect(() => {
