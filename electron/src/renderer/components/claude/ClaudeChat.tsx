@@ -30,7 +30,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   const [currentTurnMetadata, setCurrentTurnMetadata] = useState<MessageMetadata | null>(null)
   const lastAssistantMessageIdRef = useRef<string | null>(null)
   const [messageQueue, setMessageQueue] = useState<string[]>([])
-  const [branchCommands, setBranchCommands] = useState<SlashCommand[]>([])
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -41,11 +40,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     { name: 'new-terminal', description: 'Open new terminal tab' },
     { name: 'new-chat', description: 'Start new chat session' },
     { name: 'git-status', description: 'Show git status' },
-    { name: 'branch', description: 'Switch git branch', argumentHint: '<branch-name>' },
+    { name: 'branch', description: 'List and switch git branches' },
   ]
-
-  // Merge branch commands with custom commands
-  const allCustomCommands = [...CUSTOM_COMMANDS, ...branchCommands]
 
   // Update git stats helper
   const updateGitStats = async () => {
@@ -357,35 +353,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     // For now, this is a placeholder
   }
 
-  // Handle slash query changes for dynamic command loading
-  const handleSlashQueryChange = useCallback(async (query: string) => {
-    // Extract the first word (command name) without arguments
-    const commandName = query.split(/\s+/)[0].toLowerCase()
-
-    if (commandName === 'branch' || commandName === 'br') {
-      // Fetch branches from git
-      try {
-        const result = await window.electron.claude.getGitBranches(workingDir)
-        if (result.success && result.branches.length > 0) {
-          // Convert branches to SlashCommand format
-          const branches: SlashCommand[] = result.branches.map((branch) => ({
-            name: `branch ${branch}`,
-            description: `Checkout branch: ${branch}`,
-          }))
-          setBranchCommands(branches)
-        } else {
-          setBranchCommands([])
-        }
-      } catch (error) {
-        console.error('[ClaudeChat] Failed to fetch branches:', error)
-        setBranchCommands([])
-      }
-    } else {
-      // Clear branch commands when not querying for branches
-      setBranchCommands([])
-    }
-  }, [workingDir])
-
   // Helper to add system messages
   const addSystemMessage = (content: string) => {
     setMessages((prev) => [
@@ -476,45 +443,44 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         break
 
       case 'branch': {
-        // Handle direct /branch <branch-name> command
-        if (!args) {
-          addSystemMessage('Usage: /branch <branch-name>')
+        // If args provided, checkout that branch directly
+        if (args) {
+          window.electron.claude.checkoutBranch(workingDir, args).then((result) => {
+            if (result.success) {
+              setGitBranch(result.branch)
+              addSystemMessage(`✓ Checked out branch: ${result.branch}`)
+            } else {
+              addSystemMessage(`✗ Failed to checkout branch: ${args}`)
+            }
+          }).catch((error) => {
+            addSystemMessage(`✗ Error checking out branch: ${error.message}`)
+          })
           return
         }
-        window.electron.claude.checkoutBranch(workingDir, args).then((result) => {
-          if (result.success) {
-            setGitBranch(result.branch)
-            addSystemMessage(`Checked out branch: ${result.branch}`)
-            // Clear branch commands after checkout
-            setBranchCommands([])
+
+        // No args - fetch and display branch list
+        window.electron.claude.getGitBranches(workingDir).then((result) => {
+          if (result.success && result.branches.length > 0) {
+            const currentBranch = gitBranch
+            let branchList = '**Available Branches:**\n\n'
+            result.branches.forEach((branch) => {
+              const isCurrent = branch === currentBranch
+              const prefix = isCurrent ? '→ ' : '  '
+              branchList += `${prefix}\`${branch}\`${isCurrent ? ' (current)' : ''}\n`
+            })
+            branchList += '\nType `/branch <name>` to switch branches.'
+            addSystemMessage(branchList)
           } else {
-            addSystemMessage(`Failed to checkout branch: ${args}`)
+            addSystemMessage('No branches found')
           }
         }).catch((error) => {
-          addSystemMessage(`Error checking out branch: ${error.message}`)
+          addSystemMessage(`Error fetching branches: ${error.message}`)
         })
         break
       }
 
       default:
-        // Check if it's a branch selection from the dynamic list (format: "branch <branch-name>")
-        if (command.name.startsWith('branch ')) {
-          const branchName = command.name.substring(7) // Remove "branch " prefix
-          window.electron.claude.checkoutBranch(workingDir, branchName).then((result) => {
-            if (result.success) {
-              setGitBranch(result.branch)
-              addSystemMessage(`Checked out branch: ${result.branch}`)
-              // Clear branch commands after checkout
-              setBranchCommands([])
-            } else {
-              addSystemMessage(`Failed to checkout branch: ${branchName}`)
-            }
-          }).catch((error) => {
-            addSystemMessage(`Error checking out branch: ${error.message}`)
-          })
-        } else {
-          addSystemMessage(`Unknown command: ${command.name}`)
-        }
+        addSystemMessage(`Unknown command: ${command.name}`)
     }
   }
 
@@ -620,10 +586,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
       <InputBox
         onSend={handleSend}
         disabled={isWorking}
-        customCommands={allCustomCommands}
+        customCommands={CUSTOM_COMMANDS}
         claudeCommands={claudeCommands}
         onExecuteCommand={handleExecuteCommand}
-        onSlashQueryChange={handleSlashQueryChange}
       />
     </div>
   )
