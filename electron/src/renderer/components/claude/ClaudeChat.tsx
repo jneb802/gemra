@@ -504,6 +504,20 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
     setBranchList([])
   }
 
+  // Handle branch click in status bar
+  const handleBranchClick = () => {
+    window.electron.claude.getGitBranches(workingDir).then((result) => {
+      if (result.success && result.branches.length > 0) {
+        setBranchList(result.branches)
+        setShowBranchMenu(true)
+      } else {
+        addSystemMessage('No branches found')
+      }
+    }).catch((error) => {
+      addSystemMessage(`Error fetching branches: ${error.message}`)
+    })
+  }
+
   // Handle command execution from InputBox
   const handleExecuteCommand = (
     command: SlashCommand,
@@ -592,6 +606,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         onModeChange={setMode}
         onModelChange={setModel}
         onContainerToggle={handleContainerToggle}
+        onBranchClick={handleBranchClick}
       />
 
       <InputBox

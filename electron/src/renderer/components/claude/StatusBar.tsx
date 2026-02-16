@@ -22,6 +22,7 @@ interface StatusBarProps {
   onModeChange: (mode: 'default' | 'acceptEdits' | 'plan') => void
   onModelChange: (model: string) => void
   onContainerToggle: () => void
+  onBranchClick: () => void
 }
 
 const MODEL_OPTIONS = [
@@ -48,6 +49,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onModeChange,
   onModelChange,
   onContainerToggle,
+  onBranchClick,
 }) => {
   const hasGitChanges = gitStats.filesChanged > 0 || gitStats.insertions > 0 || gitStats.deletions > 0
   const [showCopied, setShowCopied] = useState(false)
@@ -207,14 +209,21 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       {/* Git branch */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ color: '#666' }}>Branch:</span>
-        <span
+        <button
+          onClick={onBranchClick}
           style={{
             color: '#b0b0b0',
             fontFamily: 'Monaco, Menlo, Consolas, monospace',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            fontSize: '12px',
           }}
+          title="Click to checkout branch"
         >
           {gitBranch}
-        </span>
+        </button>
       </div>
 
       {/* Git stats - only show if there are changes */}

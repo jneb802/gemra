@@ -70,6 +70,9 @@ contextBridge.exposeInMainWorld('electron', {
     checkoutBranch: (workingDir: string, branch: string) =>
       ipcRenderer.invoke('claude:checkout-branch', workingDir, branch),
 
+    createBranch: (workingDir: string, branchName: string, checkout: boolean) =>
+      ipcRenderer.invoke('claude:create-branch', workingDir, branchName, checkout),
+
     onText: createIpcListener<{ agentId: string; text: string }>('claude:text'),
 
     onStatus: createIpcListener<{ agentId: string; status: string }>('claude:status'),
@@ -109,6 +112,7 @@ export interface ElectronAPI {
     getSupportedCommands: (agentId: string) => Promise<{ commands: any[] }>
     getGitBranches: (workingDir: string) => Promise<{ success: boolean; branches: string[] }>
     checkoutBranch: (workingDir: string, branch: string) => Promise<{ success: boolean; branch?: string; error?: string }>
+    createBranch: (workingDir: string, branchName: string, checkout: boolean) => Promise<{ success: boolean; branch?: string; error?: string }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void
     onUsage: (callback: (data: { agentId: string; usage: { inputTokens: number; outputTokens: number; timestamp: number } }) => void) => () => void

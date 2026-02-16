@@ -85,3 +85,22 @@ export function checkoutBranch(workingDir: string, branch: string): { success: b
     }
   }
 }
+
+/**
+ * Create a new git branch and optionally check it out
+ */
+export function createBranch(workingDir: string, branchName: string, checkout = true): { success: boolean; error?: string } {
+  try {
+    if (checkout) {
+      execGit(`checkout -b "${branchName}"`, workingDir)
+    } else {
+      execGit(`branch "${branchName}"`, workingDir)
+    }
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}

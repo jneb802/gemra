@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
-import { getGitBranch, getGitStats, getGitBranches, checkoutBranch } from '../utils/gitUtils'
+import { getGitBranch, getGitStats, getGitBranches, checkoutBranch, createBranch } from '../utils/gitUtils'
 import { Logger } from '../../shared/utils/logger'
 import type { MessageContent } from '../../shared/types'
 
@@ -185,6 +185,19 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     logger.log(`Checking out branch ${branch} in ${workingDir}`)
 
     const result = checkoutBranch(workingDir, branch)
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
+
+    const newBranch = getGitBranch(workingDir)
+    return { success: true, branch: newBranch }
+  })
+
+  // Create git branch
+  createIpcHandler('claude:create-branch', async (workingDir: string, branchName: string, checkout: boolean) => {
+    logger.log(`Creating branch ${branchName} in ${workingDir} (checkout: ${checkout})`)
+
+    const result = createBranch(workingDir, branchName, checkout)
     if (!result.success) {
       return { success: false, error: result.error }
     }
