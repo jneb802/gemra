@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent } from 'react'
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { SlashCommandMenu, SlashCommand, SlashCommandMenuHandle } from './SlashCommandMenu'
 
 interface InputBoxProps {
@@ -23,6 +23,13 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const [slashQuery, setSlashQuery] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<SlashCommandMenuHandle>(null)
+
+  // Autofocus on mount
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [])
 
   const handleSend = () => {
     if (!text.trim()) return
