@@ -20,9 +20,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
   const [error, setError] = useState('')
 
   const handleBrowse = async () => {
-    const selectedPath = await window.electron.dialog.selectDirectory()
-    if (selectedPath) {
-      setLocation(selectedPath)
+    const result = await window.electron.dialog.selectDirectory()
+    if (result.success && result.path) {
+      setLocation(result.path)
     }
   }
 
@@ -35,8 +35,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     const targetPath = path.join(location, projectName.trim())
 
     // Check if directory already exists
-    const exists = await window.electron.dialog.checkDirectory(targetPath)
-    if (exists) {
+    const result = await window.electron.dialog.checkDirectory(targetPath)
+    if (result.success && result.exists) {
       setError('A directory with this name already exists')
       return
     }

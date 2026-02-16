@@ -129,9 +129,9 @@ function App() {
 
   // Welcome screen handlers
   const handleOpenDirectory = useCallback(async () => {
-    const selectedPath = await window.electron.dialog.selectDirectory()
-    if (selectedPath) {
-      await startClaudeChatInDirectory(selectedPath)
+    const result = await window.electron.dialog.selectDirectory()
+    if (result.success && result.path) {
+      await startClaudeChatInDirectory(result.path)
     }
   }, [startClaudeChatInDirectory])
 
@@ -170,8 +170,8 @@ function App() {
 
   const handleOpenRecentDirectory = useCallback(async (dirPath: string) => {
     // Check if directory still exists
-    const exists = await window.electron.dialog.checkDirectory(dirPath)
-    if (!exists) {
+    const result = await window.electron.dialog.checkDirectory(dirPath)
+    if (!result.success || !result.exists) {
       alert('This directory no longer exists')
       return
     }

@@ -118,14 +118,14 @@ export interface ElectronAPI {
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string
   dialog: {
-    selectDirectory: () => Promise<string | null>
+    selectDirectory: () => Promise<{ success: boolean; path: string | null; error?: string }>
     createDirectory: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>
-    checkDirectory: (path: string) => Promise<boolean>
+    checkDirectory: (path: string) => Promise<{ success: boolean; exists: boolean; error?: string }>
   }
   git: {
     clone: (url: string, targetPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
     init: (path: string) => Promise<{ success: boolean; error?: string }>
-    getBranch: (path: string) => Promise<{ success: boolean; branch: string | null }>
+    getBranch: (path: string) => Promise<{ success: boolean; branch?: string; error?: string }>
   }
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>
