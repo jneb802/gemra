@@ -74,6 +74,14 @@ export function getGitBranches(workingDir: string): string[] {
 /**
  * Checkout a git branch
  */
-export function checkoutBranch(workingDir: string, branch: string): void {
-  execGit(`checkout "${branch}"`, workingDir)
+export function checkoutBranch(workingDir: string, branch: string): { success: boolean; error?: string } {
+  try {
+    execGit(`checkout "${branch}"`, workingDir)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
 }

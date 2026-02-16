@@ -448,11 +448,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
         // If args provided, checkout that branch directly
         if (args) {
           window.electron.claude.checkoutBranch(workingDir, args).then((result) => {
-            if (result.success) {
+            if (result.success && result.branch) {
               setGitBranch(result.branch)
               addSystemMessage(`✓ Checked out branch: ${result.branch}`)
             } else {
-              addSystemMessage(`✗ Failed to checkout branch: ${args}`)
+              addSystemMessage(`✗ Failed to checkout branch: ${args}\n\n${result.error || 'Unknown error'}`)
             }
           }).catch((error) => {
             addSystemMessage(`✗ Error checking out branch: ${error.message}`)
@@ -491,11 +491,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({ agentId, workingDir }) =
   // Handle branch selection
   const handleBranchSelect = (branch: string) => {
     window.electron.claude.checkoutBranch(workingDir, branch).then((result) => {
-      if (result.success) {
+      if (result.success && result.branch) {
         setGitBranch(result.branch)
         addSystemMessage(`✓ Checked out branch: ${result.branch}`)
       } else {
-        addSystemMessage(`✗ Failed to checkout branch: ${branch}`)
+        addSystemMessage(`✗ Failed to checkout branch: ${branch}\n\n${result.error || 'Unknown error'}`)
       }
     }).catch((error) => {
       addSystemMessage(`✗ Error checking out branch: ${error.message}`)

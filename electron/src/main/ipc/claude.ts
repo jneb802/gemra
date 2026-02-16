@@ -183,9 +183,13 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
   createIpcHandler('claude:checkout-branch', async (workingDir: string, branch: string) => {
     logger.log(`Checking out branch ${branch} in ${workingDir}`)
 
-    checkoutBranch(workingDir, branch)
+    const result = checkoutBranch(workingDir, branch)
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
+
     const newBranch = getGitBranch(workingDir)
-    return { branch: newBranch }
+    return { success: true, branch: newBranch }
   })
 
   logger.log('IPC handlers set up successfully')
