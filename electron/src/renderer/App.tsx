@@ -1,10 +1,12 @@
 import { useEffect, useCallback, useState } from 'react'
 import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
+import { BlockTerminal } from './components/Terminal/BlockTerminal'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
 import { CloneRepositoryModal } from './components/Welcome/CloneRepositoryModal'
+import { ToastContainer } from './components/Toast/ToastContainer'
 import { useTabStore } from './stores/tabStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useInputModeStore } from './stores/inputModeStore'
@@ -352,7 +354,7 @@ function App() {
                   onOpenRecent={handleOpenRecentDirectory}
                 />
               ) : (
-                <TerminalView terminalId={tab.id} />
+                <BlockTerminal terminalId={tab.id} workingDir="/Users/benjmarston/Develop/gemra" />
               )}
             </div>
           ))}
@@ -373,6 +375,9 @@ function App() {
           onClone={handleCloneRepo}
         />
       )}
+
+      {/* Toast notifications */}
+      <ToastContainer />
     </div>
   )
 }

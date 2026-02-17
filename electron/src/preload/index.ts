@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('electron', {
     getBranch: (path: string) => ipcRenderer.invoke('git:get-branch', path),
   },
 
+  // Shell integration operations
+  shellIntegration: {
+    getStatus: () => ipcRenderer.invoke('shell-integration:get-status'),
+    enable: () => ipcRenderer.invoke('shell-integration:enable'),
+    disable: () => ipcRenderer.invoke('shell-integration:disable'),
+    installScripts: () => ipcRenderer.invoke('shell-integration:install-scripts'),
+  },
+
   // Claude Code operations
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) =>
@@ -145,6 +153,12 @@ export interface ElectronAPI {
     clone: (url: string, targetPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
     init: (path: string) => Promise<{ success: boolean; error?: string }>
     getBranch: (path: string) => Promise<{ success: boolean; branch?: string; error?: string }>
+  }
+  shellIntegration: {
+    getStatus: () => Promise<{ shell: string; installed: boolean; scriptsPath: string }>
+    enable: () => Promise<{ success: boolean; error?: string }>
+    disable: () => Promise<{ success: boolean; error?: string }>
+    installScripts: () => Promise<{ success: boolean; error?: string }>
   }
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>

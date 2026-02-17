@@ -4,9 +4,16 @@ import { useTabStore, type ChatSession } from '../../stores/tabStore'
 interface ChatSessionTabsProps {
   tabId: string
   onSessionChange: (sessionId: string) => void
+  onCreateSession: () => void
+  isCreatingSession?: boolean
 }
 
-export const ChatSessionTabs: React.FC<ChatSessionTabsProps> = ({ tabId, onSessionChange }) => {
+export const ChatSessionTabs: React.FC<ChatSessionTabsProps> = ({
+  tabId,
+  onSessionChange,
+  onCreateSession,
+  isCreatingSession = false
+}) => {
   const chatSessions = useTabStore((state) => {
     const tab = state.tabs.find((t) => t.id === tabId)
     return tab?.chatSessions || []
@@ -17,14 +24,8 @@ export const ChatSessionTabs: React.FC<ChatSessionTabsProps> = ({ tabId, onSessi
     return tab?.activeChatSessionId
   })
 
-  const createChatSession = useTabStore((state) => state.createChatSession)
   const closeChatSession = useTabStore((state) => state.closeChatSession)
   const setActiveChatSession = useTabStore((state) => state.setActiveChatSession)
-
-  const handleNewChat = () => {
-    const sessionId = createChatSession(tabId)
-    onSessionChange(sessionId)
-  }
 
   const handleCloseSession = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
@@ -69,10 +70,11 @@ export const ChatSessionTabs: React.FC<ChatSessionTabsProps> = ({ tabId, onSessi
         ))}
         <button
           className="chat-session-tab-new"
-          onClick={handleNewChat}
+          onClick={onCreateSession}
           title="New chat session"
+          disabled={isCreatingSession}
         >
-          +
+          {isCreatingSession ? '...' : '+'}
         </button>
       </div>
     </div>

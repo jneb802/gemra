@@ -1,5 +1,6 @@
 import React from 'react'
 import type { MessageMetadata } from '../../../shared/types'
+import { formatTokenCount } from '../../utils/tokenFormatting'
 
 interface MessageStatusIndicatorProps {
   metadata: MessageMetadata
@@ -18,11 +19,6 @@ export const MessageStatusIndicator: React.FC<MessageStatusIndicatorProps> = ({
     return `${minutes}m ${remainingSeconds}s`
   }
 
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`
-    return tokens.toString()
-  }
-
   // Live status during streaming
   if (isLive && !metadata.isComplete) {
     const elapsed = Date.now() - (metadata.startTime || Date.now())
@@ -39,7 +35,7 @@ export const MessageStatusIndicator: React.FC<MessageStatusIndicatorProps> = ({
     const parts = [`${verb}... (${formatDuration(elapsed)}`]
 
     if (metadata.outputTokens) {
-      parts.push(` · ↓ ${formatTokens(metadata.outputTokens)} tokens`)
+      parts.push(` · ↓ ${formatTokenCount(metadata.outputTokens)} tokens`)
     }
 
     if (metadata.thinkingTime && metadata.currentPhase !== 'thinking') {
@@ -61,7 +57,7 @@ export const MessageStatusIndicator: React.FC<MessageStatusIndicatorProps> = ({
     const parts = [`Sautéed for ${formatDuration(metadata.totalDuration)}`]
 
     if (metadata.outputTokens) {
-      parts.push(` · ↓ ${formatTokens(metadata.outputTokens)} tokens`)
+      parts.push(` · ↓ ${formatTokenCount(metadata.outputTokens)} tokens`)
     }
 
     if (metadata.thinkingTime && metadata.thinkingTime > 1000) {

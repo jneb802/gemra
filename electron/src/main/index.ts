@@ -6,6 +6,7 @@ import { setupTerminalIpc } from './ipc/terminal'
 import { setupClaudeIpc, cleanupClaudeAgents } from './ipc/claude'
 import { setupDialogIpc } from './ipc/dialog'
 import { setupGitIpc } from './ipc/git'
+import { registerShellIntegrationHandlers } from './ipc/shellIntegration'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 try {
@@ -31,6 +32,7 @@ const createWindow = () => {
   setupClaudeIpc(mainWindow)
   setupDialogIpc()
   setupGitIpc()
+  registerShellIntegrationHandlers()
 
   // Setup menu
   const menuBuilder = new MenuBuilder(mainWindow)

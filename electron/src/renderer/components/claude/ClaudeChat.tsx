@@ -3,7 +3,7 @@ import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import { ChatSessionTabs } from './ChatSessionTabs'
-import { useTabStore } from '../../stores/tabStore'
+import { useTabStore, type ChatSession } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
 import { useClaudeAgent } from './hooks/useClaudeAgent'
@@ -12,6 +12,7 @@ import { useWorktreeOperations } from './hooks/useWorktreeOperations'
 import { useContainerManagement } from './hooks/useContainerManagement'
 import { useCommandSystem } from './hooks/useCommandSystem'
 import { useMessageMetadata } from './hooks/useMessageMetadata'
+import { generateId } from '../../../shared/utils/id'
 import type { ContainerStatus } from '../../../shared/types'
 
 interface ClaudeChatProps {
@@ -37,6 +38,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 }) => {
   // Store selectors
   const updateTabAgent = useTabStore((state) => state.updateTabAgent)
+  const updateChatSessionAgent = useTabStore((state) => state.updateChatSessionAgent)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const useDocker = useSettingsStore((state) => state.useDocker)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
@@ -85,7 +87,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     useDocker,
     onUserMessage,
     onUpdateTabAgent: updateTabAgent,
+    onUpdateSessionAgent: (newAgentId: string) => {
+      if (activeTabId && activeChatSession?.id) {
+        updateChatSessionAgent(activeTabId, activeChatSession.id, newAgentId)
+      }
+    },
     activeTabId,
+    activeChatSessionId: activeChatSession?.id,
     onContainerStatusUpdate: handleContainerStatusUpdate
   })
 
@@ -177,11 +185,64 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     return toolMap[toolName] || `Running ${toolName}`
   }
 
+  // State for new session creation
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
+
   // Handle chat session change
   const handleSessionChange = useCallback((sessionId: string) => {
     // Session change will trigger re-render with new agentId
     // The chat messages and state will automatically update
   }, [])
+
+  // Handle creating a new chat session with agent initialization
+  const handleCreateNewSession = useCallback(async () => {
+    if (!activeTabId || isCreatingSession) return
+
+    setIsCreatingSession(true)
+
+    try {
+      // Start a new agent first
+      const result = await window.electron.claude.start(workingDir, undefined, useDocker)
+
+      if (result.success && result.agentId) {
+        // Create the session with the initialized agent ID
+        const sessionId = generateId.tab()
+        const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
+        const chatSessions = tab?.chatSessions || []
+        const sessionNumber = chatSessions.length + 1
+
+        const newSession: ChatSession = {
+          id: sessionId,
+          title: `Chat ${sessionNumber}`,
+          agentId: result.agentId,
+          createdAt: Date.now(),
+          lastActive: Date.now()
+        }
+
+        // Add session to store
+        useTabStore.setState((state) => ({
+          tabs: state.tabs.map((t) => {
+            if (t.id !== activeTabId) return t
+            return {
+              ...t,
+              chatSessions: [...(t.chatSessions || []), newSession],
+              activeChatSessionId: sessionId
+            }
+          })
+        }))
+
+        handleSessionChange(sessionId)
+      } else {
+        console.error('Failed to start Claude agent:', result.error)
+        agent.addSystemMessage(`Failed to create new chat session: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Exception creating new session:', error)
+      agent.addSystemMessage('Failed to create new chat session')
+    } finally {
+      setIsCreatingSession(false)
+    }
+  }, [activeTabId, workingDir, useDocker, isCreatingSession, handleSessionChange, agent])
 
   // Handle mode cycling (Shift+Tab) and chat session switching (Cmd+[ / Cmd+])
   React.useEffect(() => {
@@ -244,8 +305,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
         e.stopPropagation()
-        const sessionId = useTabStore.getState().createChatSession(activeTabId)
-        handleSessionChange(sessionId)
+        handleCreateNewSession()
       }
 
       // Close current chat session with Cmd+W
@@ -261,7 +321,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         } else if (chatSessions.length === 1 && tab?.activeChatSessionId) {
           // Last session: clear messages and reset (create a fresh session)
           const currentSession = chatSessions[0]
-          if (currentSession && agent.currentAgentId) {
+          if (currentSession?.agentId) {
             agent.clearMessages(currentSession.agentId)
           }
         }
@@ -329,11 +389,23 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         </div>
       )}
 
+      {isCreatingSession && (
+        <div className="status-indicator thinking">
+          <span className="status-icon">✨</span>
+          <span className="status-text">Creating new chat session...</span>
+        </div>
+      )}
+
       {agent.error && <div className="error-message">Error: {agent.error}</div>}
 
       {/* Chat session tabs */}
       {activeTabId && (
-        <ChatSessionTabs tabId={activeTabId} onSessionChange={handleSessionChange} />
+        <ChatSessionTabs
+          tabId={activeTabId}
+          onSessionChange={handleSessionChange}
+          onCreateSession={handleCreateNewSession}
+          isCreatingSession={isCreatingSession}
+        />
       )}
 
       {/* Input box */}

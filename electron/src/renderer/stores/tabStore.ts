@@ -6,7 +6,7 @@ export type TabType = 'terminal' | 'claude-chat'
 export interface ChatSession {
   id: string
   title: string
-  agentId: string
+  agentId?: string // Optional - set after agent is initialized
   createdAt: number
   lastActive: number
 }
@@ -47,6 +47,7 @@ interface TabState {
   closeChatSession: (tabId: string, sessionId: string) => void
   setActiveChatSession: (tabId: string, sessionId: string) => void
   updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => void
+  updateChatSessionAgent: (tabId: string, sessionId: string, agentId: string) => void
   getActiveChatSession: (tabId: string) => ChatSession | undefined
 }
 
@@ -77,7 +78,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       chatSessions.push({
         id: sessionId,
         title: 'Chat 1',
-        agentId: agentId || generateId.tab(),
+        agentId: agentId, // Will be set after agent initialization (unless explicitly provided)
         createdAt: Date.now(),
         lastActive: Date.now()
       })
@@ -176,7 +177,6 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   createChatSession: (tabId: string) => {
     const sessionId = generateId.tab()
-    const agentId = generateId.tab()
 
     set((state) => ({
       tabs: state.tabs.map((tab) => {
@@ -187,7 +187,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         const newSession: ChatSession = {
           id: sessionId,
           title: `Chat ${sessionNumber}`,
-          agentId,
+          agentId: undefined, // Will be set after agent initialization
           createdAt: Date.now(),
           lastActive: Date.now()
         }
@@ -258,6 +258,22 @@ export const useTabStore = create<TabState>((set, get) => ({
           ...tab,
           chatSessions: chatSessions.map((s) =>
             s.id === sessionId ? { ...s, title } : s
+          ),
+        }
+      }),
+    }))
+  },
+
+  updateChatSessionAgent: (tabId: string, sessionId: string, agentId: string) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        return {
+          ...tab,
+          chatSessions: chatSessions.map((s) =>
+            s.id === sessionId ? { ...s, agentId } : s
           ),
         }
       }),

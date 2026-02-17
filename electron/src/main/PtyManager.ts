@@ -35,13 +35,17 @@ export class PtyManager extends EventEmitter {
     // Determine working directory
     const cwd = options.cwd || process.env.HOME || os.homedir()
 
-    // Spawn PTY
+    // Spawn PTY with Gemra environment variable for shell integration
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: options.cols,
       rows: options.rows,
       cwd,
-      env: { ...process.env, ...options.env } as Record<string, string>,
+      env: {
+        ...process.env,
+        ...options.env,
+        GEMRA_TERMINAL: '1',  // Enable shell integration
+      } as Record<string, string>,
     })
 
     // Store instance

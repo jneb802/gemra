@@ -16,7 +16,9 @@ interface UseClaudeAgentOptions {
   useDocker: boolean
   onUserMessage?: () => void
   onUpdateTabAgent: (tabId: string, agentId: string) => void
+  onUpdateSessionAgent: (agentId: string) => void
   activeTabId: string | null
+  activeChatSessionId?: string
   onContainerStatusUpdate: (status: string, error?: string) => void
 }
 
@@ -26,7 +28,9 @@ export function useClaudeAgent({
   useDocker,
   onUserMessage,
   onUpdateTabAgent,
+  onUpdateSessionAgent,
   activeTabId,
+  activeChatSessionId,
   onContainerStatusUpdate
 }: UseClaudeAgentOptions) {
   const { state: agentStatusState, actions: agentStatusActions } = useAgentStatus()
@@ -72,9 +76,14 @@ export function useClaudeAgent({
       if (result.success && result.agentId) {
         console.log('[useClaudeAgent] Agent initialized:', result.agentId)
 
-        // Update the tab with the new agent ID
+        // Update the tab with the new agent ID (for backwards compatibility)
         if (activeTabId) {
           onUpdateTabAgent(activeTabId, result.agentId)
+        }
+
+        // Update the chat session with the new agent ID
+        if (activeChatSessionId) {
+          onUpdateSessionAgent(result.agentId)
         }
 
         // Update ref
@@ -97,7 +106,9 @@ export function useClaudeAgent({
     workingDir,
     useDocker,
     onUpdateTabAgent,
+    onUpdateSessionAgent,
     activeTabId,
+    activeChatSessionId,
     onContainerStatusUpdate,
     agentStatusActions
   ])

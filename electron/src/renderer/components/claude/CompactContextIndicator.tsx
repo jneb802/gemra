@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { formatTokenCount } from '../../utils/tokenFormatting'
 
 interface CompactContextIndicatorProps {
   inputTokens: number
@@ -22,14 +23,6 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
   const maxTokens = MODEL_LIMITS[model] || 200000
   const totalTokens = inputTokens + outputTokens
   const percentage = Math.min((totalTokens / maxTokens) * 100, 100)
-
-  // Format large numbers (e.g., 50000 -> "50K")
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000) {
-      return `${Math.round(tokens / 1000)}K`
-    }
-    return tokens.toString()
-  }
 
   // Get color based on usage percentage
   const getColor = () => {
@@ -61,7 +54,7 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
       onMouseLeave={() => setShowTooltip(false)}
       title={`${totalTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens\nInput: ${inputTokens.toLocaleString()}\nOutput: ${outputTokens.toLocaleString()}`}
     >
-      <span>{formatTokens(totalTokens)}</span>
+      <span>{formatTokenCount(totalTokens)}</span>
 
       {/* Tooltip */}
       {showTooltip && (

@@ -1,4 +1,5 @@
 import React from 'react'
+import { formatTokenCount } from '../../utils/tokenFormatting'
 
 interface ContextTooltipProps {
   visible: boolean
@@ -17,13 +18,6 @@ export const ContextTooltip: React.FC<ContextTooltipProps> = ({
 
   const totalTokens = inputTokens + outputTokens
   const percentage = (totalTokens / maxTokens) * 100
-
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}K`
-    }
-    return tokens.toString()
-  }
 
   return (
     <div
@@ -48,7 +42,7 @@ export const ContextTooltip: React.FC<ContextTooltipProps> = ({
         {percentage.toFixed(1)}% context used
       </div>
       <div style={{ color: '#888' }}>
-        {formatTokens(totalTokens)} / {formatTokens(maxTokens)}
+        {formatTokenCount(totalTokens)} / {formatTokenCount(maxTokens)}
       </div>
     </div>
   )

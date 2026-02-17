@@ -80,6 +80,13 @@ export interface MessageMetadata {
 
   // Tool execution history
   toolCalls?: ToolCall[]     // All tool calls made during this turn
+
+  // Terminal block metadata (for block-based terminal)
+  exitCode?: number
+  duration?: number
+  workingDir?: string
+  isTerminalOutput?: boolean
+  status?: string
 }
 
 // Multimodal message content blocks
@@ -106,6 +113,7 @@ export interface ClaudeMessage {
   content: string | MessageContent[]  // Support both text-only and multimodal
   id: string
   metadata?: MessageMetadata // Per-turn metadata
+  timestamp?: number  // Optional timestamp for display
 }
 
 export interface ClaudeAgentInfo {
