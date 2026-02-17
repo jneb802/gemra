@@ -19,9 +19,11 @@ export class PtyManager extends EventEmitter {
   constructor() {
     super()
     // Start periodic cleanup of orphaned terminals
+    // unref() allows Node.js to exit even if this interval is still pending
     this.cleanupInterval = setInterval(() => {
       this.cleanupOrphanedTerminals()
     }, 5 * 60 * 1000) // Check every 5 minutes
+    this.cleanupInterval.unref()
   }
 
   /**
@@ -46,17 +48,23 @@ export class PtyManager extends EventEmitter {
       console.error(`Terminal ${id} not found`)
       return null
     }
-    // Update last activity timestamp
-    this.lastActivity.set(id, Date.now())
     return terminal
+  }
+
+  private touchActivity(id: string): void {
+    this.lastActivity.set(id, Date.now())
   }
 
   /**
    * Spawn a new PTY instance
    */
   spawn(id: string, options: PtyOptions): { pid: number } {
+    if (this.terminals.has(id)) {
+      throw new Error(`Terminal ${id} already exists`)
+    }
+
     // Determine shell
-    const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh')
+    const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/sh')
 
     // Determine working directory
     const cwd = options.cwd || process.env.HOME || os.homedir()
@@ -107,6 +115,7 @@ export class PtyManager extends EventEmitter {
     const terminal = this.getTerminal(id)
     if (!terminal) return false
 
+    this.touchActivity(id)
     terminal.pty.write(data)
     return true
   }
@@ -118,6 +127,7 @@ export class PtyManager extends EventEmitter {
     const terminal = this.getTerminal(id)
     if (!terminal) return false
 
+    this.touchActivity(id)
     terminal.pty.resize(cols, rows)
     return true
   }
