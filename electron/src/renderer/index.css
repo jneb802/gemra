@@ -695,46 +695,47 @@ code {
   color: var(--git-deletion);
 }
 
-/* Git status chips - connected design */
+/* Git status chips - connected design matching status-chip style */
 .git-status-chips {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--bg-active);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-user-message);
 }
 
 .git-chip {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: var(--spacing-xs) var(--spacing-sm);
   background-color: transparent;
   border: none;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background-color 0.15s ease;
   white-space: nowrap;
 }
 
 .git-chip:hover:not(:disabled) {
-  background-color: var(--bg-hover);
+  background-color: var(--bg-active);
 }
 
 .git-chip:disabled {
   cursor: default;
-  opacity: 1;
 }
 
 .git-chip-branch {
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--bg-active);
 }
 
 .git-chip-icon {
   flex-shrink: 0;
+  font-size: var(--font-size-base);
+  line-height: 1;
 }
 
 .git-chip-branch .git-chip-icon {
@@ -746,7 +747,7 @@ code {
 }
 
 .git-chip-text {
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .git-chip-branch-name {
@@ -754,7 +755,7 @@ code {
 }
 
 .git-chip-separator {
-  color: var(--text-tertiary);
+  color: var(--text-primary);
 }
 
 .git-chip-additions {

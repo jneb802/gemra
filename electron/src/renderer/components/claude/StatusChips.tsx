@@ -46,13 +46,6 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
     })
   }
 
-  // Format git stats
-  const formatGitStats = (stats: GitStats): string => {
-    return `${stats.filesChanged} • +${stats.insertions} -${stats.deletions}`
-  }
-
-  const hasGitChanges = gitStats.filesChanged > 0
-
   return (
     <div className="status-chips-container">
       <StatusChip
@@ -61,18 +54,64 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
         title={`Working directory: ${workingDir}\nClick to copy full path`}
       />
 
-      <StatusChip
-        text={gitBranch}
-        onClick={onBranchClick}
-        title={`Current branch: ${gitBranch}\nClick to checkout another branch`}
-      />
+      {/* Git status - connected chips */}
+      <div className="git-status-chips">
+        {/* Left chip: Git branch */}
+        <button
+          onClick={onBranchClick}
+          className="git-chip git-chip-branch"
+          title={`Current branch: ${gitBranch}\nClick to checkout another branch`}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="git-chip-icon"
+          >
+            <circle cx="3" cy="3" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <circle cx="13" cy="13" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <circle cx="13" cy="3" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <path d="M3 5 L3 11 Q3 13 5 13 L11 13" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <path d="M13 5 L13 11" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
+          <span className="git-chip-text git-chip-branch-name">{gitBranch}</span>
+        </button>
 
-      {hasGitChanges && (
-        <StatusChip
-          text={formatGitStats(gitStats)}
+        {/* Right chip: File changes */}
+        <button
+          className="git-chip git-chip-files"
           title={`Uncommitted changes:\n${gitStats.filesChanged} files changed\n${gitStats.insertions} insertions\n${gitStats.deletions} deletions`}
-        />
-      )}
+          disabled
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="git-chip-icon"
+          >
+            <path
+              d="M3 2 L3 14 L13 14 L13 6 L9 2 L3 2 Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+            />
+            <path
+              d="M9 2 L9 6 L13 6"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+            />
+          </svg>
+          <span className="git-chip-text">
+            {gitStats.filesChanged}
+          </span>
+          <span className="git-chip-separator">•</span>
+          <span className="git-chip-additions">+{gitStats.insertions}</span>
+          <span className="git-chip-deletions">-{gitStats.deletions}</span>
+        </button>
+      </div>
 
       <ContainerStatusChip
         status={containerStatus}
