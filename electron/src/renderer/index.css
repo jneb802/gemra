@@ -718,17 +718,19 @@ code {
 
 .input-textarea {
   flex: 1;
-  min-height: 80px;
-  padding: 10px var(--spacing-md);
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  min-height: 24px;
+  max-height: 40vh;
+  padding: 8px;
+  padding-left: 8px;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-size-base);
   resize: none;
   outline: none;
-  transition: border-color 0.2s ease;
+  line-height: 1.5;
 }
 
 .input-box-controls {
