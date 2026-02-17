@@ -26,16 +26,16 @@ export function TabBar({ onNewTab, onCloseTab }: TabBarProps) {
             onClose={() => onCloseTab(tab.id)}
           />
         ))}
-      </div>
 
-      {/* New tab button */}
-      <button
-        onClick={onNewTab}
-        title="New Tab"
-        className="tab-bar-new-button"
-      >
-        <Plus size={16} color="#b0b0b0" />
-      </button>
+        {/* New tab button */}
+        <button
+          onClick={onNewTab}
+          title="New Tab"
+          className="tab-bar-new-button"
+        >
+          <Plus size={16} color="#b0b0b0" />
+        </button>
+      </div>
     </div>
   )
 }

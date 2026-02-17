@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
+import { ChatSessionTabs } from './ChatSessionTabs'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
@@ -26,7 +27,7 @@ interface ClaudeChatProps {
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
 export const ClaudeChat: React.FC<ClaudeChatProps> = ({
-  agentId,
+  agentId: propAgentId,
   workingDir,
   onUserMessage,
   onCreateProject,
@@ -39,6 +40,15 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const activeTabId = useTabStore((state) => state.activeTabId)
   const useDocker = useSettingsStore((state) => state.useDocker)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
+
+  // Get active chat session
+  const activeChatSession = useTabStore((state) => {
+    if (!activeTabId) return undefined
+    return state.getActiveChatSession(activeTabId)
+  })
+
+  // Use active chat session's agentId, fallback to prop agentId for backwards compatibility
+  const agentId = activeChatSession?.agentId || propAgentId
 
   // Get messages from store (use agentId if available, otherwise empty array)
   const messages = useClaudeChatStore((state) =>
@@ -167,9 +177,16 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     return toolMap[toolName] || `Running ${toolName}`
   }
 
-  // Handle mode cycling (Shift+Tab)
+  // Handle chat session change
+  const handleSessionChange = useCallback((sessionId: string) => {
+    // Session change will trigger re-render with new agentId
+    // The chat messages and state will automatically update
+  }, [])
+
+  // Handle mode cycling (Shift+Tab) and chat session switching (Cmd+[ / Cmd+])
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Mode cycling with Shift+Tab
       if (e.key === 'Tab' && e.shiftKey) {
         e.preventDefault()
 
@@ -182,11 +199,58 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
           setAgentConfig(agent.currentAgentId, { mode: nextMode })
         }
       }
+
+      // Chat session navigation with Cmd+[ / Cmd+]
+      if (activeTabId && (e.metaKey || e.ctrlKey)) {
+        const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
+        const chatSessions = tab?.chatSessions || []
+
+        if (chatSessions.length > 1) {
+          const currentIndex = chatSessions.findIndex((s) => s.id === tab?.activeChatSessionId)
+
+          if (e.key === '[') {
+            // Previous session
+            e.preventDefault()
+            const prevIndex = currentIndex > 0 ? currentIndex - 1 : chatSessions.length - 1
+            const prevSession = chatSessions[prevIndex]
+            if (prevSession) {
+              useTabStore.getState().setActiveChatSession(activeTabId, prevSession.id)
+            }
+          } else if (e.key === ']') {
+            // Next session
+            e.preventDefault()
+            const nextIndex = (currentIndex + 1) % chatSessions.length
+            const nextSession = chatSessions[nextIndex]
+            if (nextSession) {
+              useTabStore.getState().setActiveChatSession(activeTabId, nextSession.id)
+            }
+          }
+        }
+      }
+
+      // New chat session with Cmd+T
+      if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault()
+        const sessionId = useTabStore.getState().createChatSession(activeTabId)
+        handleSessionChange(sessionId)
+      }
+
+      // Close current chat session with Cmd+W
+      if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 'w') {
+        const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
+        const chatSessions = tab?.chatSessions || []
+
+        // Only handle if there are multiple chat sessions (don't close the last one)
+        if (chatSessions.length > 1 && tab?.activeChatSessionId) {
+          e.preventDefault()
+          useTabStore.getState().closeChatSession(activeTabId, tab.activeChatSessionId)
+        }
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [agentConfig.mode, agent.currentAgentId, setAgentConfig])
+  }, [agentConfig.mode, agent.currentAgentId, setAgentConfig, activeTabId, handleSessionChange])
 
   return (
     <div className="claude-chat">
@@ -245,6 +309,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       )}
 
       {agent.error && <div className="error-message">Error: {agent.error}</div>}
+
+      {/* Chat session tabs */}
+      {activeTabId && (
+        <ChatSessionTabs tabId={activeTabId} onSessionChange={handleSessionChange} />
+      )}
 
       {/* Input box */}
       <InputBox

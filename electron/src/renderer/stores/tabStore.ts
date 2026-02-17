@@ -3,13 +3,23 @@ import { generateId } from '../../shared/utils/id'
 
 export type TabType = 'terminal' | 'claude-chat'
 
+export interface ChatSession {
+  id: string
+  title: string
+  agentId: string
+  createdAt: number
+  lastActive: number
+}
+
 export interface Tab {
   id: string
   title: string
   isActive: boolean
   type: TabType
-  agentId?: string // For Claude chat tabs
+  agentId?: string // For Claude chat tabs (deprecated, use chatSessions)
   workingDir?: string // For Claude chat tabs
+  chatSessions?: ChatSession[] // Multiple chat sessions per tab
+  activeChatSessionId?: string | null // Currently active chat session
 }
 
 export interface CreateTabOptions {
@@ -31,6 +41,13 @@ interface TabState {
   updateTabAgent: (id: string, agentId: string) => void
   getActiveTab: () => Tab | undefined
   getTabByIndex: (index: number) => Tab | undefined
+
+  // Chat session actions
+  createChatSession: (tabId: string) => string
+  closeChatSession: (tabId: string, sessionId: string) => void
+  setActiveChatSession: (tabId: string, sessionId: string) => void
+  updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => void
+  getActiveChatSession: (tabId: string) => ChatSession | undefined
 }
 
 let tabCounter = 0
@@ -44,13 +61,38 @@ export const useTabStore = create<TabState>((set, get) => ({
     const id = generateId.tab()
     tabCounter++
 
+    // Format directory title (last 2 segments)
+    let title = type === 'claude-chat' ? `Claude ${tabCounter}` : `Shell ${tabCounter}`
+    if (type === 'claude-chat' && workingDir) {
+      const parts = workingDir.split('/').filter(Boolean)
+      title = parts.slice(-2).join('/')
+    }
+
+    // Create initial chat session for claude-chat tabs
+    const chatSessions: ChatSession[] = []
+    let activeChatSessionId: string | null = null
+
+    if (type === 'claude-chat') {
+      const sessionId = generateId.tab()
+      chatSessions.push({
+        id: sessionId,
+        title: 'Chat 1',
+        agentId: agentId || generateId.tab(),
+        createdAt: Date.now(),
+        lastActive: Date.now()
+      })
+      activeChatSessionId = sessionId
+    }
+
     const newTab: Tab = {
       id,
-      title: type === 'claude-chat' ? `Claude ${tabCounter}` : `Shell ${tabCounter}`,
+      title,
       isActive: true,
       type,
       ...(agentId && { agentId }),
       ...(workingDir && { workingDir }),
+      chatSessions,
+      activeChatSessionId,
     }
 
     set((state) => ({
@@ -130,5 +172,102 @@ export const useTabStore = create<TabState>((set, get) => ({
   getTabByIndex: (index: number) => {
     const state = get()
     return state.tabs[index]
+  },
+
+  createChatSession: (tabId: string) => {
+    const sessionId = generateId.tab()
+    const agentId = generateId.tab()
+
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        const sessionNumber = chatSessions.length + 1
+        const newSession: ChatSession = {
+          id: sessionId,
+          title: `Chat ${sessionNumber}`,
+          agentId,
+          createdAt: Date.now(),
+          lastActive: Date.now()
+        }
+
+        return {
+          ...tab,
+          chatSessions: [...chatSessions, newSession],
+          activeChatSessionId: sessionId,
+        }
+      }),
+    }))
+
+    return sessionId
+  },
+
+  closeChatSession: (tabId: string, sessionId: string) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        const sessionIndex = chatSessions.findIndex((s) => s.id === sessionId)
+        if (sessionIndex === -1) return tab
+
+        const newSessions = chatSessions.filter((s) => s.id !== sessionId)
+
+        // If closing the active session, activate another
+        let newActiveSessionId = tab.activeChatSessionId
+        if (sessionId === tab.activeChatSessionId && newSessions.length > 0) {
+          const newActiveIndex = Math.max(0, sessionIndex - 1)
+          newActiveSessionId = newSessions[newActiveIndex]?.id || null
+        }
+
+        return {
+          ...tab,
+          chatSessions: newSessions,
+          activeChatSessionId: newActiveSessionId,
+        }
+      }),
+    }))
+  },
+
+  setActiveChatSession: (tabId: string, sessionId: string) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        // Update lastActive timestamp
+        return {
+          ...tab,
+          activeChatSessionId: sessionId,
+          chatSessions: chatSessions.map((s) =>
+            s.id === sessionId ? { ...s, lastActive: Date.now() } : s
+          ),
+        }
+      }),
+    }))
+  },
+
+  updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        return {
+          ...tab,
+          chatSessions: chatSessions.map((s) =>
+            s.id === sessionId ? { ...s, title } : s
+          ),
+        }
+      }),
+    }))
+  },
+
+  getActiveChatSession: (tabId: string) => {
+    const state = get()
+    const tab = state.tabs.find((t) => t.id === tabId)
+    if (!tab || !tab.activeChatSessionId || !tab.chatSessions) return undefined
+    return tab.chatSessions.find((s) => s.id === tab.activeChatSessionId)
   },
 }))

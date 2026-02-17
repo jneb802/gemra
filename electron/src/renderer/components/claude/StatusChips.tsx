@@ -1,5 +1,4 @@
 import React from 'react'
-import { StatusChip } from './StatusChip'
 import { ContainerStatusChip } from './ContainerStatusChip'
 import { Tooltip } from '../common/Tooltip'
 import type { ContainerStatus } from '../../../shared/types'
@@ -22,7 +21,7 @@ interface StatusChipsProps {
 }
 
 export const StatusChips: React.FC<StatusChipsProps> = ({
-  workingDir,
+  workingDir, // Kept for backwards compatibility but no longer displayed
   gitBranch,
   gitStats,
   containerStatus,
@@ -31,32 +30,8 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
   onContainerToggle,
   dangerouslySkipPermissions = false,
 }) => {
-  // Format directory to show last two segments
-  const formatDirectory = (path: string): string => {
-    const segments = path.split('/').filter(Boolean)
-    if (segments.length <= 2) {
-      return segments.join('/')
-    }
-    return segments.slice(-2).join('/')
-  }
-
-  // Copy full path to clipboard
-  const handleDirectoryClick = () => {
-    navigator.clipboard.writeText(workingDir).then(() => {
-      console.log('[StatusChips] Copied directory to clipboard:', workingDir)
-    }).catch((err) => {
-      console.error('[StatusChips] Failed to copy directory:', err)
-    })
-  }
-
   return (
     <div className="status-chips-container">
-      <StatusChip
-        text={formatDirectory(workingDir)}
-        onClick={handleDirectoryClick}
-        title={`Working directory: ${workingDir}\nClick to copy full path`}
-      />
-
       {/* Danger chip - shown when dangerously skip permissions is enabled */}
       {dangerouslySkipPermissions && (
         <Tooltip content="⚠️ Dangerously Skip Permissions mode enabled\nAll commands execute without approval prompts">

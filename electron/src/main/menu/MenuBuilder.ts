@@ -50,13 +50,6 @@ export class MenuBuilder {
         label: 'Shell',
         submenu: [
           {
-            label: 'New Tab',
-            accelerator: 'CmdOrCtrl+T',
-            click: () => {
-              this.mainWindow.webContents.send('menu:new-tab')
-            },
-          },
-          {
             label: 'New Terminal Tab',
             accelerator: 'CmdOrCtrl+Shift+T',
             click: () => {
@@ -68,13 +61,6 @@ export class MenuBuilder {
             accelerator: 'CmdOrCtrl+Shift+L',
             click: () => {
               this.mainWindow.webContents.send('menu:new-litellm-chat')
-            },
-          },
-          {
-            label: 'Close Tab',
-            accelerator: 'CmdOrCtrl+W',
-            click: () => {
-              this.mainWindow.webContents.send('menu:close-tab')
             },
           },
           { type: 'separator' },
