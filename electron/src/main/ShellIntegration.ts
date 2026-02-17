@@ -87,7 +87,7 @@ export class ShellIntegrationManager {
     if (!fs.existsSync(rcPath)) return false
 
     const content = fs.readFileSync(rcPath, 'utf-8')
-    return content.includes('Gemra') && content.includes('shell integration')
+    return content.includes('# Gemra Terminal - Shell integration')
   }
 
   /**

@@ -8,7 +8,6 @@ import { useClaudeChatStore } from '../../stores/claudeChatStore'
 import { TerminalBlockContent } from './TerminalBlockContent'
 import { BlockActions } from './BlockActions'
 import { TerminalInput } from './TerminalInput'
-import { BlockNavigation } from './BlockNavigation'
 import { AIPromptModal } from './AIPromptModal'
 import { useBlockAI } from './useBlockAI'
 import { showToast } from '../Toast/ToastContainer'
@@ -33,10 +32,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const [gitStats, setGitStats] = useState({ filesChanged: 0, insertions: 0, deletions: 0 })
   const [shellIntegrationActive, setShellIntegrationActive] = useState(false)
   const [useFallback, setUseFallback] = useState(false)
-  const [selectedBlockId, setSelectedBlockId] = useState<string>()
-  const [blockFilter, setBlockFilter] = useState<'all' | 'failed' | 'success'>('all')
   const [autoInstallAttempted, setAutoInstallAttempted] = useState(false)
-  const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   const prevBlockCountRef = useRef(0)
 
@@ -56,7 +52,6 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const activeTabId = useTabStore(s => s.activeTabId)
   const createTab = useTabStore(s => s.createTab)
   const setActiveTab = useTabStore(s => s.setActiveTab)
-  const getActiveChatSession = useTabStore(s => s.getActiveChatSession)
   const addMessage = useClaudeChatStore(s => s.addMessage)
 
   // Check if this terminal is in the active tab
@@ -234,30 +229,6 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const activeBlock = getActiveBlock(terminalId)
   const commandRunning = activeBlock?.status === 'running'
 
-  // Navigate to a specific block
-  const handleNavigateToBlock = useCallback((blockId: string) => {
-    setSelectedBlockId(blockId)
-    const element = blockRefs.current.get(blockId)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      // Highlight briefly
-      element.style.boxShadow = '0 0 0 2px var(--button-primary)'
-      setTimeout(() => {
-        element.style.boxShadow = ''
-      }, 1000)
-    }
-  }, [])
-
-  // Filter blocks
-  const filteredBlocks = blocks.filter(block => {
-    if (blockFilter === 'failed') {
-      return block.exitCode !== undefined && block.exitCode !== 0
-    } else if (blockFilter === 'success') {
-      return block.exitCode === 0
-    }
-    return true
-  })
-
   // Auto-install shell integration on first launch
   useEffect(() => {
     if (autoInstallAttempted) return
@@ -316,49 +287,30 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   return (
     <div className="block-terminal">
 
-      {/* Block navigation (search & filter) */}
-      {blocks.length > 0 && (
-        <BlockNavigation
-          blocks={blocks}
-          currentBlockId={selectedBlockId}
-          onNavigate={handleNavigateToBlock}
-          onFilter={setBlockFilter}
-        />
-      )}
-
       {/* Block list - always rendered to maintain layout */}
       <div className="terminal-blocks-container" ref={blocksContainerRef}>
-        {filteredBlocks.length > 0 ? (
-          filteredBlocks.map((block, index) => {
-            const prevBlock = index > 0 ? filteredBlocks[index - 1] : null
-            const isGrouped = prevBlock?.type === block.type
+        {blocks.map((block, index) => {
+          const prevBlock = index > 0 ? blocks[index - 1] : null
+          const isGrouped = prevBlock?.type === block.type
 
-            return (
-              <div
-                key={block.id}
-                ref={(el) => {
-                  if (el) blockRefs.current.set(block.id, el)
-                }}
-                className="terminal-block-wrapper block-fade-in"
-              >
-                <TerminalBlockContent block={block} isGrouped={isGrouped} />
-                <BlockActions
-                  block={block}
-                  onRerun={handleRerunCommand}
-                  onToggleCollapse={() => toggleBlockCollapse(terminalId, block.id)}
-                  onExplainError={() => handleExplainError(block)}
-                  onFixCommand={() => handleFixCommand(block)}
-                  onSendToChat={() => handleSendToChat(block)}
-                  onAnalyzeOutput={() => handleAnalyzeOutput(block)}
-                />
-              </div>
-            )
-          })
-        ) : blocks.length > 0 ? (
-          <div className="terminal-blocks-empty">
-            <p>No blocks match the current filter</p>
-          </div>
-        ) : null}
+          return (
+            <div
+              key={block.id}
+              className="terminal-block-wrapper block-fade-in"
+            >
+              <TerminalBlockContent block={block} isGrouped={isGrouped} />
+              <BlockActions
+                block={block}
+                onRerun={handleRerunCommand}
+                onToggleCollapse={() => toggleBlockCollapse(terminalId, block.id)}
+                onExplainError={() => handleExplainError(block)}
+                onFixCommand={() => handleFixCommand(block)}
+                onSendToChat={() => handleSendToChat(block)}
+                onAnalyzeOutput={() => handleAnalyzeOutput(block)}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* Session tabs - positioned above terminal input */}
@@ -381,32 +333,26 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
         prompt={aiPrompt}
         onClose={() => setAiModalOpen(false)}
         onSendToChat={() => {
-          // Find or create a Claude chat tab
-          let chatTab = tabs.find(tab => tab.type === 'claude-chat')
+          // Find or create an agent-chat tab
+          let chatTab = tabs.find(tab => tab.type === 'agent-chat')
 
           if (!chatTab) {
-            // Create a new Claude chat tab
             const newTabId = createTab({
-              type: 'claude-chat',
+              type: 'agent-chat',
               workingDir: currentWorkingDir
             })
-            chatTab = tabs.find(tab => tab.id === newTabId)
+            chatTab = useTabStore.getState().tabs.find(tab => tab.id === newTabId)
           }
 
           if (chatTab) {
-            // Get the active chat session for this tab
-            const session = getActiveChatSession(chatTab.id)
-
-            if (session?.agentId) {
-              // Add the message to the chat
-              addMessage(session.agentId, {
+            if (chatTab.agentId) {
+              addMessage(chatTab.agentId, {
                 id: `msg-${Date.now()}`,
                 role: 'user',
                 content: aiPrompt,
                 timestamp: Date.now(),
               })
 
-              // Switch to the chat tab
               setActiveTab(chatTab.id)
               showToast('Sent to chat tab')
             } else {

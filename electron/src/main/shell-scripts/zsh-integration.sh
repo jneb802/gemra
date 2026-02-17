@@ -7,6 +7,10 @@ if [[ -z "$GEMRA_TERMINAL" ]]; then
   return
 fi
 
+# Prevent double-loading if sourced multiple times
+[[ -n "$GEMRA_INTEGRATION_LOADED" ]] && return
+typeset -g GEMRA_INTEGRATION_LOADED=1
+
 # Mark prompt start
 gemra_precmd() {
   local exit_code=$?

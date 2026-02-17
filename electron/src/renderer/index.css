@@ -564,6 +564,51 @@ code {
   background-color: var(--bg-secondary);
 }
 
+.tab-bar-new-button-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.tab-bar-new-dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.tab-bar-new-dropdown {
+  position: absolute;
+  top: calc(var(--tab-height) - 2px);
+  left: 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  min-width: 140px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.tab-bar-new-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.tab-bar-new-dropdown-item:hover {
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+}
+
 /* Git status chips - connected design matching status-chip style */
 .git-status-chips {
   display: inline-flex;
@@ -1996,141 +2041,6 @@ code {
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
-}
-
-/* ==========================================================================
-   Block Navigation (Search & Filter)
-   ========================================================================== */
-
-.block-navigation-toggle {
-  position: fixed;
-  top: 60px;
-  right: var(--spacing-lg);
-  z-index: 100;
-}
-
-.nav-toggle-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-size-base);
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.nav-toggle-button:hover {
-  background-color: var(--bg-active);
-  border-color: var(--button-primary);
-}
-
-.block-navigation {
-  position: fixed;
-  top: 60px;
-  right: var(--spacing-lg);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-}
-
-.nav-search {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.nav-search-input {
-  width: 250px;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  outline: none;
-}
-
-.nav-search-input:focus {
-  border-color: var(--button-primary);
-}
-
-.nav-search-results {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.nav-filters {
-  display: flex;
-  gap: 4px;
-  padding-left: var(--spacing-sm);
-  border-left: 1px solid var(--border-color);
-}
-
-.nav-filter-button {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.nav-filter-button:hover {
-  background-color: var(--bg-active);
-}
-
-.nav-filter-button.active {
-  background-color: var(--button-primary);
-  border-color: var(--button-primary);
-  color: white;
-}
-
-.nav-actions {
-  display: flex;
-  gap: 4px;
-  padding-left: var(--spacing-sm);
-  border-left: 1px solid var(--border-color);
-}
-
-.nav-action-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.nav-action-button:hover:not(:disabled) {
-  background-color: var(--bg-active);
-  border-color: var(--button-primary);
-}
-
-.nav-action-button:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 /* Collapsed output styling */
