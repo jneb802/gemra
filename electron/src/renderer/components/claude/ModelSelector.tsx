@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Tooltip } from '../common/Tooltip'
 
 interface ModelSelectorProps {
   model: string
@@ -55,11 +56,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         display: 'inline-block',
       }}
     >
-      <button
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        title={`Model: ${currentModel.name}`}
-        style={{
+      <Tooltip content={`Model: ${currentModel.name}\n${currentModel.description}\nClick to change model`}>
+        <button
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          disabled={disabled}
+          style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
@@ -88,6 +89,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         <span>{currentModel.name}</span>
         <span style={{ fontSize: '10px', marginLeft: '2px' }}>▾</span>
       </button>
+      </Tooltip>
 
       {isOpen && (
         <div

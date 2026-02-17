@@ -1,4 +1,5 @@
 import React from 'react'
+import { Tooltip } from '../common/Tooltip'
 
 interface StatusChipProps {
   icon?: string
@@ -10,14 +11,19 @@ interface StatusChipProps {
 export const StatusChip: React.FC<StatusChipProps> = ({ icon, text, onClick, title }) => {
   const isClickable = !!onClick
 
-  return (
+  const chip = (
     <div
       onClick={onClick}
-      title={title}
       className={`status-chip ${isClickable ? 'clickable' : ''}`}
     >
       {icon && <span className="status-chip-icon">{icon}</span>}
       <span>{text}</span>
     </div>
   )
+
+  if (title) {
+    return <Tooltip content={title}>{chip}</Tooltip>
+  }
+
+  return chip
 }

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Tooltip } from '../common/Tooltip'
 import type { ContainerStatus } from '../../../shared/types'
 
 interface ContainerStatusChipProps {
@@ -62,10 +63,9 @@ export const ContainerStatusChip: React.FC<ContainerStatusChipProps> = ({
     return status === 'disabled' || status === 'running' || status === 'error'
   }
 
-  return (
+  const chip = (
     <div
       onClick={isClickable() ? onClick : undefined}
-      title={error || `Click to toggle container mode`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -123,4 +123,7 @@ export const ContainerStatusChip: React.FC<ContainerStatusChipProps> = ({
       <span>{getLabel()}</span>
     </div>
   )
+
+  const tooltipContent = error || 'Click to toggle container mode'
+  return <Tooltip content={tooltipContent}>{chip}</Tooltip>
 }

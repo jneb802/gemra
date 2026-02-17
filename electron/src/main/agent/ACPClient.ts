@@ -20,6 +20,7 @@ export class ACPClient extends EventEmitter {
   private logger = new Logger('ACPClient')
   private isActive = false
   private currentPhase: 'idle' | 'thinking' | 'streaming' | 'tool_execution' = 'idle'
+  private lastStreamedText = '' // Track accumulated text for delta calculation
 
   constructor(private options: ACPClientOptions) {
     super()
@@ -241,21 +242,40 @@ export class ACPClient extends EventEmitter {
           this.emit('agentStatus', { type: 'streaming' })
         }
 
-        // Extract text from content blocks
+        // First, accumulate all text blocks in this message
+        let currentAccumulatedText = ''
         for (const block of message.content) {
           if (block.type === 'text' && block.text) {
+            currentAccumulatedText += block.text
+          }
+        }
+
+        // Calculate delta: SDK sends accumulated text, we only want the new characters
+        if (currentAccumulatedText) {
+          const delta = currentAccumulatedText.slice(this.lastStreamedText.length)
+
+          // Only emit if there's new content
+          if (delta) {
             const acpMessage: ACPMessage = {
               jsonrpc: '2.0',
               method: 'session/update',
               params: {
                 update: {
                   sessionUpdate: 'agent_message_chunk',
-                  content: { type: 'text', text: block.text },
+                  content: { type: 'text', text: delta },
                 },
               },
             }
             this.emit('message', acpMessage)
-          } else if (block.type === 'tool_use') {
+
+            // Update our tracker with the accumulated text
+            this.lastStreamedText = currentAccumulatedText
+          }
+        }
+
+        // Handle tool_use blocks
+        for (const block of message.content) {
+          if (block.type === 'tool_use') {
             // Tool execution within message
             this.currentPhase = 'tool_execution'
             this.emit('toolExecution', {
@@ -286,6 +306,9 @@ export class ACPClient extends EventEmitter {
         },
       }
       this.emit('message', acpMessage)
+
+      // Reset streaming tracker for next turn
+      this.lastStreamedText = ''
 
       // Transition to idle
       this.currentPhase = 'idle'
@@ -338,6 +361,9 @@ export class ACPClient extends EventEmitter {
     }
 
     this.logger.log('Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
+
+    // Reset streaming tracker for new turn
+    this.lastStreamedText = ''
 
     // Transition to thinking phase when sending
     this.currentPhase = 'thinking'

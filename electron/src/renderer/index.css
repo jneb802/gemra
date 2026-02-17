@@ -234,7 +234,7 @@ code {
 
 /* Message container */
 .message {
-  width: 100%;
+  max-width: var(--message-max-width);
   margin-bottom: var(--message-spacing-default);
   padding: var(--message-padding-vertical) var(--message-padding-horizontal);
   border-radius: var(--radius-xl);
@@ -248,11 +248,13 @@ code {
 /* User message styling */
 .message-user {
   background-color: var(--bg-user-message);
+  margin-left: auto; /* Right-align user messages like iMessage */
 }
 
 /* Assistant message styling - minimal */
 .message-assistant {
   background-color: transparent;
+  margin-right: auto; /* Left-align assistant messages */
 }
 
 /* System message styling */

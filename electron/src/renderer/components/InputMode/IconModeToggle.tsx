@@ -2,6 +2,7 @@ import React from 'react'
 import type { InputMode } from '../../types/inputMode'
 import { BashIcon } from '../icons/BashIcon'
 import { GemIcon } from '../icons/GemIcon'
+import { Tooltip } from '../common/Tooltip'
 
 interface IconModeToggleProps {
   mode: InputMode
@@ -43,11 +44,11 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
       }}
     >
       {/* Command button */}
-      <button
-        onClick={handleCommandClick}
-        disabled={disabled}
-        title="Command mode - Execute as shell command"
-        style={{
+      <Tooltip content="Command mode - Execute as shell command">
+        <button
+          onClick={handleCommandClick}
+          disabled={disabled}
+          style={{
           width: '32px',
           height: '32px',
           display: 'flex',
@@ -75,17 +76,20 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
       >
         <BashIcon size={18} color="#e0e0e0" />
       </button>
+      </Tooltip>
 
       {/* AI button */}
-      <button
-        onClick={handleAiClick}
-        disabled={disabled}
-        title={
+      <Tooltip
+        content={
           isAuto
             ? 'Auto mode - Detects command vs AI (click to switch to AI mode)'
             : 'AI mode - Send to Claude (click to switch to Auto mode)'
         }
-        style={{
+      >
+        <button
+          onClick={handleAiClick}
+          disabled={disabled}
+          style={{
           width: '32px',
           height: '32px',
           display: 'flex',
@@ -128,6 +132,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
       >
         <GemIcon size={18} color="currentColor" />
       </button>
+      </Tooltip>
     </div>
   )
 }
