@@ -211,10 +211,7 @@ export function useOSC133Parser({
     return () => {
       disposeOscHandler.dispose()
       disposeOsc7Handler.dispose()
-
-      // Restore original write
-      // Note: This is a bit hacky, in production we'd use a proper wrapper
-      // terminal.write = originalWrite
+      terminal.write = originalWrite
     }
   }, [terminal, terminalId, workingDir])
 

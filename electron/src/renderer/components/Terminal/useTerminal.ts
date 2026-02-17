@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -119,10 +119,11 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Write data to terminal
-  const write = (data: string) => {
+  // Write data to terminal — stable reference via useCallback so effects that
+  // depend on `write` don't re-subscribe on every render
+  const write = useCallback((data: string) => {
     terminalRef.current?.write(data)
-  }
+  }, [])
 
   // Focus terminal
   const focus = () => {
