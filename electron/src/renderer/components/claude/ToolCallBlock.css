@@ -1,16 +1,16 @@
 /* Tool Call Block Styles */
 
 .tool-call-block {
-  margin: 12px 0;
-  border-left: 3px solid var(--tool-border-color, #6b7280);
-  background: rgba(59, 130, 246, 0.05);
+  margin: 0;
+  border: 1px solid var(--border-color, #3e3e3e);
+  background: transparent;
   border-radius: 6px;
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .tool-call-block:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.02));
 }
 
 .tool-call-header {
@@ -28,12 +28,7 @@
 }
 
 .tool-call-header.clickable:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.tool-icon {
-  font-size: 16px;
-  line-height: 1;
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .tool-name {
@@ -110,15 +105,15 @@
   color: var(--text-primary, #1f2937);
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
   padding: 2px 6px;
   border-radius: 3px;
   word-break: break-all;
 }
 
 code.tool-param-value {
-  background: rgba(59, 130, 246, 0.1);
-  color: #2563eb;
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary, #d4d4d4);
 }
 
 .tool-output {
@@ -172,16 +167,17 @@ code.tool-param-value {
   padding: 4px 12px;
   font-size: 11px;
   font-weight: 500;
-  background: rgba(59, 130, 246, 0.1);
-  color: #2563eb;
-  border: none;
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+  color: var(--text-secondary, #888);
+  border: 1px solid var(--border-color, #3e3e3e);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .tool-output-toggle:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--bg-active, rgba(0, 0, 0, 0.08));
+  color: var(--text-primary, #d4d4d4);
 }
 
 .tool-error {
@@ -211,15 +207,15 @@ code.tool-param-value {
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .tool-call-block {
-    background: rgba(59, 130, 246, 0.1);
+    background: transparent;
   }
 
   .tool-call-block:hover {
-    background: rgba(59, 130, 246, 0.15);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.02));
   }
 
   .tool-call-header.clickable:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .tool-name {
@@ -227,13 +223,13 @@ code.tool-param-value {
   }
 
   .tool-param-value {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary, #f9fafb);
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    color: var(--text-primary, #d4d4d4);
   }
 
   code.tool-param-value {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    color: var(--text-primary, #d4d4d4);
   }
 
   .tool-output-content {
@@ -247,12 +243,13 @@ code.tool-param-value {
   }
 
   .tool-output-toggle {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    color: var(--text-secondary, #888);
   }
 
   .tool-output-toggle:hover {
-    background: rgba(59, 130, 246, 0.3);
+    background: var(--bg-active, rgba(255, 255, 255, 0.08));
+    color: var(--text-primary, #d4d4d4);
   }
 
   .tool-error-content {

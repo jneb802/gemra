@@ -156,13 +156,8 @@ function agentStatusReducer(state: AgentStatusState, action: AgentStatusAction):
 
       return {
         ...state,
-        activeToolCalls: newToolCalls,
-        currentTurnMetadata: state.currentTurnMetadata
-          ? {
-              ...state.currentTurnMetadata,
-              toolCalls: [...(state.currentTurnMetadata.toolCalls || []), action.payload]
-            }
-          : null
+        activeToolCalls: newToolCalls
+        // Note: Tool calls are now shown as separate messages, not in metadata
       }
     }
 
@@ -172,15 +167,8 @@ function agentStatusReducer(state: AgentStatusState, action: AgentStatusAction):
 
       return {
         ...state,
-        activeToolCalls: updatedToolCalls,
-        currentTurnMetadata: state.currentTurnMetadata
-          ? {
-              ...state.currentTurnMetadata,
-              toolCalls: (state.currentTurnMetadata.toolCalls || []).map((tc) =>
-                tc.id === action.payload.id ? action.payload : tc
-              )
-            }
-          : null
+        activeToolCalls: updatedToolCalls
+        // Note: Tool calls are now shown as separate messages, not in metadata
       }
     }
 

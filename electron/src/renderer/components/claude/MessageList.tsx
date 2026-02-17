@@ -68,13 +68,20 @@ export const MessageList: React.FC<MessageListProps> = ({
   // Auto-scroll to bottom when streaming or user hasn't manually scrolled
   useEffect(() => {
     if ((isStreaming || !isUserScrolling) && messages.length > 0 && listRef.current) {
-      listRef.current.scrollToRow({
-        index: messages.length - 1,
-        align: 'end',
-        behavior: 'smooth',
+      // Use requestAnimationFrame to ensure DOM updates are complete before scrolling
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (listRef.current) {
+            listRef.current.scrollToRow({
+              index: messages.length - 1,
+              align: 'end',
+              behavior: 'smooth',
+            })
+          }
+        })
       })
     }
-  }, [messages.length, isStreaming, isUserScrolling, listRef])
+  }, [messages.length, isStreaming, isUserScrolling])
 
   // Cleanup timeout on unmount
   useEffect(() => {

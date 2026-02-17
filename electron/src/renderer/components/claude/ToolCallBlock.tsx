@@ -244,12 +244,11 @@ export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ toolCall, isStream
   const canExpand = hasOutput || hasError
 
   return (
-    <div className="tool-call-block" style={{ borderLeftColor: color }}>
+    <div className="tool-call-block">
       <div
         className={`tool-call-header ${canExpand ? 'clickable' : ''}`}
         onClick={() => canExpand && setIsExpanded(!isExpanded)}
       >
-        <span className="tool-icon">{icon}</span>
         <span className="tool-name">{toolCall.name}</span>
         <div className="tool-header-right">
           {getStatusBadge()}

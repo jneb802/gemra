@@ -246,7 +246,8 @@ export function useClaudeAgent({
           totalDuration,
           inputTokens: data.usage.inputTokens,
           outputTokens: data.usage.outputTokens,
-          isComplete: true
+          isComplete: true,
+          toolCalls: Array.from(agentStatusStateRef.current.activeToolCalls.values())
         }
 
         // Attach metadata to last assistant message
@@ -303,6 +304,15 @@ export function useClaudeAgent({
 
       console.log('[useClaudeAgent] Tool started:', data.toolCall)
       agentStatusActionsRef.current.addToolCall(data.toolCall)
+
+      // Create a separate message for this tool call
+      addMessage(currentAgentIdRef.current, {
+        id: `tool-${data.toolCall.id}`,
+        role: 'tool',
+        content: '', // Empty content, the toolCall property has the data
+        timestamp: Date.now(),
+        toolCall: data.toolCall
+      })
     })
 
     // Listen for tool completed events
@@ -311,6 +321,11 @@ export function useClaudeAgent({
 
       console.log('[useClaudeAgent] Tool completed:', data.toolCall)
       agentStatusActionsRef.current.updateToolCall(data.toolCall)
+
+      // Update the tool message with completed data
+      updateMessage(currentAgentIdRef.current, `tool-${data.toolCall.id}`, {
+        toolCall: data.toolCall
+      })
     })
 
     // Listen for quest prompts (agent asking questions)

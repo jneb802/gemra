@@ -274,12 +274,26 @@ code {
   margin: var(--spacing-sm) 0;
 }
 
+/* Tool message styling - shown chronologically in timeline */
+.message-tool {
+  background-color: transparent;
+  margin-right: auto; /* Left-align like assistant messages */
+  max-width: var(--message-max-width);
+  margin-bottom: 8px; /* Compact spacing for tool calls */
+  padding: 4px 0; /* Minimal padding */
+}
+
 /* Message content */
 .message-content {
   font-size: var(--font-size-md);
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
+  color: var(--text-primary);
+}
+
+.message-content strong {
+  font-weight: 600;
   color: var(--text-primary);
 }
 

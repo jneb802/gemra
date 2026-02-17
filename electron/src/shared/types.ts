@@ -117,13 +117,14 @@ export interface ImageContent {
 export type MessageContent = TextContent | ImageContent
 
 export interface ClaudeMessage {
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   content: string | MessageContent[]  // Support both text-only and multimodal
   id: string
   metadata?: MessageMetadata // Per-turn metadata
   timestamp?: number  // Optional timestamp for display
   questPrompt?: QuestPrompt  // If this message is a question
   questResponse?: string | string[]  // User's answer (when filled)
+  toolCall?: ToolCall  // If this message represents a tool execution
 }
 
 export interface ClaudeAgentInfo {

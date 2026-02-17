@@ -24,6 +24,34 @@ const sanitizeContent = (content: string): string => {
     .trim()
 }
 
+// Parse markdown bold syntax and return JSX with <strong> tags
+const parseMarkdownBold = (text: string): React.ReactNode => {
+  // Match **text** or __text__ for bold
+  const boldRegex = /(\*\*|__)(.*?)\1/g
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = boldRegex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+
+    // Add bold text
+    parts.push(<strong key={match.index}>{match[2]}</strong>)
+
+    lastIndex = boldRegex.lastIndex
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+
+  return parts.length > 0 ? parts : text
+}
+
 export const MessageItem = ({
   ariaAttributes,
   index,
@@ -33,6 +61,20 @@ export const MessageItem = ({
   onRespondToQuest,
 }: RowComponentProps<MessageItemProps>) => {
   const message = messages[index]
+
+  // Handle tool call messages separately
+  if (message.role === 'tool' && message.toolCall) {
+    return (
+      <div style={style} {...ariaAttributes}>
+        <div className="message message-tool">
+          <ToolCallBlock
+            toolCall={message.toolCall}
+            isStreaming={message.toolCall.status === 'running'}
+          />
+        </div>
+      </div>
+    )
+  }
 
   // Determine if this message should be grouped with previous
   const isGroupedWithPrevious = index > 0 && messages[index].role === messages[index - 1].role
@@ -50,12 +92,15 @@ export const MessageItem = ({
 
   // Render message content (handles both string and multimodal)
   const renderContent = () => {
+    const isAssistant = message.role === 'assistant'
+
     if (typeof message.content === 'string') {
       const sanitized = sanitizeContent(message.content)
       // Don't render if content is empty after sanitization
       if (!sanitized) return null
 
-      return { text: <div className="message-content">{sanitized}</div>, images: [] }
+      const content = isAssistant ? parseMarkdownBold(sanitized) : sanitized
+      return { text: <div className="message-content">{content}</div>, images: [] }
     }
 
     // Multimodal content (array of blocks)
@@ -68,9 +113,10 @@ export const MessageItem = ({
         // Skip empty blocks after sanitization
         if (!sanitized) return
 
+        const content = isAssistant ? parseMarkdownBold(sanitized) : sanitized
         textBlocks.push(
           <div key={idx} style={{ marginBottom: textBlocks.length > 0 ? '8px' : 0 }}>
-            {sanitized}
+            {content}
           </div>
         )
       }
@@ -142,19 +188,6 @@ export const MessageItem = ({
         {!isQuestPrompt && message.role === 'user' && content && content.images.length > 0 && (
           <div className="message-attachments">
             {content.images}
-          </div>
-        )}
-
-        {/* Tool calls - show for assistant messages */}
-        {!isQuestPrompt && message.role === 'assistant' && metadata?.toolCalls && metadata.toolCalls.length > 0 && (
-          <div className="tool-calls-container">
-            {metadata.toolCalls.map((toolCall) => (
-              <ToolCallBlock
-                key={toolCall.id}
-                toolCall={toolCall}
-                isStreaming={!!isStreaming && toolCall.status === 'running'}
-              />
-            ))}
           </div>
         )}
 
