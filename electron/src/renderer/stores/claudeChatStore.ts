@@ -36,6 +36,7 @@ interface ClaudeChatState {
   getAgentConfig: (agentId: string) => AgentConfig
 
   removeAgent: (agentId: string) => void
+  cleanupOldAgents: (activeAgentIds: string[]) => void
 }
 
 const DEFAULT_CONFIG: AgentConfig = {
@@ -159,6 +160,28 @@ export const useClaudeChatStore = create<ClaudeChatState>((set, get) => ({
       messages.delete(agentId)
       tokenUsage.delete(agentId)
       agentConfig.delete(agentId)
+
+      return { messages, tokenUsage, agentConfig }
+    })
+  },
+
+  // Cleanup old agents to prevent memory leaks
+  cleanupOldAgents: (activeAgentIds: string[]) => {
+    set((state) => {
+      const messages = new Map(state.messages)
+      const tokenUsage = new Map(state.tokenUsage)
+      const agentConfig = new Map(state.agentConfig)
+
+      const activeSet = new Set(activeAgentIds)
+
+      // Remove agents that are no longer active
+      for (const agentId of messages.keys()) {
+        if (!activeSet.has(agentId)) {
+          messages.delete(agentId)
+          tokenUsage.delete(agentId)
+          agentConfig.delete(agentId)
+        }
+      }
 
       return { messages, tokenUsage, agentConfig }
     })

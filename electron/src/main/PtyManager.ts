@@ -12,6 +12,30 @@ interface PtyInstance {
 
 export class PtyManager extends EventEmitter {
   private terminals = new Map<string, PtyInstance>()
+  private lastActivity = new Map<string, number>()
+  private readonly MAX_IDLE_TIME = 30 * 60 * 1000 // 30 minutes
+  private cleanupInterval: NodeJS.Timeout | null = null
+
+  constructor() {
+    super()
+    // Start periodic cleanup of orphaned terminals
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupOrphanedTerminals()
+    }, 5 * 60 * 1000) // Check every 5 minutes
+  }
+
+  /**
+   * Cleanup orphaned or idle terminals
+   */
+  private cleanupOrphanedTerminals(): void {
+    const now = Date.now()
+    for (const [id, lastActive] of this.lastActivity) {
+      if (now - lastActive > this.MAX_IDLE_TIME) {
+        console.log(`Cleaning up orphaned terminal ${id} (idle for ${Math.round((now - lastActive) / 60000)} minutes)`)
+        this.kill(id)
+      }
+    }
+  }
 
   /**
    * Get a terminal instance by ID
@@ -22,6 +46,8 @@ export class PtyManager extends EventEmitter {
       console.error(`Terminal ${id} not found`)
       return null
     }
+    // Update last activity timestamp
+    this.lastActivity.set(id, Date.now())
     return terminal
   }
 
@@ -55,8 +81,12 @@ export class PtyManager extends EventEmitter {
       pid: ptyProcess.pid,
     })
 
+    // Initialize last activity timestamp
+    this.lastActivity.set(id, Date.now())
+
     // Handle data from PTY
     ptyProcess.onData((data) => {
+      this.lastActivity.set(id, Date.now()) // Update activity on data
       this.emit('data', { terminalId: id, data })
     })
 
@@ -64,6 +94,7 @@ export class PtyManager extends EventEmitter {
     ptyProcess.onExit(({ exitCode, signal }) => {
       this.emit('exit', { terminalId: id, exitCode, signal })
       this.terminals.delete(id)
+      this.lastActivity.delete(id)
     })
 
     return { pid: ptyProcess.pid }
@@ -95,11 +126,12 @@ export class PtyManager extends EventEmitter {
    * Kill a PTY
    */
   kill(id: string): boolean {
-    const terminal = this.getTerminal(id)
+    const terminal = this.terminals.get(id) // Don't use getTerminal to avoid updating activity
     if (!terminal) return false
 
     terminal.pty.kill()
     this.terminals.delete(id)
+    this.lastActivity.delete(id)
     return true
   }
 
@@ -114,6 +146,12 @@ export class PtyManager extends EventEmitter {
    * Kill all PTYs (cleanup)
    */
   killAll(): void {
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval)
+      this.cleanupInterval = null
+    }
+
     for (const [id, terminal] of this.terminals) {
       try {
         terminal.pty.kill()
@@ -122,6 +160,7 @@ export class PtyManager extends EventEmitter {
       }
     }
     this.terminals.clear()
+    this.lastActivity.clear()
     this.removeAllListeners() // Remove all event listeners
   }
 }

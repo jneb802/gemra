@@ -22,6 +22,8 @@ interface UseClaudeAgentOptions {
   onContainerStatusUpdate: (status: string, error?: string) => void
 }
 
+const MAX_MESSAGE_QUEUE_SIZE = 10
+
 export function useClaudeAgent({
   agentId,
   workingDir,
@@ -155,7 +157,17 @@ export function useClaudeAgent({
     [workingDir, onContainerStatusUpdate, agentStatusActions]
   )
 
-  // IPC Event Listeners
+  // IPC Event Listeners (use refs to avoid re-creating listeners on every dependency change)
+  const onContainerStatusUpdateRef = useRef(onContainerStatusUpdate)
+  const agentStatusActionsRef = useRef(agentStatusActions)
+  const agentStatusStateRef = useRef(agentStatusState)
+
+  useEffect(() => {
+    onContainerStatusUpdateRef.current = onContainerStatusUpdate
+    agentStatusActionsRef.current = agentStatusActions
+    agentStatusStateRef.current = agentStatusState
+  })
+
   useEffect(() => {
     if (!agentId) return
 
@@ -194,7 +206,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Status changed:', data.status)
-      agentStatusActions.setWorking(data.status === 'working')
+      agentStatusActionsRef.current.setWorking(data.status === 'working')
     })
 
     // Listen for token usage
@@ -208,7 +220,7 @@ export function useClaudeAgent({
 
       // Finalize metadata for current turn
       const now = Date.now()
-      const currentMetadata = agentStatusState.currentTurnMetadata
+      const currentMetadata = agentStatusStateRef.current.currentTurnMetadata
 
       if (currentMetadata) {
         // Calculate final phase time
@@ -245,7 +257,7 @@ export function useClaudeAgent({
         }
 
         // Update reducer state
-        agentStatusActions.finalizeTurn(data.usage.inputTokens, data.usage.outputTokens, now)
+        agentStatusActionsRef.current.finalizeTurn(data.usage.inputTokens, data.usage.outputTokens, now)
       }
     })
 
@@ -254,11 +266,11 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Agent status:', data.status)
-      agentStatusActions.setStatus(data.status)
+      agentStatusActionsRef.current.setStatus(data.status)
 
       // Update metadata with phase transitions
       const now = Date.now()
-      agentStatusActions.updateTurnPhase(data.status, now)
+      agentStatusActionsRef.current.updateTurnPhase(data.status, now)
     })
 
     // Listen for tool executions
@@ -266,7 +278,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Tool execution:', data.tool)
-      agentStatusActions.setTool(data.tool)
+      agentStatusActionsRef.current.setTool(data.tool)
     })
 
     // Listen for errors
@@ -274,7 +286,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.error('[useClaudeAgent] Error:', data.error)
-      agentStatusActions.setError(data.error)
+      agentStatusActionsRef.current.setError(data.error)
     })
 
     // Listen for container status changes
@@ -282,7 +294,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Container status:', data.status, data.error)
-      onContainerStatusUpdate(data.status, data.error)
+      onContainerStatusUpdateRef.current(data.status, data.error)
     })
 
     // Listen for tool started events
@@ -290,7 +302,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Tool started:', data.toolCall)
-      agentStatusActions.addToolCall(data.toolCall)
+      agentStatusActionsRef.current.addToolCall(data.toolCall)
     })
 
     // Listen for tool completed events
@@ -298,7 +310,7 @@ export function useClaudeAgent({
       if (data.agentId !== currentAgentIdRef.current) return
 
       console.log('[useClaudeAgent] Tool completed:', data.toolCall)
-      agentStatusActions.updateToolCall(data.toolCall)
+      agentStatusActionsRef.current.updateToolCall(data.toolCall)
     })
 
     return () => {
@@ -312,17 +324,7 @@ export function useClaudeAgent({
       unlistenToolStarted()
       unlistenToolCompleted()
     }
-  }, [
-    agentId,
-    agentStatusActions,
-    addMessage,
-    updateMessage,
-    appendToLastMessage,
-    addTokenUsage,
-    getMessages,
-    onContainerStatusUpdate,
-    agentStatusState.currentTurnMetadata
-  ])
+  }, [agentId, addMessage, updateMessage, appendToLastMessage, addTokenUsage, getMessages]) // Simplified dependencies
 
   // Send message internal implementation
   const sendMessageInternal = useCallback(
@@ -393,7 +395,11 @@ export function useClaudeAgent({
       // If already working or initializing, queue the message instead
       if (agentStatusState.isWorking || agentStatusState.isInitializingAgent) {
         console.log('[useClaudeAgent] Agent busy/initializing, queueing message')
-        setMessageQueue((prev) => [...prev, content])
+        setMessageQueue((prev) => {
+          const newQueue = [...prev, content]
+          // Keep only the last MAX_MESSAGE_QUEUE_SIZE messages to prevent unbounded growth
+          return newQueue.slice(-MAX_MESSAGE_QUEUE_SIZE)
+        })
         return
       }
 

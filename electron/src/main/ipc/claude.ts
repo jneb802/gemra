@@ -40,10 +40,34 @@ function forwardAgentEvents(
   agentId: string,
   mainWindow: BrowserWindow
 ): void {
+  // Batch text chunks to prevent IPC flooding during fast streaming
+  let textBuffer = ''
+  let flushTimeout: NodeJS.Timeout | null = null
+
+  const flushTextBuffer = () => {
+    if (textBuffer.length > 0) {
+      safeSend(mainWindow, 'claude:text', { agentId, text: textBuffer })
+      textBuffer = ''
+    }
+    flushTimeout = null
+  }
+
   // Listen for text responses from agent
   agent.on('text', (text: string) => {
     logger.log(`Agent ${agentId} text:`, text)
-    safeSend(mainWindow, 'claude:text', { agentId, text })
+    textBuffer += text
+
+    // Clear existing timeout
+    if (flushTimeout) {
+      clearTimeout(flushTimeout)
+    }
+
+    // Flush immediately if buffer is large, otherwise batch for 16ms (60fps)
+    if (textBuffer.length > 500) {
+      flushTextBuffer()
+    } else {
+      flushTimeout = setTimeout(flushTextBuffer, 16)
+    }
   })
 
   // Listen for status changes
@@ -94,6 +118,13 @@ function forwardAgentEvents(
   // Listen for exit
   agent.on('exit', (info: any) => {
     logger.log(`Agent ${agentId} exited:`, info)
+
+    // Flush any remaining text
+    if (flushTimeout) {
+      clearTimeout(flushTimeout)
+      flushTextBuffer()
+    }
+
     agents.delete(agentId)
     safeSend(mainWindow, 'claude:exit', { agentId, info })
   })

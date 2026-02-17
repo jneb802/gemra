@@ -11,6 +11,7 @@ import { useTabStore } from './stores/tabStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useInputModeStore } from './stores/inputModeStore'
 import { useRecentStore } from './stores/recentStore'
+import { useClaudeChatStore } from './stores/claudeChatStore'
 import { usePlatform } from './hooks/usePlatform'
 import { TIMING } from '../shared/constants'
 import * as path from 'path'
@@ -33,17 +34,62 @@ function App() {
   const addRecent = useRecentStore((state) => state.addRecent)
   const recentItems = useRecentStore((state) => state.getRecent())
 
+  // Periodic cleanup of old agents to prevent memory leaks
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      // Collect all active agent IDs from tabs and chat sessions
+      const activeAgentIds = new Set<string>()
+
+      tabs.forEach(tab => {
+        if (tab.type === 'claude-chat') {
+          if (tab.agentId) {
+            activeAgentIds.add(tab.agentId)
+          }
+          tab.chatSessions?.forEach(session => {
+            if (session.agentId) {
+              activeAgentIds.add(session.agentId)
+            }
+          })
+        }
+      })
+
+      // Cleanup agents that are no longer in any tab
+      useClaudeChatStore.getState().cleanupOldAgents(Array.from(activeAgentIds))
+    }, 60000) // Cleanup every minute
+
+    return () => clearInterval(cleanupInterval)
+  }, [tabs])
+
   // Handler for closing tabs with agent cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId)
 
     // Stop Claude agent if it's a claude-chat tab
-    if (tab?.type === 'claude-chat' && tab.agentId) {
-      try {
-        await window.electron.claude.stop(tab.agentId)
-        console.log(`Stopped agent ${tab.agentId} for tab ${tabId}`)
-      } catch (error) {
-        console.error('Failed to stop agent:', error)
+    if (tab?.type === 'claude-chat') {
+      // Stop and cleanup deprecated agentId
+      if (tab.agentId) {
+        try {
+          await window.electron.claude.stop(tab.agentId)
+          useClaudeChatStore.getState().removeAgent(tab.agentId)
+          console.log(`Stopped agent ${tab.agentId} for tab ${tabId}`)
+        } catch (error) {
+          console.error('Failed to stop agent:', error)
+        }
+      }
+
+      // Stop and cleanup all chat session agents
+      if (tab.chatSessions) {
+        for (const session of tab.chatSessions) {
+          if (session.agentId) {
+            try {
+              await window.electron.claude.stop(session.agentId)
+              useClaudeChatStore.getState().removeAgent(session.agentId)
+              console.log(`Stopped agent ${session.agentId} for session ${session.id}`)
+            } catch (error) {
+              console.error('Failed to stop session agent:', error)
+            }
+          }
+        }
       }
     }
 
@@ -337,27 +383,32 @@ function App() {
 
       {/* Main content area */}
       <div className="app-content">
-        {/* Terminal views */}
+        {/* Terminal views - only render active tab */}
         <div className="app-terminal-container">
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              className={`app-tab-content ${tab.isActive ? 'active' : ''}`}
-            >
-              {tab.type === 'claude-chat' && tab.workingDir ? (
-                <ClaudeChat
-                  agentId={tab.agentId} // Can be undefined initially
-                  workingDir={tab.workingDir}
-                  onCreateProject={() => setShowCreateModal(true)}
-                  onOpenRepository={handleOpenDirectory}
-                  onCloneRepository={() => setShowCloneModal(true)}
-                  onOpenRecent={handleOpenRecentDirectory}
-                />
-              ) : (
-                <BlockTerminal terminalId={tab.id} workingDir="/Users/benjmarston/Develop/gemra" />
-              )}
-            </div>
-          ))}
+          {(() => {
+            const activeTab = tabs.find((tab) => tab.isActive)
+            if (!activeTab) return null
+
+            return (
+              <div key={activeTab.id} className="app-tab-content active">
+                {activeTab.type === 'claude-chat' && activeTab.workingDir ? (
+                  <ClaudeChat
+                    agentId={activeTab.agentId} // Can be undefined initially
+                    workingDir={activeTab.workingDir}
+                    onCreateProject={() => setShowCreateModal(true)}
+                    onOpenRepository={handleOpenDirectory}
+                    onCloneRepository={() => setShowCloneModal(true)}
+                    onOpenRecent={handleOpenRecentDirectory}
+                  />
+                ) : (
+                  <BlockTerminal
+                    terminalId={activeTab.id}
+                    workingDir="/Users/benjmarston/Develop/gemra"
+                  />
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
 

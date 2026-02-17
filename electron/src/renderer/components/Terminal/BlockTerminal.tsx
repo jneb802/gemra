@@ -52,10 +52,14 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
 
   // Tab and chat store
   const tabs = useTabStore(s => s.tabs)
+  const activeTabId = useTabStore(s => s.activeTabId)
   const createTab = useTabStore(s => s.createTab)
   const setActiveTab = useTabStore(s => s.setActiveTab)
   const getActiveChatSession = useTabStore(s => s.getActiveChatSession)
   const addMessage = useClaudeChatStore(s => s.addMessage)
+
+  // Check if this terminal is in the active tab
+  const isActiveTab = tabs.find(t => t.id === activeTabId)?.id === terminalId
 
   // Initialize xterm.js (hidden, used for parsing)
   const { containerRef, terminal, write, focus } = useTerminal({
@@ -146,13 +150,16 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
 
     // Cleanup: kill PTY on unmount
     return () => {
+      console.log('[BlockTerminal] Cleaning up terminal:', terminalId)
       window.electron.pty.kill(terminalId)
       clearBlocks(terminalId)
     }
-  }, [terminalId, workingDir])
+  }, [terminalId, workingDir, clearBlocks])
 
-  // Fetch git info periodically
+  // Fetch git info periodically (only when tab is active)
   useEffect(() => {
+    if (!isActiveTab) return // Skip polling for inactive tabs
+
     const fetchGitInfo = async () => {
       try {
         const branchResult = await window.electron.claude.getGitBranch(currentWorkingDir)
@@ -176,7 +183,7 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
     fetchGitInfo()
     const interval = setInterval(fetchGitInfo, 5000)
     return () => clearInterval(interval)
-  }, [currentWorkingDir])
+  }, [currentWorkingDir, isActiveTab])
 
   // Send command to PTY
   const handleSendCommand = useCallback((command: string) => {
@@ -386,7 +393,7 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
             // Get the active chat session for this tab
             const session = getActiveChatSession(chatTab.id)
 
-            if (session) {
+            if (session?.agentId) {
               // Add the message to the chat
               addMessage(session.agentId, {
                 id: `msg-${Date.now()}`,
@@ -398,6 +405,8 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
               // Switch to the chat tab
               setActiveTab(chatTab.id)
               showToast('Sent to chat tab')
+            } else {
+              showToast('Chat session not initialized yet')
             }
           }
 

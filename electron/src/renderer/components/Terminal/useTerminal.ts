@@ -15,11 +15,12 @@ interface UseTerminalOptions {
 export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions) {
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const webglAddonRef = useRef<WebglAddon | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const settings = useSettingsStore()
 
-  // Initialize terminal
+  // Initialize terminal (only when terminalId changes)
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -49,6 +50,7 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
         webglAddon.dispose()
       })
       terminal.loadAddon(webglAddon)
+      webglAddonRef.current = webglAddon
     } catch (e) {
       console.warn('WebGL addon failed to load:', e)
     }
@@ -79,11 +81,31 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
 
     // Cleanup
     return () => {
+      webglAddonRef.current?.dispose()
       terminal.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
+      webglAddonRef.current = null
     }
-  }, [terminalId, settings]) // Re-initialize if settings change
+  }, [terminalId]) // Only re-create when terminalId changes
+
+  // Update terminal options when settings change (without re-creating terminal)
+  useEffect(() => {
+    if (!terminalRef.current) return
+
+    terminalRef.current.options = {
+      cursorBlink: settings.cursorBlink,
+      cursorStyle: settings.cursorStyle,
+      fontFamily: settings.fontFamily,
+      fontSize: settings.fontSize,
+      lineHeight: settings.lineHeight,
+      theme: terminalThemes[settings.theme],
+      scrollback: settings.scrollback,
+    }
+
+    // Re-fit after font/size changes
+    fitAddonRef.current?.fit()
+  }, [settings])
 
   // Handle window resize
   useEffect(() => {
