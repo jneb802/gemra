@@ -31,7 +31,7 @@ export const FormInput: React.FC<FormInputProps> = ({
           display: 'block',
           marginBottom: '6px',
           fontSize: '13px',
-          color: '#d4d4d4',
+          color: 'var(--text-primary)',
         }}
       >
         {label}
@@ -48,10 +48,10 @@ export const FormInput: React.FC<FormInputProps> = ({
         style={{
           width: '100%',
           padding: '8px 12px',
-          backgroundColor: '#1e1e1e',
-          border: '1px solid #3e3e3e',
+          backgroundColor: 'var(--bg-primary)',
+          border: '1px solid var(--border-color)',
           borderRadius: '4px',
-          color: '#d4d4d4',
+          color: 'var(--text-primary)',
           fontSize: '13px',
           outline: 'none',
           opacity: disabled ? 0.6 : 1,

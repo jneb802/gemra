@@ -30,9 +30,9 @@ export const ModalActions: React.FC<ModalActionsProps> = ({
         style={{
           padding: '8px 16px',
           backgroundColor: 'transparent',
-          border: '1px solid #3e3e3e',
+          border: '1px solid var(--border-color)',
           borderRadius: '4px',
-          color: '#d4d4d4',
+          color: 'var(--text-primary)',
           cursor: isLoading ? 'not-allowed' : 'pointer',
           fontSize: '13px',
           opacity: isLoading ? 0.6 : 1,
@@ -45,10 +45,10 @@ export const ModalActions: React.FC<ModalActionsProps> = ({
         disabled={!canSubmit || isLoading}
         style={{
           padding: '8px 16px',
-          backgroundColor: canSubmit && !isLoading ? '#569cd6' : '#3e3e3e',
+          backgroundColor: canSubmit && !isLoading ? 'var(--button-primary)' : 'var(--border-color)',
           border: 'none',
           borderRadius: '4px',
-          color: canSubmit && !isLoading ? '#ffffff' : '#6e6e6e',
+          color: canSubmit && !isLoading ? '#ffffff' : 'var(--text-tertiary)',
           cursor: canSubmit && !isLoading ? 'pointer' : 'not-allowed',
           fontSize: '13px',
           fontWeight: 500,

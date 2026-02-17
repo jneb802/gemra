@@ -2160,7 +2160,7 @@ code {
   max-width: 400px;
   padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
@@ -2256,5 +2256,5 @@ code {
 }
 
 .terminal-blocks-container::-webkit-scrollbar-thumb:hover {
-  background: var(--border-primary);
+  background: var(--border-color);
 }

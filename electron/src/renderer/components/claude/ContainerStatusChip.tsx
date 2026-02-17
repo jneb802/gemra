@@ -45,16 +45,16 @@ export const ContainerStatusChip: React.FC<ContainerStatusChipProps> = ({
   const getColor = () => {
     switch (status) {
       case 'disabled':
-        return '#888'
+        return 'var(--text-muted)'
       case 'building':
       case 'starting':
-        return '#f59e0b' // Orange
+        return 'var(--container-building)'
       case 'running':
-        return '#4ade80' // Green
+        return 'var(--container-running)'
       case 'error':
-        return '#f87171' // Red
+        return 'var(--container-error)'
       default:
-        return '#888'
+        return 'var(--text-muted)'
     }
   }
 
@@ -71,8 +71,8 @@ export const ContainerStatusChip: React.FC<ContainerStatusChipProps> = ({
         alignItems: 'center',
         gap: '6px',
         padding: '4px 8px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3a3a3a',
+        backgroundColor: 'var(--bg-user-message)',
+        border: '1px solid var(--bg-active)',
         borderRadius: '6px',
         fontSize: '12px',
         fontFamily: 'var(--font-mono)',
@@ -84,12 +84,12 @@ export const ContainerStatusChip: React.FC<ContainerStatusChipProps> = ({
       }}
       onMouseEnter={(e) => {
         if (isClickable()) {
-          e.currentTarget.style.backgroundColor = '#3a3a3a'
+          e.currentTarget.style.backgroundColor = 'var(--bg-active)'
         }
       }}
       onMouseLeave={(e) => {
         if (isClickable()) {
-          e.currentTarget.style.backgroundColor = '#2a2a2a'
+          e.currentTarget.style.backgroundColor = 'var(--bg-user-message)'
         }
       }}
     >

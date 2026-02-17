@@ -73,10 +73,10 @@ export function OptionSelector<T extends string>({
             gap: '6px',
             height: '32px',
             padding: '0 8px',
-            backgroundColor: isOpen ? '#3a3a3a' : '#2a2a2a',
-            border: '1px solid #3a3a3a',
+            backgroundColor: isOpen ? 'var(--bg-active)' : 'var(--bg-user-message)',
+            border: '1px solid var(--bg-active)',
             borderRadius: '4px',
-            color: '#e0e0e0',
+            color: 'var(--text-primary)',
             fontSize: '12px',
             fontFamily: 'var(--font-mono)',
             cursor: disabled ? 'not-allowed' : 'pointer',
@@ -85,12 +85,12 @@ export function OptionSelector<T extends string>({
           }}
           onMouseEnter={(e) => {
             if (!disabled) {
-              e.currentTarget.style.backgroundColor = '#3a3a3a'
+              e.currentTarget.style.backgroundColor = 'var(--bg-active)'
             }
           }}
           onMouseLeave={(e) => {
             if (!isOpen && !disabled) {
-              e.currentTarget.style.backgroundColor = '#2a2a2a'
+              e.currentTarget.style.backgroundColor = 'var(--bg-user-message)'
             }
           }}
         >
@@ -106,8 +106,8 @@ export function OptionSelector<T extends string>({
             bottom: '100%',
             [align]: 0,
             marginBottom: '8px',
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #3a3a3a',
+            backgroundColor: 'var(--bg-user-message)',
+            border: '1px solid var(--bg-active)',
             borderRadius: '4px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             minWidth: '160px',
@@ -125,17 +125,17 @@ export function OptionSelector<T extends string>({
                   gap: '2px',
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: value === option.id ? '#3a3a3a' : 'transparent',
+                  backgroundColor: value === option.id ? 'var(--bg-active)' : 'transparent',
                   border: 'none',
                   borderRadius: '3px',
-                  color: '#e0e0e0',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'background-color 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#3a3a3a'
+                  e.currentTarget.style.backgroundColor = 'var(--bg-active)'
                 }}
                 onMouseLeave={(e) => {
                   if (value !== option.id) {
@@ -155,7 +155,7 @@ export function OptionSelector<T extends string>({
                     <span style={{ fontSize: '12px', color: '#4a9eff' }}>✓</span>
                   )}
                 </div>
-                <div style={{ fontSize: '11px', color: '#888' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   {option.description}
                 </div>
               </button>

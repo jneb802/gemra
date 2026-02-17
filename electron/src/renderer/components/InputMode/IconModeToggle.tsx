@@ -54,10 +54,10 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: isCommand ? '#3a3a3a' : 'transparent',
-          border: '1px solid #3a3a3a',
+          backgroundColor: isCommand ? 'var(--bg-active)' : 'transparent',
+          border: '1px solid var(--bg-active)',
           borderRadius: '4px',
-          color: '#e0e0e0',
+          color: 'var(--text-primary)',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
           transition: 'background-color 0.15s ease',
@@ -65,7 +65,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
         }}
         onMouseEnter={(e) => {
           if (!disabled) {
-            e.currentTarget.style.backgroundColor = '#3a3a3a'
+            e.currentTarget.style.backgroundColor = 'var(--bg-active)'
           }
         }}
         onMouseLeave={(e) => {
@@ -74,7 +74,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           }
         }}
       >
-        <BashIcon size={18} color="#e0e0e0" />
+        <BashIcon size={18} color="var(--text-primary)" />
       </button>
       </Tooltip>
 
@@ -96,7 +96,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: isAi ? (isAuto ? 'transparent' : '#d4a02e') : 'transparent',
-          border: '1px solid #3a3a3a',
+          border: '1px solid var(--bg-active)',
           borderRadius: '4px',
           color: isAi && !isAuto ? '#1a1a1a' : '#d4a02e',
           cursor: disabled ? 'not-allowed' : 'pointer',
@@ -108,7 +108,7 @@ export const IconModeToggle: React.FC<IconModeToggleProps> = ({
         onMouseEnter={(e) => {
           if (!disabled) {
             if (isAuto) {
-              e.currentTarget.style.backgroundColor = '#3a3a3a'
+              e.currentTarget.style.backgroundColor = 'var(--bg-active)'
               e.currentTarget.style.color = '#d4a02e'
             } else if (isAi) {
               e.currentTarget.style.backgroundColor = '#e5b13e'

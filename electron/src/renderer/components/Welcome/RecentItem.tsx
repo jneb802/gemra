@@ -35,20 +35,20 @@ export const RecentItem: React.FC<RecentItemProps> = ({ item, onClick }) => {
         borderRadius: '6px',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
-        color: '#d4d4d4',
+        color: 'var(--text-primary)',
         width: '100%',
         textAlign: 'left'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#2d2d2d'
-        e.currentTarget.style.borderColor = '#3e3e3e'
+        e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'
+        e.currentTarget.style.borderColor = 'var(--border-color)'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = 'transparent'
         e.currentTarget.style.borderColor = 'transparent'
       }}
     >
-      <Folder size={20} color="#569cd6" />
+      <Folder size={20} color="var(--button-primary)" />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
@@ -73,12 +73,12 @@ export const RecentItem: React.FC<RecentItemProps> = ({ item, onClick }) => {
             </span>
           )}
         </div>
-        <div style={{ fontSize: '12px', color: '#8e8e8e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {item.path}
         </div>
       </div>
 
-      <div style={{ fontSize: '12px', color: '#6e6e6e', flexShrink: 0 }}>
+      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', flexShrink: 0 }}>
         {formatTimestamp(item.timestamp)}
       </div>
     </button>

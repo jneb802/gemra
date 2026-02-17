@@ -2,7 +2,7 @@
 
 .tool-call-block {
   margin: 0;
-  border: 1px solid var(--border-color, #3e3e3e);
+  border: 1px solid var(--border-color);
   background: transparent;
   border-radius: 6px;
   overflow: hidden;
@@ -10,7 +10,7 @@
 }
 
 .tool-call-block:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.02));
+  background: var(--bg-hover);
 }
 
 .tool-call-header {
@@ -28,11 +28,11 @@
 }
 
 .tool-call-header.clickable:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .tool-name {
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -53,19 +53,19 @@
 }
 
 .tool-status-badge.running {
-  background: rgba(59, 130, 246, 0.2);
-  color: #2563eb;
+  background: rgba(86, 156, 214, 0.2);
+  color: var(--button-primary);
   animation: pulse 2s ease-in-out infinite;
 }
 
 .tool-status-badge.completed {
-  background: rgba(16, 185, 129, 0.2);
-  color: #059669;
+  background: rgba(74, 222, 128, 0.2);
+  color: var(--container-running);
 }
 
 .tool-status-badge.error {
-  background: rgba(239, 68, 68, 0.2);
-  color: #dc2626;
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--container-error);
 }
 
 @keyframes pulse {
@@ -79,7 +79,7 @@
 
 .tool-expand-icon {
   font-size: 10px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   transition: transform 0.2s ease;
 }
 
@@ -97,28 +97,28 @@
 }
 
 .tool-param-label {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .tool-param-value {
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-size: 11px;
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+  background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 3px;
   word-break: break-all;
 }
 
 code.tool-param-value {
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
-  color: var(--text-primary, #d4d4d4);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .tool-output {
   margin-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid var(--border-color);
   padding-top: 12px;
 }
 
@@ -135,31 +135,31 @@ code.tool-param-value {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
 .tool-output-label.error {
-  color: #dc2626;
+  color: var(--container-error);
 }
 
 .tool-output-content {
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-size: 11px;
   line-height: 1.5;
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.05);
   padding: 8px;
   border-radius: 4px;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
 }
 
 .tool-output-content.error {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--container-error);
 }
 
 .tool-output-toggle {
@@ -167,17 +167,17 @@ code.tool-param-value {
   padding: 4px 12px;
   font-size: 11px;
   font-weight: 500;
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
-  color: var(--text-secondary, #888);
-  border: 1px solid var(--border-color, #3e3e3e);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .tool-output-toggle:hover {
-  background: var(--bg-active, rgba(0, 0, 0, 0.08));
-  color: var(--text-primary, #d4d4d4);
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 .tool-error {
@@ -191,69 +191,15 @@ code.tool-param-value {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #dc2626;
+  color: var(--container-error);
   margin-bottom: 6px;
 }
 
 .tool-error-content {
   font-size: 12px;
   line-height: 1.5;
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.2);
   padding: 8px;
   border-radius: 4px;
-  color: #dc2626;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .tool-call-block {
-    background: transparent;
-  }
-
-  .tool-call-block:hover {
-    background: var(--bg-hover, rgba(255, 255, 255, 0.02));
-  }
-
-  .tool-call-header.clickable:hover {
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .tool-name {
-    color: var(--text-primary, #f9fafb);
-  }
-
-  .tool-param-value {
-    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-    color: var(--text-primary, #d4d4d4);
-  }
-
-  code.tool-param-value {
-    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-    color: var(--text-primary, #d4d4d4);
-  }
-
-  .tool-output-content {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary, #f9fafb);
-  }
-
-  .tool-output-content.error {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-  }
-
-  .tool-output-toggle {
-    background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-    color: var(--text-secondary, #888);
-  }
-
-  .tool-output-toggle:hover {
-    background: var(--bg-active, rgba(255, 255, 255, 0.08));
-    color: var(--text-primary, #d4d4d4);
-  }
-
-  .tool-error-content {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-  }
+  color: var(--container-error);
 }

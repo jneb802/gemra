@@ -26,10 +26,10 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
 
   // Get color based on usage percentage
   const getColor = () => {
-    if (percentage >= 90) return '#f87171' // Red
-    if (percentage >= 75) return '#f59e0b' // Orange
-    if (percentage >= 50) return '#fbbf24' // Yellow
-    return '#888' // Gray
+    if (percentage >= 90) return 'var(--container-error)'
+    if (percentage >= 75) return 'var(--container-building)'
+    if (percentage >= 50) return '#fbbf24' // Yellow — no token equivalent
+    return 'var(--text-muted)'
   }
 
   return (
@@ -41,8 +41,8 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
         gap: '4px',
         height: '32px',
         padding: '0 8px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3a3a3a',
+        backgroundColor: 'var(--bg-user-message)',
+        border: '1px solid var(--bg-active)',
         borderRadius: '4px',
         fontSize: '12px',
         fontFamily: 'var(--font-mono)',
@@ -65,8 +65,8 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
             right: 0,
             marginBottom: '8px',
             padding: '8px 12px',
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #3a3a3a',
+            backgroundColor: 'var(--bg-user-message)',
+            border: '1px solid var(--bg-active)',
             borderRadius: '4px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             fontSize: '12px',
@@ -76,12 +76,12 @@ export const CompactContextIndicator: React.FC<CompactContextIndicatorProps> = (
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ color: '#888' }}>
+            <div style={{ color: 'var(--text-muted)' }}>
               <span style={{ color: '#4a9eff' }}>{inputTokens.toLocaleString()}</span> in
               {' + '}
-              <span style={{ color: '#4ade80' }}>{outputTokens.toLocaleString()}</span> out
+              <span style={{ color: 'var(--container-running)' }}>{outputTokens.toLocaleString()}</span> out
             </div>
-            <div style={{ color: '#666', fontSize: '11px' }}>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
               {totalTokens.toLocaleString()} / {maxTokens.toLocaleString()} ({Math.round(percentage)}%)
             </div>
           </div>

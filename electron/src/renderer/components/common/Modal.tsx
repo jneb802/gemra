@@ -32,12 +32,12 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
     >
       <div
         style={{
-          backgroundColor: '#2d2d2d',
+          backgroundColor: 'var(--bg-secondary)',
           borderRadius: '8px',
           padding: '24px',
           width,
           maxWidth: '90vw',
-          border: '1px solid #3e3e3e',
+          border: '1px solid var(--border-color)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -50,14 +50,14 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
             marginBottom: '20px',
           }}
         >
-          <h2 style={{ margin: 0, fontSize: '18px', color: '#d4d4d4' }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: '18px', color: 'var(--text-primary)' }}>{title}</h2>
           <button
             onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: '#8e8e8e',
+              color: 'var(--text-muted)',
               padding: '4px',
               display: 'flex',
               alignItems: 'center',
