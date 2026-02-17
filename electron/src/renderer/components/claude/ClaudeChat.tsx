@@ -434,6 +434,17 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
           {agent.error && <div className="error-message">Error: {agent.error}</div>}
 
+          {/* Session tabs - always visible */}
+          {activeTabId && (
+            <SessionTabs
+              tabId={activeTabId}
+              onSessionChange={handleSessionChange}
+              onCreateChatSession={handleCreateNewSession}
+              onCreateTerminalSession={handleCreateTerminalSession}
+              isCreatingSession={isCreatingSession}
+            />
+          )}
+
           {/* Input box - only for chat sessions */}
           <InputBox
             onSend={agent.sendMessage}
@@ -510,10 +521,23 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
           />
         </>
       ) : isTerminalSession && activeSession?.terminalId ? (
-        <BlockTerminal
-          terminalId={activeSession.terminalId}
-          workingDir={activeSession.workingDir || workingDir}
-        />
+        <>
+          <BlockTerminal
+            terminalId={activeSession.terminalId}
+            workingDir={activeSession.workingDir || workingDir}
+          />
+
+          {/* Session tabs - always visible */}
+          {activeTabId && (
+            <SessionTabs
+              tabId={activeTabId}
+              onSessionChange={handleSessionChange}
+              onCreateChatSession={handleCreateNewSession}
+              onCreateTerminalSession={handleCreateTerminalSession}
+              isCreatingSession={isCreatingSession}
+            />
+          )}
+        </>
       ) : null}
 
       {isCreatingSession && (
@@ -521,17 +545,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
           <span className="status-icon">✨</span>
           <span className="status-text">Creating new session...</span>
         </div>
-      )}
-
-      {/* Session tabs - always visible */}
-      {activeTabId && (
-        <SessionTabs
-          tabId={activeTabId}
-          onSessionChange={handleSessionChange}
-          onCreateChatSession={handleCreateNewSession}
-          onCreateTerminalSession={handleCreateTerminalSession}
-          isCreatingSession={isCreatingSession}
-        />
       )}
     </div>
   )
