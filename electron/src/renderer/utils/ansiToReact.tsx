@@ -56,6 +56,15 @@ export function ansiToReact(text: string): React.ReactNode {
   // Also strip any malformed OSC sequences that lost their escape characters
   text = text.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
 
+  // Strip all non-SGR CSI sequences (cursor movement, screen clearing, etc.)
+  // Keep only SGR (Select Graphic Rendition) sequences for color/styling
+  text = text.replace(/\x1b\[[\d;]*[A-KM-Za-km-z]/g, (match) => {
+    // Keep SGR sequences (ending in 'm')
+    if (match.endsWith('m')) return match
+    // Strip everything else (cursor movement, clear, etc.)
+    return ''
+  })
+
   // Remove ANSI sequences if they exist, otherwise return plain text
   const ansiRegex = /\x1b\[([0-9;]*)m/g
 
@@ -192,6 +201,8 @@ export function stripAnsi(text: string): string {
   text = text.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
   text = text.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
 
-  // Strip CSI sequences (colors/styles)
-  return text.replace(/\x1b\[[0-9;]*m/g, '')
+  // Strip ALL CSI sequences (colors, cursor movement, screen control, etc.)
+  text = text.replace(/\x1b\[[\d;?]*[A-Za-z]/g, '')
+
+  return text
 }

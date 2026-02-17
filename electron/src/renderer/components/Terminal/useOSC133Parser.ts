@@ -151,12 +151,24 @@ export function useOSC133Parser({
       return true
     })
 
-    // Helper function to strip OSC sequences from data
-    const stripOSC = (str: string): string => {
+    // Helper function to strip escape sequences from data
+    const stripEscapeSequences = (str: string, mode: 'command' | 'output' = 'output'): string => {
       // Remove OSC sequences: ESC ] ... (BEL | ST)
       let cleaned = str.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
       // Remove malformed OSC sequences
       cleaned = cleaned.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
+
+      if (mode === 'command') {
+        // For command input, only strip cursor movement and control sequences
+        // but preserve the actual text content more carefully
+        cleaned = cleaned.replace(/\x1b\[[0-9;]*[ABCDEFGHJK]/g, '') // Cursor movement, erase
+        cleaned = cleaned.replace(/\x1b\[[\d;?]*[hl]/g, '') // Mode setting
+        cleaned = cleaned.replace(/\r/g, '') // Carriage returns
+      } else {
+        // For output, strip ALL CSI sequences (cursor, clear, colors, etc.)
+        cleaned = cleaned.replace(/\x1b\[[\d;?]*[A-Za-z]/g, '')
+      }
+
       return cleaned
     }
 
@@ -173,18 +185,18 @@ export function useOSC133Parser({
       // Accumulate data based on current sequence
       switch (state.currentSequence) {
         case 'A':
-          // Accumulating prompt (strip OSC sequences)
-          state.promptBuffer += stripOSC(strData)
+          // Accumulating prompt (strip escape sequences for command mode)
+          state.promptBuffer += stripEscapeSequences(strData, 'command')
           break
 
         case 'B':
-          // Accumulating command input (strip OSC sequences)
-          state.commandBuffer += stripOSC(strData)
+          // Accumulating command input (strip escape sequences carefully to preserve text)
+          state.commandBuffer += stripEscapeSequences(strData, 'command')
           break
 
         case 'C':
-          // Accumulating command output (strip OSC sequences before appending)
-          const cleanedOutput = stripOSC(strData)
+          // Accumulating command output (strip all escape sequences)
+          const cleanedOutput = stripEscapeSequences(strData, 'output')
           state.outputBuffer += cleanedOutput
           if (state.currentBlock && cleanedOutput) {
             appendToBlock(terminalId, state.currentBlock.id, cleanedOutput)

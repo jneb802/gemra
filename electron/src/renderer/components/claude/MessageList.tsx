@@ -22,6 +22,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   const [isUserScrolling, setIsUserScrolling] = useState(false)
   const scrollTimeoutRef = useRef<NodeJS.Timeout>()
   const [containerHeight, setContainerHeight] = useState(600)
+  const isInitialMount = useRef(true)
 
   // Use message grouping helper
   const { isGroupedWithPrevious } = useMessageGrouping(messages)
@@ -68,6 +69,9 @@ export const MessageList: React.FC<MessageListProps> = ({
   // Auto-scroll to bottom when streaming or user hasn't manually scrolled
   useEffect(() => {
     if ((isStreaming || !isUserScrolling) && messages.length > 0 && listRef.current) {
+      // Use instant scroll on initial mount (tab switch), smooth scroll for updates
+      const scrollBehavior = isInitialMount.current ? 'instant' : 'smooth'
+
       // Use requestAnimationFrame to ensure DOM updates are complete before scrolling
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -75,8 +79,10 @@ export const MessageList: React.FC<MessageListProps> = ({
             listRef.current.scrollToRow({
               index: messages.length - 1,
               align: 'end',
-              behavior: 'smooth',
+              behavior: scrollBehavior,
             })
+            // Mark that initial mount is complete
+            isInitialMount.current = false
           }
         })
       })
