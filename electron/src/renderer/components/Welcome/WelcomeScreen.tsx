@@ -3,6 +3,7 @@ import { Plus, FolderOpen, GitBranch } from 'lucide-react'
 import { ActionCard } from './ActionCard'
 import { RecentItem } from './RecentItem'
 import { useRecentStore } from '@renderer/stores/recentStore'
+import './WelcomeScreen.css'
 
 interface WelcomeScreenProps {
   onCreateProject: () => void
@@ -20,29 +21,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   const recentItems = useRecentStore(state => state.getRecent())
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#1e1e1e',
-        color: '#d4d4d4',
-        padding: '40px',
-        overflow: 'auto'
-      }}
-    >
-      <div style={{ maxWidth: '700px', width: '100%' }}>
+    <div className="welcome-screen">
+      <div className="welcome-screen__container">
         {/* Action Cards */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '12px',
-            marginBottom: '32px'
-          }}
-        >
+        <div className="welcome-screen__actions">
           <ActionCard
             icon={<Plus />}
             title="Create Project"
@@ -65,13 +47,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
         {/* Recent Items */}
         {recentItems.length > 0 && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: '#d4d4d4' }}>
+          <div className="welcome-screen__recent">
+            <div className="welcome-screen__recent-header">
+              <h2 className="welcome-screen__recent-title">
                 Recent
               </h2>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div className="welcome-screen__recent-list">
               {recentItems.map((item) => (
                 <RecentItem
                   key={item.id}

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTerminal } from './useTerminal'
 import { MenuItem, Separator } from '../common'
+import { TIMING } from '../../../shared/constants'
 
 interface TerminalViewProps {
   terminalId: string
@@ -51,7 +52,7 @@ export function TerminalView({ terminalId }: TerminalViewProps) {
   useEffect(() => {
     const spawnPty = async () => {
       // Wait for terminal to be initialized
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, TIMING.TERMINAL_INIT_DELAY))
 
       // Get terminal dimensions
       const container = containerRef.current

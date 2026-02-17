@@ -4,6 +4,7 @@ import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ToolCall, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
+import { TIMING } from '../../../shared/constants'
 import type { SlashCommand } from './SlashCommandMenu'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -57,6 +58,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const tabs = useTabStore((state) => state.tabs)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const useDocker = useSettingsStore((state) => state.useDocker)
+  const updateSettings = useSettingsStore((state) => state.updateSettings)
   const currentAgentIdRef = useRef<string | undefined>(agentId)
 
   // Define custom commands
@@ -89,6 +91,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     console.log('[ClaudeChat] Initializing agent...')
     setIsInitializingAgent(true)
     setError(null)
+
+    // Set initial container status based on Docker mode
+    if (useDocker) {
+      setContainerStatus('building')
+    } else {
+      setContainerStatus('disabled')
+    }
 
     try {
       const result = await window.electron.claude.start(workingDir, undefined, useDocker)
@@ -141,7 +150,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
     // Get initial git stats and start polling
     updateGitStats()
-    const statsInterval = setInterval(updateGitStats, 2000)
+    const statsInterval = setInterval(updateGitStats, TIMING.GIT_STATS_POLL_INTERVAL)
 
     // Fetch Claude commands from SDK (only if agent is initialized)
     if (agentId) {
@@ -397,9 +406,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     if (!currentTurnMetadata || currentTurnMetadata.isComplete) return
 
     const interval = setInterval(() => {
-      // Trigger re-render every 1s to update elapsed time
+      // Trigger re-render to update elapsed time display
       setCurrentTurnMetadata((prev) => (prev ? { ...prev } : null))
-    }, 1000)
+    }, TIMING.TIMER_UPDATE_INTERVAL)
 
     return () => clearInterval(interval)
   }, [currentTurnMetadata?.isComplete])
@@ -490,8 +499,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       const [nextMessage, ...remainingQueue] = messageQueue
       console.log('[ClaudeChat] Agent idle, processing queued message:', nextMessage)
       setMessageQueue(remainingQueue)
-      // Small delay to ensure state is clean
-      setTimeout(() => sendMessageInternal(nextMessage), 100)
+      // Delay before processing queued messages to ensure clean state
+      setTimeout(() => sendMessageInternal(nextMessage), TIMING.MESSAGE_QUEUE_DELAY)
     }
   }, [isWorking, messageQueue, sendMessageInternal])
 
@@ -519,6 +528,16 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       const newDockerState = containerStatus === 'error' ? true : containerStatus === 'disabled'
       const modeText = newDockerState ? 'container' : 'host'
 
+      // Update settings store to persist the Docker mode
+      updateSettings({ useDocker: newDockerState })
+
+      // Set container status immediately based on new mode
+      if (newDockerState) {
+        setContainerStatus('building')
+      } else {
+        setContainerStatus('disabled')
+      }
+
       // Add system message about restart
       if (containerStatus === 'error') {
         addSystemMessage(`🔄 Retrying container mode...`)
@@ -530,8 +549,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       console.log('[ClaudeChat] Stopping current agent:', currentAgentIdRef.current)
       await window.electron.claude.stop(currentAgentIdRef.current)
 
-      // Small delay to ensure cleanup
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // Delay before restarting agent to ensure cleanup
+      await new Promise((resolve) => setTimeout(resolve, TIMING.AGENT_RESTART_DELAY))
 
       // Start new agent with toggled Docker state
       console.log('[ClaudeChat] Starting new agent with Docker:', newDockerState)
@@ -540,7 +559,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       if (result.success && result.agentId) {
         console.log('[ClaudeChat] New agent started:', result.agentId)
 
-        // Update agent ID reference
+        // Update agent ID reference IMMEDIATELY to catch early events
         currentAgentIdRef.current = result.agentId
 
         // Update the tab's agent ID in store
@@ -551,8 +570,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         // Add success message
         addSystemMessage(`✓ Agent restarted in ${modeText} mode`)
 
-        // Note: The new agent's container status will be emitted via IPC events
-        // and picked up by the useEffect listener
+        // Ensure container status reflects the new mode
+        // The status will be updated by IPC events as the agent progresses
+        if (!newDockerState) {
+          // For non-Docker mode, immediately set to disabled
+          setContainerStatus('disabled')
+        }
+        // For Docker mode, status was already set to 'building' above
       } else {
         console.error('[ClaudeChat] Failed to start new agent:', result.error)
         addSystemMessage(`✗ Failed to restart agent: ${result.error || 'Unknown error'}`)
@@ -577,6 +601,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     agentId,
     tabs,
     updateTabAgent,
+    updateSettings,
   ])
 
   // Helper to add system messages

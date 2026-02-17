@@ -406,7 +406,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
         <AgentModeSelector
           mode={agentMode}
-          onAgentModeChange={onAgentModeChange}
+          onModeChange={onAgentModeChange}
           disabled={disabled}
         />
 
