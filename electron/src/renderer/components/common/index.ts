@@ -1,5 +1,3 @@
-export { DropdownMenu } from './DropdownMenu'
-export type { DropdownOption } from './DropdownMenu'
 export { MenuItem } from './MenuItem'
 export type { MenuItemProps } from './MenuItem'
 export { Separator } from './Separator'
