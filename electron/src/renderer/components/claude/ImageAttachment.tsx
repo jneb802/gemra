@@ -128,7 +128,7 @@ export const CompactImageChip: React.FC<CompactImageChipProps> = ({ images, onRe
     <div
       style={{
         position: 'absolute',
-        right: '76px', // Position before the send button (12px padding + 64px button width)
+        right: '12px',
         top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex',

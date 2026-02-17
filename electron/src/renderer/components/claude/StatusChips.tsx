@@ -18,6 +18,7 @@ interface StatusChipsProps {
   containerError?: string
   onBranchClick: () => void
   onContainerToggle: () => void
+  dangerouslySkipPermissions?: boolean
 }
 
 export const StatusChips: React.FC<StatusChipsProps> = ({
@@ -28,6 +29,7 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
   containerError,
   onBranchClick,
   onContainerToggle,
+  dangerouslySkipPermissions = false,
 }) => {
   // Format directory to show last two segments
   const formatDirectory = (path: string): string => {
@@ -54,6 +56,42 @@ export const StatusChips: React.FC<StatusChipsProps> = ({
         onClick={handleDirectoryClick}
         title={`Working directory: ${workingDir}\nClick to copy full path`}
       />
+
+      {/* Danger chip - shown when dangerously skip permissions is enabled */}
+      {dangerouslySkipPermissions && (
+        <Tooltip content="⚠️ Dangerously Skip Permissions mode enabled\nAll commands execute without approval prompts">
+          <div className="danger-chip">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              className="danger-chip-icon"
+            >
+              <path
+                d="M8 1.5 L14.5 13.5 L1.5 13.5 Z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M8 6 L8 9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <circle
+                cx="8"
+                cy="11"
+                r="0.5"
+                fill="currentColor"
+              />
+            </svg>
+            <span className="danger-chip-text">Danger</span>
+          </div>
+        </Tooltip>
+      )}
 
       {/* Git status - connected chips */}
       <div className="git-status-chips">

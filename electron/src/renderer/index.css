@@ -247,8 +247,14 @@ code {
 
 /* User message styling */
 .message-user {
-  background-color: var(--bg-user-message);
+  background-color: transparent;
   margin-left: auto; /* Right-align user messages like iMessage */
+  text-align: right;
+}
+
+/* Right-align attachments for user messages */
+.message-user .message-attachments {
+  justify-content: flex-end;
 }
 
 /* Assistant message styling - minimal */
@@ -275,6 +281,15 @@ code {
   white-space: pre-wrap;
   word-wrap: break-word;
   color: var(--text-primary);
+}
+
+/* Message attachments list - compact thumbnail display below text */
+.message-attachments {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 /* Message status indicator - inline after message content */
@@ -585,6 +600,31 @@ code {
 
 .git-chip-deletions {
   color: var(--git-deletion);
+}
+
+/* Danger chip */
+.danger-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bg-user-message);
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: #f59e0b;
+  user-select: none;
+}
+
+.danger-chip-icon {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+.danger-chip-text {
+  color: #f59e0b;
+  font-weight: 500;
 }
 
 /* ==========================================================================

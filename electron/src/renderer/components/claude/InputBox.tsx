@@ -35,6 +35,7 @@ interface InputBoxProps {
   containerError?: string
   onContainerToggle: () => void
   tokenUsage: { inputTokens: number; outputTokens: number }
+  dangerouslySkipPermissions?: boolean
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -62,6 +63,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   containerError,
   onContainerToggle,
   tokenUsage,
+  dangerouslySkipPermissions = false,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -360,6 +362,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
         containerError={containerError}
         onBranchClick={onBranchClick}
         onContainerToggle={onContainerToggle}
+        dangerouslySkipPermissions={dangerouslySkipPermissions}
       />
 
       {/* Middle row - Textarea with image chip */}

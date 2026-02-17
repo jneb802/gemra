@@ -49,6 +49,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const [showBranchMenu, setShowBranchMenu] = useState(false)
   const [branchList, setBranchList] = useState<string[]>([])
   const [isTogglingContainer, setIsTogglingContainer] = useState(false)
+  const [dangerouslySkipPermissions, setDangerouslySkipPermissions] = useState(false)
 
   // Store references
   const updateTabAgent = useTabStore((state) => state.updateTabAgent)
@@ -130,6 +131,11 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       if (result.success) {
         setGitBranch(result.branch)
       }
+    })
+
+    // Check permissions mode
+    window.electron.claude.getPermissionsMode().then((result) => {
+      setDangerouslySkipPermissions(result.dangerouslySkipPermissions)
     })
 
     // Get initial git stats and start polling
@@ -838,6 +844,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         containerError={containerError}
         onContainerToggle={handleContainerToggle}
         tokenUsage={tokenUsage}
+        dangerouslySkipPermissions={dangerouslySkipPermissions}
       />
     </div>
   )

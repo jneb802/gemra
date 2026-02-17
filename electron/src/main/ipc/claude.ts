@@ -214,6 +214,12 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     return { success: true, branch: newBranch }
   })
 
+  // Check if dangerous skip permissions mode is enabled
+  createIpcHandler('claude:get-permissions-mode', async () => {
+    const dangerouslySkipPermissions = process.env.CLAUDE_SANDBOX === '1'
+    return { dangerouslySkipPermissions }
+  })
+
   logger.log('IPC handlers set up successfully')
 }
 

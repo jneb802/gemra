@@ -47,51 +47,53 @@ export const MessageItem = ({
       // Don't render if content is empty after sanitization
       if (!sanitized) return null
 
-      return <div className="message-content">{sanitized}</div>
+      return { text: <div className="message-content">{sanitized}</div>, images: [] }
     }
 
     // Multimodal content (array of blocks)
-    return (
-      <div className="message-content">
-        {message.content.map((block: MessageContent, idx: number) => {
-          if (block.type === 'text') {
-            const sanitized = sanitizeContent(block.text)
-            // Skip empty blocks after sanitization
-            if (!sanitized) return null
+    const textBlocks: JSX.Element[] = []
+    const imageBlocks: JSX.Element[] = []
 
-            return (
-              <div key={idx} style={{ marginBottom: idx < message.content.length - 1 ? '8px' : 0 }}>
-                {sanitized}
-              </div>
-            )
-          }
+    message.content.forEach((block: MessageContent, idx: number) => {
+      if (block.type === 'text') {
+        const sanitized = sanitizeContent(block.text)
+        // Skip empty blocks after sanitization
+        if (!sanitized) return
 
-          if (block.type === 'image') {
-            return (
-              <img
-                key={idx}
-                src={`data:${block.source.media_type};base64,${block.source.data}`}
-                alt="Attached image"
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '400px',
-                  borderRadius: '8px',
-                  marginBottom: idx < message.content.length - 1 ? '8px' : 0,
-                }}
-              />
-            )
-          }
+        textBlocks.push(
+          <div key={idx} style={{ marginBottom: textBlocks.length > 0 ? '8px' : 0 }}>
+            {sanitized}
+          </div>
+        )
+      }
 
-          return null
-        })}
-      </div>
-    )
+      if (block.type === 'image') {
+        imageBlocks.push(
+          <img
+            key={idx}
+            src={`data:${block.source.media_type};base64,${block.source.data}`}
+            alt="Attached image"
+            style={{
+              width: '32px',
+              height: '32px',
+              objectFit: 'cover',
+              borderRadius: '4px',
+            }}
+          />
+        )
+      }
+    })
+
+    return {
+      text: textBlocks.length > 0 ? <div className="message-content">{textBlocks}</div> : null,
+      images: imageBlocks,
+    }
   }
 
   const content = renderContent()
 
   // Don't render message if content is null (empty after sanitization)
-  if (!content) {
+  if (!content || (!content.text && content.images.length === 0)) {
     return null
   }
 
@@ -102,7 +104,14 @@ export const MessageItem = ({
           isGroupedWithPrevious ? ' message-grouped' : ''
         }`}
       >
-        {content}
+        {content.text}
+
+        {/* Image attachments list (shown below text for user messages) */}
+        {message.role === 'user' && content.images.length > 0 && (
+          <div className="message-attachments">
+            {content.images}
+          </div>
+        )}
 
         {/* Live status for streaming message */}
         {message.role === 'assistant' && isStreaming && currentTurnMetadata && (
