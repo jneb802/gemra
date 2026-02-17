@@ -104,3 +104,117 @@ export function createBranch(workingDir: string, branchName: string, checkout = 
     }
   }
 }
+
+/**
+ * Worktree data structure
+ */
+export interface Worktree {
+  path: string      // Absolute path to worktree directory
+  branch: string    // Branch name (without refs/heads/)
+  commit: string    // HEAD commit SHA
+  isMain: boolean   // Is this the main worktree?
+}
+
+/**
+ * List all git worktrees
+ */
+export function listWorktrees(workingDir: string): Worktree[] {
+  try {
+    const output = execGit('worktree list --porcelain', workingDir)
+    const worktrees: Worktree[] = []
+
+    // Parse porcelain output
+    // Format:
+    // worktree /path
+    // HEAD abc123
+    // branch refs/heads/main
+    // (blank line between worktrees)
+
+    const lines = output.split('\n')
+    let currentWorktree: Partial<Worktree> = {}
+    let isFirst = true
+
+    for (const line of lines) {
+      if (line.startsWith('worktree ')) {
+        currentWorktree.path = line.substring('worktree '.length)
+        currentWorktree.isMain = isFirst
+        isFirst = false
+      } else if (line.startsWith('HEAD ')) {
+        currentWorktree.commit = line.substring('HEAD '.length)
+      } else if (line.startsWith('branch ')) {
+        const branchRef = line.substring('branch '.length)
+        // Strip refs/heads/ prefix
+        currentWorktree.branch = branchRef.replace(/^refs\/heads\//, '')
+      } else if (line.trim() === '' && currentWorktree.path) {
+        // End of current worktree entry
+        worktrees.push({
+          path: currentWorktree.path,
+          branch: currentWorktree.branch || '(detached)',
+          commit: currentWorktree.commit || '',
+          isMain: currentWorktree.isMain || false
+        })
+        currentWorktree = {}
+      }
+    }
+
+    // Handle last entry if no trailing newline
+    if (currentWorktree.path) {
+      worktrees.push({
+        path: currentWorktree.path,
+        branch: currentWorktree.branch || '(detached)',
+        commit: currentWorktree.commit || '',
+        isMain: currentWorktree.isMain || false
+      })
+    }
+
+    return worktrees
+  } catch (error) {
+    console.error('Failed to list worktrees:', error)
+    return []
+  }
+}
+
+/**
+ * Add a new worktree
+ */
+export function addWorktree(workingDir: string, path: string, branch: string): { success: boolean; error?: string } {
+  try {
+    execGit(`worktree add "${path}" "${branch}"`, workingDir)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+/**
+ * Remove a worktree
+ */
+export function removeWorktree(workingDir: string, path: string): { success: boolean; error?: string } {
+  try {
+    execGit(`worktree remove "${path}"`, workingDir)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+/**
+ * Prune worktree information for deleted directories
+ */
+export function pruneWorktrees(workingDir: string): { success: boolean; error?: string } {
+  try {
+    execGit('worktree prune', workingDir)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}

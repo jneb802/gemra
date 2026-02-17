@@ -9,6 +9,7 @@ import { CompactContextIndicator } from './CompactContextIndicator'
 import { useInputModeStore } from '../../stores/inputModeStore'
 import { detectInputType } from '../../utils/inputDetection'
 import type { MessageContent, ContainerStatus } from '../../../shared/types'
+import type { Worktree, WorktreeMenuMode } from './hooks/useWorktreeOperations'
 
 interface InputBoxProps {
   onSend: (content: string | MessageContent[]) => void
@@ -23,6 +24,14 @@ interface InputBoxProps {
   currentBranch?: string
   onBranchSelect?: (branch: string) => void
   onCloseBranchMenu?: () => void
+  showWorktreeMenu?: boolean
+  worktreeList?: Worktree[]
+  worktreeMenuMode?: WorktreeMenuMode
+  onWorktreeSelect?: (worktree: Worktree) => void
+  onCloseWorktreeMenu?: () => void
+  onWorktreeSubcommand?: (subcommand: string, args?: string) => void
+  onShowWorktreeSubcommands?: () => void
+  onShowWorktreeList?: () => void
   workingDir: string
   gitBranch: string
   gitStats: { filesChanged: number; insertions: number; deletions: number }
@@ -51,6 +60,14 @@ export const InputBox: React.FC<InputBoxProps> = ({
   currentBranch = '',
   onBranchSelect,
   onCloseBranchMenu,
+  showWorktreeMenu = false,
+  worktreeList = [],
+  worktreeMenuMode = 'list',
+  onWorktreeSelect,
+  onCloseWorktreeMenu,
+  onWorktreeSubcommand,
+  onShowWorktreeSubcommands,
+  onShowWorktreeList,
   workingDir,
   gitBranch,
   gitStats,
@@ -72,12 +89,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<SlashCommandMenuHandle>(null)
 
-  // Input mode state
-  const globalMode = useInputModeStore((state) => state.globalMode)
-  const getTabMode = useInputModeStore((state) => state.getTabMode)
+  // Input mode state - reactive subscription that triggers re-renders
+  const currentMode = useInputModeStore((state) =>
+    tabId ? (state.tabModes[tabId] || state.globalMode) : state.globalMode
+  )
   const setTabMode = useInputModeStore((state) => state.setTabMode)
-
-  const currentMode = tabId ? getTabMode(tabId) : globalMode
 
   // Autofocus on mount
   useEffect(() => {
@@ -258,9 +274,30 @@ export const InputBox: React.FC<InputBoxProps> = ({
     description: branch === currentBranch ? '(current branch)' : `Switch to ${branch}`,
   }))
 
+  // Convert worktrees to SlashCommand format for the menu
+  const worktreeCommands: SlashCommand[] = worktreeList.map((worktree) => ({
+    name: worktree.path,
+    description: `${worktree.branch}${worktree.isMain ? ' (main)' : ''} - ${worktree.commit.substring(0, 7)}`,
+  }))
+
+  // Worktree sub-commands
+  const worktreeSubcommands: SlashCommand[] = [
+    { name: 'create', description: 'Create a new worktree', argumentHint: '<path> <branch>' },
+    { name: 'remove', description: 'Remove a worktree', argumentHint: '<path>' },
+    { name: 'prune', description: 'Prune deleted worktrees' },
+    { name: 'list', description: 'List all worktrees' },
+  ]
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Menu navigation when visible (either slash menu or branch menu)
-    if (showSlashMenu || showBranchMenu) {
+    // Handle "/" key when in worktree list mode to show subcommands
+    if (showWorktreeMenu && worktreeMenuMode === 'list' && e.key === '/') {
+      e.preventDefault()
+      onShowWorktreeSubcommands?.()
+      return
+    }
+
+    // Menu navigation when visible (slash menu, branch menu, or worktree menu)
+    if (showSlashMenu || showBranchMenu || showWorktreeMenu) {
       switch (e.key) {
         case 'Tab':
           e.preventDefault()
@@ -275,6 +312,8 @@ export const InputBox: React.FC<InputBoxProps> = ({
           e.preventDefault()
           if (showBranchMenu) {
             menuRef.current?.executeSelected()
+          } else if (showWorktreeMenu) {
+            menuRef.current?.executeSelected()
           } else {
             menuRef.current?.executeSelected()
             setText('')
@@ -285,6 +324,13 @@ export const InputBox: React.FC<InputBoxProps> = ({
           e.preventDefault()
           if (showBranchMenu) {
             onCloseBranchMenu?.()
+          } else if (showWorktreeMenu) {
+            // If in subcommands mode, go back to list
+            if (worktreeMenuMode === 'subcommands') {
+              onShowWorktreeList?.()
+            } else {
+              onCloseWorktreeMenu?.()
+            }
           } else {
             setShowSlashMenu(false)
           }
@@ -323,6 +369,19 @@ export const InputBox: React.FC<InputBoxProps> = ({
     onBranchSelect?.(command.name)
   }
 
+  const handleWorktreeCommandSelect = (command: SlashCommand, category: 'custom' | 'claude') => {
+    if (worktreeMenuMode === 'list') {
+      // Selecting a worktree from the list
+      const selectedWorktree = worktreeList.find((wt) => wt.path === command.name)
+      if (selectedWorktree) {
+        onWorktreeSelect?.(selectedWorktree)
+      }
+    } else {
+      // Executing a subcommand
+      onWorktreeSubcommand?.(command.name)
+    }
+  }
+
   const handleModeChange = (newMode: 'auto' | 'command' | 'ai') => {
     if (tabId) {
       setTabMode(tabId, newMode)
@@ -342,7 +401,18 @@ export const InputBox: React.FC<InputBoxProps> = ({
           customTabLabel="Branches"
         />
       )}
-      {showSlashMenu && !showBranchMenu && (
+      {showWorktreeMenu && !showBranchMenu && (
+        <SlashCommandMenu
+          ref={menuRef}
+          query=""
+          customCommands={worktreeMenuMode === 'list' ? worktreeCommands : worktreeSubcommands}
+          claudeCommands={[]}
+          onSelectCommand={handleWorktreeCommandSelect}
+          onClose={() => onCloseWorktreeMenu?.()}
+          customTabLabel={worktreeMenuMode === 'list' ? 'Worktrees (/ for commands)' : 'Worktree Commands'}
+        />
+      )}
+      {showSlashMenu && !showBranchMenu && !showWorktreeMenu && (
         <SlashCommandMenu
           ref={menuRef}
           query={slashQuery}

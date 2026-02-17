@@ -87,6 +87,18 @@ contextBridge.exposeInMainWorld('electron', {
     createBranch: (workingDir: string, branchName: string, checkout: boolean) =>
       ipcRenderer.invoke('claude:create-branch', workingDir, branchName, checkout),
 
+    listWorktrees: (workingDir: string) =>
+      ipcRenderer.invoke('claude:list-worktrees', workingDir),
+
+    addWorktree: (workingDir: string, path: string, branch: string) =>
+      ipcRenderer.invoke('claude:add-worktree', workingDir, path, branch),
+
+    removeWorktree: (workingDir: string, path: string) =>
+      ipcRenderer.invoke('claude:remove-worktree', workingDir, path),
+
+    pruneWorktrees: (workingDir: string) =>
+      ipcRenderer.invoke('claude:prune-worktrees', workingDir),
+
     getPermissionsMode: () =>
       ipcRenderer.invoke('claude:get-permissions-mode'),
 
@@ -144,6 +156,10 @@ export interface ElectronAPI {
     getGitBranches: (workingDir: string) => Promise<{ success: boolean; branches: string[] }>
     checkoutBranch: (workingDir: string, branch: string) => Promise<{ success: boolean; branch?: string; error?: string }>
     createBranch: (workingDir: string, branchName: string, checkout: boolean) => Promise<{ success: boolean; branch?: string; error?: string }>
+    listWorktrees: (workingDir: string) => Promise<{ worktrees: Array<{ path: string; branch: string; commit: string; isMain: boolean }> }>
+    addWorktree: (workingDir: string, path: string, branch: string) => Promise<{ success: boolean; error?: string }>
+    removeWorktree: (workingDir: string, path: string) => Promise<{ success: boolean; error?: string }>
+    pruneWorktrees: (workingDir: string) => Promise<{ success: boolean; error?: string }>
     getPermissionsMode: () => Promise<{ dangerouslySkipPermissions: boolean }>
     onText: (callback: (data: { agentId: string; text: string }) => void) => () => void
     onStatus: (callback: (data: { agentId: string; status: string }) => void) => () => void

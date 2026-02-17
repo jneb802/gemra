@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
 import { useClaudeAgent } from './hooks/useClaudeAgent'
 import { useGitOperations } from './hooks/useGitOperations'
+import { useWorktreeOperations } from './hooks/useWorktreeOperations'
 import { useContainerManagement } from './hooks/useContainerManagement'
 import { useCommandSystem } from './hooks/useCommandSystem'
 import { useMessageMetadata } from './hooks/useMessageMetadata'
@@ -85,6 +86,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     onAddSystemMessage: agent.addSystemMessage
   })
 
+  // Initialize worktree operations hook
+  const worktree = useWorktreeOperations({
+    workingDir,
+    onAddSystemMessage: agent.addSystemMessage
+  })
+
   // Initialize container management hook
   const containerManagement = useContainerManagement({
     workingDir,
@@ -129,6 +136,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       createBranch: git.createBranch,
       fetchBranches: git.fetchBranches,
       getGitStatus: git.getGitStatus
+    },
+    worktreeOperations: {
+      listWorktrees: worktree.listWorktrees
     }
   })
 
@@ -203,6 +213,44 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         currentBranch={git.gitBranch}
         onBranchSelect={git.handleBranchSelect}
         onCloseBranchMenu={git.closeBranchMenu}
+        showWorktreeMenu={worktree.showWorktreeMenu}
+        worktreeList={worktree.worktreeList}
+        worktreeMenuMode={worktree.worktreeMenuMode}
+        onWorktreeSelect={worktree.handleWorktreeSelect}
+        onCloseWorktreeMenu={worktree.closeWorktreeMenu}
+        onWorktreeSubcommand={(subcommand: string, args?: string) => {
+          switch (subcommand) {
+            case 'create':
+              if (args) {
+                const [path, branch] = args.split(/\s+/)
+                if (path && branch) {
+                  worktree.addWorktree(path, branch)
+                } else {
+                  agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+                }
+              } else {
+                agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+              }
+              break
+            case 'remove':
+              if (args) {
+                worktree.removeWorktree(args)
+              } else {
+                agent.addSystemMessage('Usage: /worktree remove <path>')
+              }
+              break
+            case 'prune':
+              worktree.pruneWorktrees()
+              break
+            case 'list':
+              worktree.listWorktrees()
+              break
+            default:
+              agent.addSystemMessage(`Unknown worktree subcommand: ${subcommand}`)
+          }
+        }}
+        onShowWorktreeSubcommands={worktree.showSubcommands}
+        onShowWorktreeList={worktree.showList}
         workingDir={workingDir}
         gitBranch={git.gitBranch}
         gitStats={git.gitStats}

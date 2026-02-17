@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { ClaudeAgent } from '../agent/ClaudeAgent'
 import { createIpcHandler } from '../utils/ipcUtils'
 import { generateId } from '../../shared/utils/id'
-import { getGitBranch, getGitStats, getGitBranches, checkoutBranch, createBranch } from '../utils/gitUtils'
+import { getGitBranch, getGitStats, getGitBranches, checkoutBranch, createBranch, listWorktrees, addWorktree, removeWorktree, pruneWorktrees } from '../utils/gitUtils'
 import { Logger } from '../../shared/utils/logger'
 import type { MessageContent } from '../../shared/types'
 
@@ -224,6 +224,50 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
     const newBranch = getGitBranch(workingDir)
     return { success: true, branch: newBranch }
+  })
+
+  // List git worktrees
+  createIpcHandler('claude:list-worktrees', async (workingDir: string) => {
+    logger.log(`Listing worktrees for ${workingDir}`)
+
+    const worktrees = listWorktrees(workingDir)
+    return { worktrees }
+  })
+
+  // Add git worktree
+  createIpcHandler('claude:add-worktree', async (workingDir: string, path: string, branch: string) => {
+    logger.log(`Adding worktree at ${path} for branch ${branch} in ${workingDir}`)
+
+    const result = addWorktree(workingDir, path, branch)
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
+
+    return { success: true }
+  })
+
+  // Remove git worktree
+  createIpcHandler('claude:remove-worktree', async (workingDir: string, path: string) => {
+    logger.log(`Removing worktree at ${path} in ${workingDir}`)
+
+    const result = removeWorktree(workingDir, path)
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
+
+    return { success: true }
+  })
+
+  // Prune git worktrees
+  createIpcHandler('claude:prune-worktrees', async (workingDir: string) => {
+    logger.log(`Pruning worktrees in ${workingDir}`)
+
+    const result = pruneWorktrees(workingDir)
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
+
+    return { success: true }
   })
 
   // Check if dangerous skip permissions mode is enabled

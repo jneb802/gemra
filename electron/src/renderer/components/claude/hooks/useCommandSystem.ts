@@ -22,6 +22,9 @@ interface UseCommandSystemOptions {
     fetchBranches: () => Promise<string[]>
     getGitStatus: () => Promise<{ success: boolean; status?: string }>
   }
+  worktreeOperations?: {
+    listWorktrees: () => Promise<any[]>
+  }
 }
 
 // Define custom commands
@@ -34,7 +37,8 @@ const CUSTOM_COMMANDS: SlashCommand[] = [
   { name: 'new-chat', description: 'Start new chat session' },
   { name: 'git-status', description: 'Show git status' },
   { name: 'checkout', description: 'Checkout git branches' },
-  { name: 'branch', description: 'Create a new git branch', argumentHint: '<name>' }
+  { name: 'branch', description: 'Create a new git branch', argumentHint: '<name>' },
+  { name: 'worktree', description: 'Manage git worktrees' }
 ]
 
 export function useCommandSystem({
@@ -45,7 +49,8 @@ export function useCommandSystem({
   onClearMessages,
   onModeChange,
   onModelChange,
-  gitOperations
+  gitOperations,
+  worktreeOperations
 }: UseCommandSystemOptions) {
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
 
@@ -169,6 +174,21 @@ export function useCommandSystem({
           }
           break
 
+        case 'worktree':
+          {
+            // List worktrees and show in menu (handled by InputBox)
+            if (worktreeOperations) {
+              worktreeOperations.listWorktrees().then((worktrees) => {
+                if (worktrees.length === 0) {
+                  onAddSystemMessage('No worktrees found')
+                }
+              })
+            } else {
+              onAddSystemMessage('Worktree operations not available')
+            }
+          }
+          break
+
         default:
           onAddSystemMessage(`Unknown command: ${command.name}`)
       }
@@ -180,7 +200,8 @@ export function useCommandSystem({
       onClearMessages,
       onModeChange,
       onModelChange,
-      gitOperations
+      gitOperations,
+      worktreeOperations
     ]
   )
 
