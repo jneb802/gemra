@@ -321,13 +321,18 @@ code {
    ========================================================================== */
 
 .status-indicator {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background-color: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
-  font-size: var(--font-size-base);
+  gap: 6px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin: 12px 16px;
+  background-color: var(--bg-user-message);
+  border: 1px solid var(--bg-active);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  width: fit-content;
 }
 
 .status-indicator.thinking {
@@ -343,18 +348,26 @@ code {
 }
 
 .status-icon {
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-base);
+  line-height: 1;
 }
 
 .status-text {
-  font-weight: 500;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .status-detail {
-  margin-left: var(--spacing-xs);
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border-color);
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -362,11 +375,17 @@ code {
    ========================================================================== */
 
 .error-message {
-  padding: var(--spacing-md) var(--spacing-lg);
-  background-color: var(--bg-error);
-  border-top: 1px solid var(--border-color-error);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin: 12px 16px;
+  background-color: var(--bg-user-message);
+  border: 1px solid var(--border-color-error);
+  border-radius: var(--radius-lg);
   color: var(--text-error);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  width: fit-content;
 }
 
 /* ==========================================================================

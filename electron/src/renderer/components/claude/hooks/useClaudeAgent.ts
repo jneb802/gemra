@@ -191,13 +191,44 @@ export function useClaudeAgent({
 
       // Finalize metadata for current turn
       const now = Date.now()
-      agentStatusActions.finalizeTurn(data.usage.inputTokens, data.usage.outputTokens, now)
+      const currentMetadata = agentStatusState.currentTurnMetadata
 
-      // Attach metadata to last assistant message
-      if (lastAssistantMessageIdRef.current && agentStatusState.currentTurnMetadata) {
-        updateMessage(data.agentId, lastAssistantMessageIdRef.current, {
-          metadata: agentStatusState.currentTurnMetadata
-        })
+      if (currentMetadata) {
+        // Calculate final phase time
+        const phaseElapsed = now - (currentMetadata.phaseStartTime || now)
+        let finalThinkingTime = currentMetadata.thinkingTime || 0
+        let finalStreamingTime = currentMetadata.streamingTime || 0
+        let finalToolTime = currentMetadata.toolExecutionTime || 0
+
+        if (currentMetadata.currentPhase === 'thinking') {
+          finalThinkingTime += phaseElapsed
+        } else if (currentMetadata.currentPhase === 'streaming') {
+          finalStreamingTime += phaseElapsed
+        } else if (currentMetadata.currentPhase === 'tool_execution') {
+          finalToolTime += phaseElapsed
+        }
+
+        const totalDuration = now - (currentMetadata.startTime || now)
+        const finalMetadata = {
+          ...currentMetadata,
+          thinkingTime: finalThinkingTime,
+          streamingTime: finalStreamingTime,
+          toolExecutionTime: finalToolTime,
+          totalDuration,
+          inputTokens: data.usage.inputTokens,
+          outputTokens: data.usage.outputTokens,
+          isComplete: true
+        }
+
+        // Attach metadata to last assistant message
+        if (lastAssistantMessageIdRef.current) {
+          updateMessage(data.agentId, lastAssistantMessageIdRef.current, {
+            metadata: finalMetadata
+          })
+        }
+
+        // Update reducer state
+        agentStatusActions.finalizeTurn(data.usage.inputTokens, data.usage.outputTokens, now)
       }
     })
 

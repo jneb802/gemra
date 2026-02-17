@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
-import { StatusIndicators } from './StatusIndicators'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
@@ -152,6 +151,22 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     }
   })
 
+  // Helper to get tool display name
+  const getToolDisplayName = (toolName: string): string => {
+    const toolMap: Record<string, string> = {
+      Read: 'Reading file',
+      Write: 'Writing file',
+      Edit: 'Editing file',
+      Bash: 'Running command',
+      Grep: 'Searching code',
+      Glob: 'Finding files',
+      Task: 'Spawning agent',
+      WebSearch: 'Searching web',
+      WebFetch: 'Fetching URL'
+    }
+    return toolMap[toolName] || `Running ${toolName}`
+  }
+
   // Handle mode cycling (Shift+Tab)
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -192,12 +207,44 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       )}
 
       {/* Status indicators */}
-      <StatusIndicators
-        agentStatus={agent.agentStatus}
-        isWorking={agent.isWorking}
-        isInitializingAgent={agent.isInitializingAgent}
-        error={agent.error}
-      />
+      {agent.agentStatus.type === 'thinking' && (
+        <div className="status-indicator thinking">
+          <span className="status-icon">🤔</span>
+          <span className="status-text">Thinking...</span>
+        </div>
+      )}
+
+      {agent.agentStatus.type === 'streaming' && agent.isWorking && (
+        <div className="status-indicator streaming">
+          <span className="status-icon">✍️</span>
+          <span className="status-text">Writing response...</span>
+        </div>
+      )}
+
+      {agent.agentStatus.type === 'tool_execution' && agent.agentStatus.tool && (
+        <div className="status-indicator tool-execution">
+          <span className="status-icon">🔧</span>
+          <span className="status-text">{getToolDisplayName(agent.agentStatus.tool.name)}</span>
+          {agent.agentStatus.tool.name === 'Read' && agent.agentStatus.tool.input?.file_path && (
+            <span className="status-detail">{agent.agentStatus.tool.input.file_path}</span>
+          )}
+          {agent.agentStatus.tool.name === 'Bash' && agent.agentStatus.tool.input?.command && (
+            <span className="status-detail">{agent.agentStatus.tool.input.command}</span>
+          )}
+          {agent.agentStatus.tool.name === 'Grep' && agent.agentStatus.tool.input?.pattern && (
+            <span className="status-detail">"{agent.agentStatus.tool.input.pattern}"</span>
+          )}
+        </div>
+      )}
+
+      {agent.isInitializingAgent && (
+        <div className="status-indicator thinking">
+          <span className="status-icon">🚀</span>
+          <span className="status-text">Starting Claude Code agent...</span>
+        </div>
+      )}
+
+      {agent.error && <div className="error-message">Error: {agent.error}</div>}
 
       {/* Input box */}
       <InputBox
