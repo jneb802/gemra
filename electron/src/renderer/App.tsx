@@ -112,11 +112,16 @@ function App() {
     }
   }, [createClaudeTab, useDocker, addRecent])
 
-  // Create initial tab on mount with last used directory
+  // Create initial tab on mount with last used directory (but don't start agent yet)
   useEffect(() => {
     if (tabs.length === 0) {
       const lastUsedDir = recentItems[0]?.path || '/Users/benjmarston/Develop/gemra'
-      startClaudeChatInDirectory(lastUsedDir)
+      // Create tab immediately without starting agent (lazy initialization)
+      createTab({
+        type: 'claude-chat',
+        workingDir: lastUsedDir
+        // agentId will be set when user sends first message
+      })
     }
   }, []) // Only run once on mount
 
@@ -337,9 +342,9 @@ function App() {
               key={tab.id}
               className={`app-tab-content ${tab.isActive ? 'active' : ''}`}
             >
-              {tab.type === 'claude-chat' && tab.agentId && tab.workingDir ? (
+              {tab.type === 'claude-chat' && tab.workingDir ? (
                 <ClaudeChat
-                  agentId={tab.agentId}
+                  agentId={tab.agentId} // Can be undefined initially
                   workingDir={tab.workingDir}
                   onCreateProject={() => setShowCreateModal(true)}
                   onOpenRepository={handleOpenDirectory}

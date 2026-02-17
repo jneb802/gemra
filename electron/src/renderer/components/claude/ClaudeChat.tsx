@@ -7,9 +7,10 @@ import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, Messag
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
 import { useTabStore } from '../../stores/tabStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 interface ClaudeChatProps {
-  agentId: string
+  agentId?: string // Optional - will be initialized on first message
   workingDir: string
   onUserMessage?: () => void
   onCreateProject: () => void
@@ -31,6 +32,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 }) => {
   const [messages, setMessages] = useState<ClaudeMessage[]>([])
   const [isWorking, setIsWorking] = useState(false)
+  const [isInitializingAgent, setIsInitializingAgent] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({ type: 'idle' })
   const [currentTool, setCurrentTool] = useState<ToolExecution | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +54,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   // Store references
   const updateTabAgent = useTabStore((state) => state.updateTabAgent)
   const tabs = useTabStore((state) => state.tabs)
-  const currentAgentIdRef = useRef<string>(agentId)
+  const activeTabId = useTabStore((state) => state.activeTabId)
+  const useDocker = useSettingsStore((state) => state.useDocker)
+  const currentAgentIdRef = useRef<string | undefined>(agentId)
 
   // Define custom commands
   const CUSTOM_COMMANDS: SlashCommand[] = [
@@ -79,6 +83,41 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     }
   }
 
+  // Initialize agent (lazy initialization on first message)
+  const initializeAgent = useCallback(async (): Promise<string | null> => {
+    console.log('[ClaudeChat] Initializing agent...')
+    setIsInitializingAgent(true)
+    setError(null)
+
+    try {
+      const result = await window.electron.claude.start(workingDir, undefined, useDocker)
+
+      if (result.success && result.agentId) {
+        console.log('[ClaudeChat] Agent initialized:', result.agentId)
+
+        // Update the tab with the new agent ID
+        if (activeTabId) {
+          updateTabAgent(activeTabId, result.agentId)
+        }
+
+        // Update ref
+        currentAgentIdRef.current = result.agentId
+
+        return result.agentId
+      } else {
+        console.error('[ClaudeChat] Failed to initialize agent:', result.error)
+        setError(result.error || 'Failed to start agent')
+        return null
+      }
+    } catch (err) {
+      console.error('[ClaudeChat] Exception initializing agent:', err)
+      setError(err instanceof Error ? err.message : 'Failed to start agent')
+      return null
+    } finally {
+      setIsInitializingAgent(false)
+    }
+  }, [workingDir, useDocker, updateTabAgent, activeTabId])
+
   // Sync currentAgentIdRef with prop changes
   useEffect(() => {
     currentAgentIdRef.current = agentId
@@ -98,14 +137,16 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     updateGitStats()
     const statsInterval = setInterval(updateGitStats, 2000)
 
-    // Fetch Claude commands from SDK
-    window.electron.claude.getSupportedCommands(agentId).then((result) => {
-      if (result.commands) {
-        setClaudeCommands(result.commands)
-      }
-    }).catch((error) => {
-      console.error('[ClaudeChat] Failed to fetch Claude commands:', error)
-    })
+    // Fetch Claude commands from SDK (only if agent is initialized)
+    if (agentId) {
+      window.electron.claude.getSupportedCommands(agentId).then((result) => {
+        if (result.commands) {
+          setClaudeCommands(result.commands)
+        }
+      }).catch((error) => {
+        console.error('[ClaudeChat] Failed to fetch Claude commands:', error)
+      })
+    }
 
     // Listen for text responses from Claude
     const unlistenText = window.electron.claude.onText((data) => {
@@ -314,6 +355,14 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const sendMessageInternal = useCallback(async (content: string | MessageContent[]) => {
     console.log('[ClaudeChat] Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
 
+    // Ensure we have an agent ID
+    const activeAgentId = currentAgentIdRef.current
+    if (!activeAgentId) {
+      console.error('[ClaudeChat] No agent ID available')
+      setError('Agent not initialized')
+      return
+    }
+
     // Clear any previous error
     setError(null)
 
@@ -340,7 +389,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
     // Send to agent
     try {
-      const result = await window.electron.claude.send(agentId, content)
+      const result = await window.electron.claude.send(activeAgentId, content)
       if (!result.success) {
         setError(result.error || 'Failed to send message')
         setIsWorking(false)
@@ -352,21 +401,32 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       setIsWorking(false)
       setCurrentTurnMetadata(null)
     }
-  }, [agentId])
+  }, [])
 
   const handleSend = useCallback(async (content: string | MessageContent[]) => {
     // Notify parent that user sent a message (to dismiss welcome overlay)
     onUserMessage?.()
 
-    // If already working, queue the message instead
-    if (isWorking) {
-      console.log('[ClaudeChat] Agent busy, queueing message')
+    // If agent not initialized yet, initialize it first (lazy initialization)
+    if (!currentAgentIdRef.current && !isInitializingAgent) {
+      console.log('[ClaudeChat] Agent not initialized, starting it now...')
+      const newAgentId = await initializeAgent()
+
+      if (!newAgentId) {
+        // Agent failed to initialize, error already set
+        return
+      }
+    }
+
+    // If already working or initializing, queue the message instead
+    if (isWorking || isInitializingAgent) {
+      console.log('[ClaudeChat] Agent busy/initializing, queueing message')
       setMessageQueue((prev) => [...prev, content])
       return
     }
 
     await sendMessageInternal(content)
-  }, [isWorking, sendMessageInternal, onUserMessage])
+  }, [isWorking, isInitializingAgent, sendMessageInternal, onUserMessage, initializeAgent])
 
   // Process queued messages when agent becomes idle
   useEffect(() => {
@@ -428,9 +488,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         currentAgentIdRef.current = result.agentId
 
         // Update the tab's agent ID in store
-        const currentTab = tabs.find((t) => t.agentId === agentId)
-        if (currentTab) {
-          updateTabAgent(currentTab.id, result.agentId)
+        if (activeTabId) {
+          updateTabAgent(activeTabId, result.agentId)
         }
 
         // Add success message
@@ -739,6 +798,13 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         </div>
       )}
 
+      {isInitializingAgent && (
+        <div className="status-indicator thinking">
+          <span className="status-icon">🚀</span>
+          <span className="status-text">Starting Claude Code agent...</span>
+        </div>
+      )}
+
       {error && (
         <div className="error-message">
           Error: {error}
@@ -747,12 +813,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
       <InputBox
         onSend={handleSend}
-        disabled={isWorking}
+        disabled={isWorking || isInitializingAgent}
         customCommands={CUSTOM_COMMANDS}
         claudeCommands={claudeCommands}
         onExecuteCommand={handleExecuteCommand}
         onExecuteCommandFromInput={handleExecuteCommandFromInput}
-        tabId={agentId}
+        tabId={currentAgentIdRef.current}
         showBranchMenu={showBranchMenu}
         branchList={branchList}
         currentBranch={gitBranch}
