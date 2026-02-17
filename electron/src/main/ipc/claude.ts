@@ -70,6 +70,18 @@ function forwardAgentEvents(
     safeSend(mainWindow, 'claude:toolExecution', { agentId, tool })
   })
 
+  // Listen for tool started events
+  agent.on('tool-started', (toolCall: any) => {
+    logger.log(`Agent ${agentId} tool-started:`, toolCall)
+    safeSend(mainWindow, 'claude:tool-started', { agentId, toolCall })
+  })
+
+  // Listen for tool completed events
+  agent.on('tool-completed', (toolCall: any) => {
+    logger.log(`Agent ${agentId} tool-completed:`, toolCall)
+    safeSend(mainWindow, 'claude:tool-completed', { agentId, toolCall })
+  })
+
   // Listen for errors
   agent.on('error', (error: Error) => {
     logger.error(`Agent ${agentId} error:`, error)

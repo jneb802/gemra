@@ -17,6 +17,7 @@ export class ClaudeAgent extends EventEmitter {
   private client: ACPClient
   private status: 'idle' | 'working' | 'error' = 'idle'
   private logger: Logger
+  private activeToolCalls: Map<string, { id: string; name: string; input: any; startTime: number }> = new Map()
 
   constructor(public id: string, options: ClaudeAgentOptions) {
     super()
@@ -51,6 +52,79 @@ export class ClaudeAgent extends EventEmitter {
       this.status = 'idle'
       this.emit('exit', info)
     })
+
+    // Forward tool execution events with enhanced tracking
+    this.client.on('toolExecution', (toolInfo: any) => {
+      this.handleToolExecution(toolInfo)
+    })
+
+    // Forward agent status events
+    this.client.on('agentStatus', (status: any) => {
+      this.emit('agentStatus', status)
+    })
+  }
+
+  /**
+   * Handle tool execution tracking
+   */
+  private handleToolExecution(toolInfo: any): void {
+    const toolId = toolInfo.id || `tool-${Date.now()}`
+    const toolName = toolInfo.name || 'unknown'
+    const toolInput = toolInfo.input || {}
+
+    // Check if this is a new tool call or an existing one
+    if (!this.activeToolCalls.has(toolId)) {
+      // New tool execution started
+      const startTime = Date.now()
+      this.activeToolCalls.set(toolId, {
+        id: toolId,
+        name: toolName,
+        input: toolInput,
+        startTime,
+      })
+
+      // Emit tool-started event
+      this.emit('tool-started', {
+        id: toolId,
+        name: toolName,
+        input: toolInput,
+        status: 'running',
+        startTime,
+      })
+
+      this.logger.log(`Tool started: ${toolName} (${toolId})`)
+    }
+
+    // Forward the toolExecution event as well for backward compatibility
+    this.emit('toolExecution', toolInfo)
+  }
+
+  /**
+   * Complete all active tool calls
+   */
+  private completeAllActiveTools(): void {
+    const now = Date.now()
+
+    for (const [toolId, toolData] of this.activeToolCalls.entries()) {
+      const duration = now - toolData.startTime
+
+      // Emit tool-completed event
+      this.emit('tool-completed', {
+        id: toolId,
+        name: toolData.name,
+        input: toolData.input,
+        status: 'completed',
+        startTime: toolData.startTime,
+        endTime: now,
+        duration,
+        output: undefined, // We don't have output tracking yet
+      })
+
+      this.logger.log(`Tool completed: ${toolData.name} (${toolId}) - ${duration}ms`)
+    }
+
+    // Clear all active tools
+    this.activeToolCalls.clear()
   }
 
   /**
@@ -112,6 +186,9 @@ export class ClaudeAgent extends EventEmitter {
 
     // Check if it's a response with result (prompt completed)
     if (message.result) {
+      // Complete any remaining active tool calls
+      this.completeAllActiveTools()
+
       // Extract token usage if available
       if (message.result.usage) {
         const usage = {

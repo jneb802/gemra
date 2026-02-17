@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
-import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
+import type { ClaudeMessage, AgentStatus, ToolExecution, ToolCall, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'
 import type { SlashCommand } from './SlashCommandMenu'
 import { useTabStore } from '../../stores/tabStore'
@@ -50,6 +50,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const [branchList, setBranchList] = useState<string[]>([])
   const [isTogglingContainer, setIsTogglingContainer] = useState(false)
   const [dangerouslySkipPermissions, setDangerouslySkipPermissions] = useState(false)
+  const [activeToolCalls, setActiveToolCalls] = useState<Map<string, ToolCall>>(new Map())
 
   // Store references
   const updateTabAgent = useTabStore((state) => state.updateTabAgent)
@@ -314,6 +315,50 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       }
     })
 
+    // Listen for tool started events
+    const unlistenToolStarted = window.electron.claude.onToolStarted((data) => {
+      if (data.agentId === currentAgentIdRef.current) {
+        console.log('[ClaudeChat] Tool started:', data.toolCall)
+
+        // Add tool call to active map and update metadata
+        setActiveToolCalls((prev) => {
+          const updated = new Map(prev)
+          updated.set(data.toolCall.id, data.toolCall)
+          return updated
+        })
+
+        // Update current turn metadata with new tool call
+        setCurrentTurnMetadata((prev) => {
+          if (!prev) return null
+          const toolCalls = [...(prev.toolCalls || []), data.toolCall]
+          return { ...prev, toolCalls }
+        })
+      }
+    })
+
+    // Listen for tool completed events
+    const unlistenToolCompleted = window.electron.claude.onToolCompleted((data) => {
+      if (data.agentId === currentAgentIdRef.current) {
+        console.log('[ClaudeChat] Tool completed:', data.toolCall)
+
+        // Update tool call in active map
+        setActiveToolCalls((prev) => {
+          const updated = new Map(prev)
+          updated.set(data.toolCall.id, data.toolCall)
+          return updated
+        })
+
+        // Update current turn metadata with completed tool call
+        setCurrentTurnMetadata((prev) => {
+          if (!prev) return null
+          const toolCalls = (prev.toolCalls || []).map((tc) =>
+            tc.id === data.toolCall.id ? data.toolCall : tc
+          )
+          return { ...prev, toolCalls }
+        })
+      }
+    })
+
     return () => {
       unlistenText()
       unlistenStatus()
@@ -322,6 +367,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       unlistenToolExecution()
       unlistenError()
       unlistenContainer()
+      unlistenToolStarted()
+      unlistenToolCompleted()
       clearInterval(statsInterval)
     }
   }, [agentId, workingDir])
@@ -371,12 +418,16 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     // Clear any previous error
     setError(null)
 
+    // Clear active tool calls from previous turn
+    setActiveToolCalls(new Map())
+
     // Start tracking new turn
     setCurrentTurnMetadata({
       startTime: Date.now(),
       currentPhase: 'thinking',
       phaseStartTime: Date.now(),
       isComplete: false,
+      toolCalls: [], // Initialize empty tool calls array
     })
 
     // Add user message

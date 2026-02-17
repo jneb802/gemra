@@ -49,6 +49,11 @@ export const IPC_CHANNELS = {
 
   // Container status
   CONTAINER_STATUS: 'container:status',
+
+  // Tool execution
+  TOOL_STARTED: 'claude:tool-started',
+  TOOL_COMPLETED: 'claude:tool-completed',
+  TOOL_ERROR: 'claude:tool-error',
 } as const
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
@@ -72,6 +77,9 @@ export interface MessageMetadata {
 
   // Status flag
   isComplete?: boolean       // Whether turn finished
+
+  // Tool execution history
+  toolCalls?: ToolCall[]     // All tool calls made during this turn
 }
 
 // Multimodal message content blocks
@@ -129,11 +137,53 @@ export interface TokenUsage {
   timestamp: number
 }
 
+// Tool execution output types
+export interface BashOutput {
+  stdout?: string
+  stderr?: string
+  exitCode?: number
+}
+
+export interface FileOutput {
+  path: string
+  content?: string
+  linesRead?: number
+}
+
+export interface EditOutput {
+  path: string
+  diff?: string
+  oldContent?: string
+  newContent?: string
+}
+
+export interface GrepOutput {
+  pattern: string
+  matches?: Array<{ file: string; line: number; content: string }>
+  matchCount?: number
+}
+
+export type ToolOutput = BashOutput | FileOutput | EditOutput | GrepOutput | string
+
+// Tool execution tracking (basic version for status tracking)
 export interface ToolExecution {
   id: string
   name: string
   input: any
   status: 'running' | 'completed' | 'error'
+}
+
+// Complete tool call record (for message history)
+export interface ToolCall {
+  id: string
+  name: string  // 'Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob', 'Task', 'WebSearch', 'WebFetch'
+  input: Record<string, any>  // Tool-specific parameters
+  output?: ToolOutput  // Result or error message
+  error?: string  // Error message if status is 'error'
+  status: 'running' | 'completed' | 'error'
+  startTime: number
+  endTime?: number
+  duration?: number  // Milliseconds
 }
 
 export type AgentStatus =
