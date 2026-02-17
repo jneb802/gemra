@@ -695,6 +695,76 @@ code {
   color: var(--git-deletion);
 }
 
+/* Git status chips - connected design */
+.git-status-chips {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.git-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: transparent;
+  border: none;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.git-chip:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+}
+
+.git-chip:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.git-chip-branch {
+  border-right: 1px solid var(--border-color);
+}
+
+.git-chip-icon {
+  flex-shrink: 0;
+}
+
+.git-chip-branch .git-chip-icon {
+  color: #50fa7b;
+}
+
+.git-chip-files .git-chip-icon {
+  color: #808080;
+}
+
+.git-chip-text {
+  color: var(--text-secondary);
+}
+
+.git-chip-branch-name {
+  color: #98c379;
+}
+
+.git-chip-separator {
+  color: var(--text-tertiary);
+}
+
+.git-chip-additions {
+  color: var(--git-addition);
+}
+
+.git-chip-deletions {
+  color: var(--git-deletion);
+}
+
 /* ==========================================================================
    Input Box
    ========================================================================== */
@@ -984,7 +1054,6 @@ code {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
 }
 
 /* ==========================================================================

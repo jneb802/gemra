@@ -51,7 +51,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onContainerToggle,
   onBranchClick,
 }) => {
-  const hasGitChanges = gitStats.filesChanged > 0 || gitStats.insertions > 0 || gitStats.deletions > 0
   const [showCopied, setShowCopied] = useState(false)
 
   // Get last two parts of path (e.g., "Develop/gemra" from "/Users/benjmarston/Develop/gemra")
@@ -178,38 +177,64 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
       <Separator />
 
-      {/* Git branch */}
-      <div className="status-bar-section">
-        <span className="status-bar-label">Branch:</span>
+      {/* Git status chips - connected branch and file changes */}
+      <div className="git-status-chips">
+        {/* Left chip: Git branch */}
         <button
           onClick={onBranchClick}
-          className="status-bar-branch"
+          className="git-chip git-chip-branch"
           title="Click to checkout branch"
         >
-          {gitBranch}
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="git-chip-icon"
+          >
+            <circle cx="3" cy="3" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <circle cx="13" cy="13" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <circle cx="13" cy="3" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <path d="M3 5 L3 11 Q3 13 5 13 L11 13" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            <path d="M13 5 L13 11" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
+          <span className="git-chip-text git-chip-branch-name">{gitBranch}</span>
+        </button>
+
+        {/* Right chip: File changes */}
+        <button
+          className="git-chip git-chip-files"
+          title="File changes"
+          disabled
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="git-chip-icon"
+          >
+            <path
+              d="M3 2 L3 14 L13 14 L13 6 L9 2 L3 2 Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+            />
+            <path
+              d="M9 2 L9 6 L13 6"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+            />
+          </svg>
+          <span className="git-chip-text">
+            {gitStats.filesChanged}
+          </span>
+          <span className="git-chip-separator">•</span>
+          <span className="git-chip-additions">+{gitStats.insertions}</span>
+          <span className="git-chip-deletions">-{gitStats.deletions}</span>
         </button>
       </div>
-
-      {/* Git stats - only show if there are changes */}
-      {hasGitChanges && (
-        <>
-          <Separator />
-
-          <div className="status-bar-git-stats">
-            {gitStats.filesChanged > 0 && (
-              <span className="status-bar-value">
-                {gitStats.filesChanged} file{gitStats.filesChanged !== 1 ? 's' : ''}
-              </span>
-            )}
-            {gitStats.insertions > 0 && (
-              <span className="status-bar-git-additions">+{gitStats.insertions}</span>
-            )}
-            {gitStats.deletions > 0 && (
-              <span className="status-bar-git-deletions">-{gitStats.deletions}</span>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Spacer to push context indicator to the right */}
       <div className="status-bar-spacer" />
