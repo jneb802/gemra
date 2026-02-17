@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
-import { StatusBar } from './StatusBar'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import type { ClaudeMessage, AgentStatus, ToolExecution, ContainerStatus, MessageMetadata, MessageContent } from '../../../shared/types'
 import { generateId } from '../../../shared/utils/id'

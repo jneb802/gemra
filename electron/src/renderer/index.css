@@ -86,7 +86,6 @@
   /* Other */
   --scrollbar-width: 10px;
   --tab-height: 40px;
-  --status-bar-height: 32px;
   --traffic-light-width: 90px;
 }
 
@@ -354,66 +353,6 @@ code {
 }
 
 /* ==========================================================================
-   Input Box
-   ========================================================================== */
-
-.input-textarea {
-  width: 100%;
-  min-height: 24px;
-  max-height: 40vh;
-  padding: 8px;
-  padding-left: 8px;
-  background-color: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-size-base);
-  resize: none;
-  outline: none;
-  line-height: 1.5;
-}
-
-.input-textarea:focus {
-  outline: none;
-}
-
-.input-textarea:focus-visible {
-  outline: none;
-}
-
-.input-textarea:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.send-button {
-  padding: 10px var(--spacing-xl);
-  background-color: var(--button-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: white;
-  font-size: var(--font-size-base);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.send-button:hover:not(:disabled) {
-  background-color: var(--button-primary-hover);
-}
-
-.send-button:focus-visible {
-  outline: 2px solid var(--border-color-focus);
-  outline-offset: 2px;
-}
-
-.send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ==========================================================================
    Animations
    ========================================================================== */
 
@@ -575,126 +514,6 @@ code {
   background-color: var(--bg-secondary);
 }
 
-/* ==========================================================================
-   Status Bar
-   ========================================================================== */
-
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
-  height: var(--status-bar-height);
-  padding: 0 var(--spacing-lg);
-  background-color: #252525;
-  border-top: 1px solid var(--border-color);
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-}
-
-.status-bar-section {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.status-bar-label {
-  color: var(--text-tertiary);
-}
-
-.status-bar-value {
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-}
-
-.status-bar-button {
-  background: none;
-  border: none;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  transition: background-color 0.15s ease;
-}
-
-.status-bar-button:hover {
-  background-color: var(--bg-active);
-}
-
-.status-bar-spacer {
-  flex: 1;
-}
-
-.status-bar-separator {
-  width: 1px;
-  height: 16px;
-  background-color: var(--border-separator);
-}
-
-.status-bar-directory {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-}
-
-.status-bar-branch {
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-}
-
-.status-bar-container {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-}
-
-.status-bar-container:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.status-bar-container-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-bar-container-spinner {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  border-top-color: transparent;
-  animation: spin 1s linear infinite;
-}
-
-.status-bar-git-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.status-bar-git-additions {
-  color: var(--git-addition);
-}
-
-.status-bar-git-deletions {
-  color: var(--git-deletion);
-}
-
 /* Git status chips - connected design matching status-chip style */
 .git-status-chips {
   display: inline-flex;
@@ -809,10 +628,6 @@ code {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.input-box-spacer {
-  flex: 1;
 }
 
 /* ==========================================================================
