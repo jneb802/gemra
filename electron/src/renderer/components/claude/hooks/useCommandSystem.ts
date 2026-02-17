@@ -33,7 +33,6 @@ const CUSTOM_COMMANDS: SlashCommand[] = [
   { name: 'clear', description: 'Clear chat history' },
   { name: 'mode', description: 'Switch agent mode', argumentHint: '<default|acceptEdits|plan>' },
   { name: 'model', description: 'Switch model', argumentHint: '<opus|sonnet|haiku>' },
-  { name: 'new-terminal', description: 'Open new terminal tab' },
   { name: 'new-chat', description: 'Start new chat session' },
   { name: 'git-status', description: 'Show git status' },
   { name: 'checkout', description: 'Checkout git branches' },
@@ -129,11 +128,6 @@ export function useCommandSystem({
             onModelChange(args)
             onAddSystemMessage(`Model changed to: ${args}`)
           }
-          break
-
-        case 'new-terminal':
-          window.electron.onMenuEvent('menu:new-tab', () => {})
-          onAddSystemMessage('New terminal opened')
           break
 
         case 'new-chat':

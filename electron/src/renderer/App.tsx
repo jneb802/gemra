@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { TabBar } from './components/Tabs/TabBar'
 import { TerminalView } from './components/Terminal/TerminalView'
-import { BlockTerminal } from './components/Terminal/BlockTerminal'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
@@ -12,6 +11,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useInputModeStore } from './stores/inputModeStore'
 import { useRecentStore } from './stores/recentStore'
 import { useClaudeChatStore } from './stores/claudeChatStore'
+import { useBlockStore } from './stores/blockStore'
 import { usePlatform } from './hooks/usePlatform'
 import { TIMING } from '../shared/constants'
 import * as path from 'path'
@@ -77,16 +77,24 @@ function App() {
         }
       }
 
-      // Stop and cleanup all chat session agents
+      // Stop and cleanup all chat session agents and terminal PTYs
       if (tab.chatSessions) {
         for (const session of tab.chatSessions) {
-          if (session.agentId) {
+          if (session.type === 'chat' && session.agentId) {
             try {
               await window.electron.claude.stop(session.agentId)
               useClaudeChatStore.getState().removeAgent(session.agentId)
               console.log(`Stopped agent ${session.agentId} for session ${session.id}`)
             } catch (error) {
               console.error('Failed to stop session agent:', error)
+            }
+          } else if (session.type === 'terminal' && session.terminalId) {
+            try {
+              await window.electron.pty.kill(session.terminalId)
+              useBlockStore.getState().clearBlocks(session.terminalId)
+              console.log(`Killed PTY ${session.terminalId} for terminal session ${session.id}`)
+            } catch (error) {
+              console.error('Failed to kill PTY:', error)
             }
           }
         }
@@ -126,12 +134,13 @@ function App() {
       alert(
         `Failed to start Claude Code agent.\n\n` +
         `Error: ${result.error}\n\n` +
-        `Creating a regular terminal tab instead...`
+        `Creating directory tab with terminal session instead...`
       )
-      // Fallback to regular terminal
-      createTab({ type: 'terminal' })
+      // Fallback: create claude-chat tab with terminal session
+      const tabId = createTab({ type: 'claude-chat', workingDir })
+      useTabStore.getState().createTerminalSession(tabId, workingDir)
     }
-  }, [createClaudeTab, useDocker])
+  }, [createClaudeTab, createTab, useDocker])
 
   // Handler for creating LiteLLM chat tabs
   const handleNewLiteLLMTab = useCallback(async () => {
@@ -255,10 +264,6 @@ function App() {
     )
 
     unsubscribers.push(
-      window.electron.onMenuEvent('menu:new-terminal', () => createTab({ type: 'terminal' }))
-    )
-
-    unsubscribers.push(
       window.electron.onMenuEvent('menu:new-litellm-chat', () => handleNewLiteLLMTab())
     )
 
@@ -305,12 +310,6 @@ function App() {
       if (e.key === 't' && !e.shiftKey) {
         e.preventDefault()
         handleNewClaudeTab()
-      }
-
-      // Cmd/Ctrl+Shift+T - New terminal tab
-      if (e.key === 'T' && e.shiftKey) {
-        e.preventDefault()
-        createTab({ type: 'terminal' })
       }
 
       // Cmd/Ctrl+W - Close tab
@@ -401,10 +400,7 @@ function App() {
                     onOpenRecent={handleOpenRecentDirectory}
                   />
                 ) : (
-                  <BlockTerminal
-                    terminalId={activeTab.id}
-                    workingDir="/Users/benjmarston/Develop/gemra"
-                  />
+                  <div className="error-message">Unknown tab type: {activeTab.type}</div>
                 )}
               </div>
             )

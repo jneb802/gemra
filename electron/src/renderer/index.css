@@ -647,10 +647,10 @@ code {
 }
 
 /* ==========================================================================
-   Chat Session Tabs
+   Session Tabs (Chat + Terminal)
    ========================================================================== */
 
-.chat-session-tabs {
+.session-tabs {
   display: flex;
   align-items: center;
   background-color: var(--bg-primary);
@@ -658,7 +658,7 @@ code {
   padding: 0 16px;
 }
 
-.chat-session-tabs-list {
+.session-tabs-list {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -669,11 +669,11 @@ code {
   -ms-overflow-style: none; /* IE/Edge */
 }
 
-.chat-session-tabs-list::-webkit-scrollbar {
+.session-tabs-list::-webkit-scrollbar {
   display: none; /* Chrome/Safari */
 }
 
-.chat-session-tab {
+.session-tab {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -692,25 +692,34 @@ code {
   max-width: 120px;
 }
 
-.chat-session-tab:hover {
+.session-tab:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.chat-session-tab.active {
+.session-tab.active {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   font-weight: 500;
 }
 
-.chat-session-tab-title {
+.session-tab-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.session-tab.active .session-tab-icon {
+  opacity: 1;
+}
+
+.session-tab-title {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-session-tab-close {
+.session-tab-close {
   display: none;
   width: 16px;
   height: 16px;
@@ -723,22 +732,28 @@ code {
   flex-shrink: 0;
 }
 
-.chat-session-tab:hover .chat-session-tab-close {
+.session-tab:hover .session-tab-close {
   display: flex;
 }
 
-.chat-session-tab-close:hover {
+.session-tab-close:hover {
   background-color: var(--bg-active);
   opacity: 1;
 }
 
-.chat-session-tab-new {
+.session-tabs-new-buttons {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.session-tab-new {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 28px;
   height: 24px;
-  padding: 0;
+  padding: 0 6px;
   background-color: transparent;
   border: none;
   border-radius: var(--radius-md);
@@ -750,12 +765,12 @@ code {
   flex-shrink: 0;
 }
 
-.chat-session-tab-new:hover:not(:disabled) {
+.session-tab-new:hover:not(:disabled) {
   background-color: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.chat-session-tab-new:disabled {
+.session-tab-new:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

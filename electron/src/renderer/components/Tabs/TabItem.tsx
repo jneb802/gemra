@@ -1,4 +1,4 @@
-import { X, Terminal, MessageSquare } from 'lucide-react'
+import { X, MessageSquare } from 'lucide-react'
 import type { Tab } from '../../stores/tabStore'
 
 interface TabItemProps {
@@ -13,13 +13,13 @@ export function TabItem({ tab, onSelect, onClose }: TabItemProps) {
     onClose()
   }
 
-  const isTerminal = tab.type === 'terminal'
-  const Icon = isTerminal ? Terminal : MessageSquare
+  // All top-level tabs are now directory tabs (claude-chat)
+  const Icon = MessageSquare
 
   return (
     <div
       onClick={onSelect}
-      className={`tab-item ${tab.isActive ? 'active' : ''} ${isTerminal ? 'tab-item-terminal' : 'tab-item-chat'}`}
+      className={`tab-item ${tab.isActive ? 'active' : ''}`}
     >
       <Icon size={14} color={tab.isActive ? '#ffffff' : '#888888'} />
       <span className="tab-item-title">

@@ -50,13 +50,6 @@ export class MenuBuilder {
         label: 'Shell',
         submenu: [
           {
-            label: 'New Terminal Tab',
-            accelerator: 'CmdOrCtrl+Shift+T',
-            click: () => {
-              this.mainWindow.webContents.send('menu:new-terminal')
-            },
-          },
-          {
             label: 'New LiteLLM Chat',
             accelerator: 'CmdOrCtrl+Shift+L',
             click: () => {

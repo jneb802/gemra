@@ -1,12 +1,20 @@
 import { create } from 'zustand'
 import { generateId } from '../../shared/utils/id'
 
-export type TabType = 'terminal' | 'claude-chat'
+export type TabType = 'claude-chat'
 
 export interface ChatSession {
   id: string
   title: string
+  type: 'chat' | 'terminal'
+
+  // For chat sessions
   agentId?: string // Optional - set after agent is initialized
+
+  // For terminal sessions
+  terminalId?: string
+  workingDir?: string
+
   createdAt: number
   lastActive: number
 }
@@ -44,11 +52,13 @@ interface TabState {
 
   // Chat session actions
   createChatSession: (tabId: string) => string
+  createTerminalSession: (tabId: string, workingDir: string) => string
   closeChatSession: (tabId: string, sessionId: string) => void
   setActiveChatSession: (tabId: string, sessionId: string) => void
   updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => void
   updateChatSessionAgent: (tabId: string, sessionId: string, agentId: string) => void
   getActiveChatSession: (tabId: string) => ChatSession | undefined
+  getActiveSession: (tabId: string) => ChatSession | undefined
 }
 
 let tabCounter = 0
@@ -58,12 +68,12 @@ export const useTabStore = create<TabState>((set, get) => ({
   activeTabId: null,
 
   createTab: (options: CreateTabOptions = {}) => {
-    const { type = 'terminal', agentId, workingDir } = options
+    const { type = 'claude-chat', agentId, workingDir } = options
     const id = generateId.tab()
     tabCounter++
 
     // Format directory title (last 2 segments)
-    let title = type === 'claude-chat' ? `Claude ${tabCounter}` : `Shell ${tabCounter}`
+    let title = `Claude ${tabCounter}`
     if (type === 'claude-chat' && workingDir) {
       const parts = workingDir.split('/').filter(Boolean)
       title = parts.slice(-2).join('/')
@@ -78,6 +88,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       chatSessions.push({
         id: sessionId,
         title: 'Chat 1',
+        type: 'chat',
         agentId: agentId, // Will be set after agent initialization (unless explicitly provided)
         createdAt: Date.now(),
         lastActive: Date.now()
@@ -183,11 +194,43 @@ export const useTabStore = create<TabState>((set, get) => ({
         if (tab.id !== tabId) return tab
 
         const chatSessions = tab.chatSessions || []
-        const sessionNumber = chatSessions.length + 1
+        const sessionNumber = chatSessions.filter(s => s.type === 'chat').length + 1
         const newSession: ChatSession = {
           id: sessionId,
           title: `Chat ${sessionNumber}`,
+          type: 'chat',
           agentId: undefined, // Will be set after agent initialization
+          createdAt: Date.now(),
+          lastActive: Date.now()
+        }
+
+        return {
+          ...tab,
+          chatSessions: [...chatSessions, newSession],
+          activeChatSessionId: sessionId,
+        }
+      }),
+    }))
+
+    return sessionId
+  },
+
+  createTerminalSession: (tabId: string, workingDir: string) => {
+    const sessionId = generateId.tab()
+    const terminalId = generateId.tab()
+
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+
+        const chatSessions = tab.chatSessions || []
+        const sessionNumber = chatSessions.filter(s => s.type === 'terminal').length + 1
+        const newSession: ChatSession = {
+          id: sessionId,
+          title: `Terminal ${sessionNumber}`,
+          type: 'terminal',
+          terminalId: terminalId,
+          workingDir: workingDir,
           createdAt: Date.now(),
           lastActive: Date.now()
         }
@@ -281,6 +324,13 @@ export const useTabStore = create<TabState>((set, get) => ({
   },
 
   getActiveChatSession: (tabId: string) => {
+    const state = get()
+    const tab = state.tabs.find((t) => t.id === tabId)
+    if (!tab || !tab.activeChatSessionId || !tab.chatSessions) return undefined
+    return tab.chatSessions.find((s) => s.id === tab.activeChatSessionId)
+  },
+
+  getActiveSession: (tabId: string) => {
     const state = get()
     const tab = state.tabs.find((t) => t.id === tabId)
     if (!tab || !tab.activeChatSessionId || !tab.chatSessions) return undefined
