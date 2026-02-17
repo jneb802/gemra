@@ -42,10 +42,16 @@ export function useClaudeAgent({
   const clearMessages = useClaudeChatStore((state) => state.clearMessages)
   const getMessages = useClaudeChatStore((state) => state.getMessages)
 
-  // Sync currentAgentIdRef with prop changes
+  // Sync currentAgentIdRef with prop changes and reset status when switching agents
   useEffect(() => {
+    // If agentId is changing to a different agent, reset the status
+    if (currentAgentIdRef.current && agentId && currentAgentIdRef.current !== agentId) {
+      console.log('[useClaudeAgent] Agent ID changed, resetting status')
+      agentStatusActions.reset()
+      agentStatusActions.setError(null)
+    }
     currentAgentIdRef.current = agentId
-  }, [agentId])
+  }, [agentId, agentStatusActions])
 
   // Initialize agent (lazy initialization on first message)
   const initializeAgent = useCallback(async (): Promise<string | null> => {

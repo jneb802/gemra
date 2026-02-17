@@ -200,6 +200,18 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         }
       }
 
+      // Cmd+1-9: Switch to specific chat session
+      if (activeTabId && (e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+        const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
+        const chatSessions = tab?.chatSessions || []
+        const index = parseInt(e.key) - 1
+
+        if (chatSessions[index]) {
+          e.preventDefault()
+          useTabStore.getState().setActiveChatSession(activeTabId, chatSessions[index].id)
+        }
+      }
+
       // Chat session navigation with Cmd+[ / Cmd+]
       if (activeTabId && (e.metaKey || e.ctrlKey)) {
         const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
