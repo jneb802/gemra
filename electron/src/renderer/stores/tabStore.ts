@@ -1,20 +1,13 @@
 import { create } from 'zustand'
 import { generateId } from '../../shared/utils/id'
 
-export type TabType = 'claude-chat'
+export type TabType = 'agent-chat' | 'terminal'
 
-export interface ChatSession {
+export interface TerminalSession {
   id: string
   title: string
-  type: 'chat' | 'terminal'
-
-  // For chat sessions
-  agentId?: string // Optional - set after agent is initialized
-
-  // For terminal sessions
-  terminalId?: string
-  workingDir?: string
-
+  terminalId: string
+  workingDir: string
   createdAt: number
   lastActive: number
 }
@@ -24,16 +17,22 @@ export interface Tab {
   title: string
   isActive: boolean
   type: TabType
-  agentId?: string // For Claude chat tabs (deprecated, use chatSessions)
-  workingDir?: string // For Claude chat tabs
-  chatSessions?: ChatSession[] // Multiple chat sessions per tab
-  activeChatSessionId?: string | null // Currently active chat session
+  workingDir: string
+
+  // agent-chat only
+  agentId?: string
+  subTerminals?: TerminalSession[]
+  activeSubTerminalId?: string | null  // null = viewing chat
+
+  // standalone terminal only
+  terminalId?: string
 }
 
 export interface CreateTabOptions {
   type?: TabType
   agentId?: string
   workingDir?: string
+  terminalId?: string
 }
 
 interface TabState {
@@ -50,61 +49,49 @@ interface TabState {
   getActiveTab: () => Tab | undefined
   getTabByIndex: (index: number) => Tab | undefined
 
-  // Chat session actions
-  createChatSession: (tabId: string) => string
-  createTerminalSession: (tabId: string, workingDir: string) => string
-  closeChatSession: (tabId: string, sessionId: string) => void
-  setActiveChatSession: (tabId: string, sessionId: string) => void
-  updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => void
-  updateChatSessionAgent: (tabId: string, sessionId: string, agentId: string) => void
-  getActiveChatSession: (tabId: string) => ChatSession | undefined
-  getActiveSession: (tabId: string) => ChatSession | undefined
+  // Sub-terminal actions (for agent-chat tabs)
+  addSubTerminal: (tabId: string, workingDir: string) => string
+  closeSubTerminal: (tabId: string, terminalSessionId: string) => void
+  setActiveSubTerminal: (tabId: string, id: string | null) => void
+  getActiveSubTerminal: (tabId: string) => TerminalSession | undefined
 }
 
-let tabCounter = 0
+let agentChatCounter = 0
+let terminalCounter = 0
 
 export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
 
   createTab: (options: CreateTabOptions = {}) => {
-    const { type = 'claude-chat', agentId, workingDir } = options
+    const { type = 'agent-chat', agentId, workingDir, terminalId } = options
     const id = generateId.tab()
-    tabCounter++
 
-    // Format directory title (last 2 segments)
-    let title = `Claude ${tabCounter}`
-    if (type === 'claude-chat' && workingDir) {
-      const parts = workingDir.split('/').filter(Boolean)
-      title = parts.slice(-2).join('/')
-    }
+    let newTab: Tab
 
-    // Create initial chat session for claude-chat tabs
-    const chatSessions: ChatSession[] = []
-    let activeChatSessionId: string | null = null
-
-    if (type === 'claude-chat') {
-      const sessionId = generateId.tab()
-      chatSessions.push({
-        id: sessionId,
-        title: 'Chat 1',
-        type: 'chat',
-        agentId: agentId, // Will be set after agent initialization (unless explicitly provided)
-        createdAt: Date.now(),
-        lastActive: Date.now()
-      })
-      activeChatSessionId = sessionId
-    }
-
-    const newTab: Tab = {
-      id,
-      title,
-      isActive: true,
-      type,
-      ...(agentId && { agentId }),
-      ...(workingDir && { workingDir }),
-      chatSessions,
-      activeChatSessionId,
+    if (type === 'agent-chat') {
+      agentChatCounter++
+      newTab = {
+        id,
+        title: `Claude ${agentChatCounter}`,
+        isActive: true,
+        type: 'agent-chat',
+        workingDir: workingDir || '',
+        ...(agentId && { agentId }),
+        subTerminals: [],
+        activeSubTerminalId: null,
+      }
+    } else {
+      terminalCounter++
+      const tId = terminalId || generateId.tab()
+      newTab = {
+        id,
+        title: `Terminal ${terminalCounter}`,
+        isActive: true,
+        type: 'terminal',
+        workingDir: workingDir || '',
+        terminalId: tId,
+      }
     }
 
     set((state) => ({
@@ -120,7 +107,7 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   // Kept for backwards compatibility - delegates to createTab
   createClaudeTab: (agentId: string, workingDir: string) => {
-    return get().createTab({ type: 'claude-chat', agentId, workingDir })
+    return get().createTab({ type: 'agent-chat', agentId, workingDir })
   },
 
   closeTab: (id: string) => {
@@ -130,12 +117,9 @@ export const useTabStore = create<TabState>((set, get) => ({
     if (tabIndex === -1) return
 
     const newTabs = state.tabs.filter((tab) => tab.id !== id)
-
-    // If closing the active tab, activate another tab
     let newActiveTabId = state.activeTabId
 
     if (id === state.activeTabId && newTabs.length > 0) {
-      // Activate the tab to the left, or the first tab if we closed the first tab
       const newActiveIndex = Math.max(0, tabIndex - 1)
       newActiveTabId = newTabs[newActiveIndex]?.id || null
 
@@ -186,59 +170,29 @@ export const useTabStore = create<TabState>((set, get) => ({
     return state.tabs[index]
   },
 
-  createChatSession: (tabId: string) => {
-    const sessionId = generateId.tab()
-
-    set((state) => ({
-      tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
-
-        const chatSessions = tab.chatSessions || []
-        const sessionNumber = chatSessions.filter(s => s.type === 'chat').length + 1
-        const newSession: ChatSession = {
-          id: sessionId,
-          title: `Chat ${sessionNumber}`,
-          type: 'chat',
-          agentId: undefined, // Will be set after agent initialization
-          createdAt: Date.now(),
-          lastActive: Date.now()
-        }
-
-        return {
-          ...tab,
-          chatSessions: [...chatSessions, newSession],
-          activeChatSessionId: sessionId,
-        }
-      }),
-    }))
-
-    return sessionId
-  },
-
-  createTerminalSession: (tabId: string, workingDir: string) => {
+  addSubTerminal: (tabId: string, workingDir: string) => {
     const sessionId = generateId.tab()
     const terminalId = generateId.tab()
 
     set((state) => ({
       tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
+        if (tab.id !== tabId || tab.type !== 'agent-chat') return tab
 
-        const chatSessions = tab.chatSessions || []
-        const sessionNumber = chatSessions.filter(s => s.type === 'terminal').length + 1
-        const newSession: ChatSession = {
+        const subTerminals = tab.subTerminals || []
+        const sessionNumber = subTerminals.length + 1
+        const newSession: TerminalSession = {
           id: sessionId,
           title: `Terminal ${sessionNumber}`,
-          type: 'terminal',
-          terminalId: terminalId,
-          workingDir: workingDir,
+          terminalId,
+          workingDir,
           createdAt: Date.now(),
-          lastActive: Date.now()
+          lastActive: Date.now(),
         }
 
         return {
           ...tab,
-          chatSessions: [...chatSessions, newSession],
-          activeChatSessionId: sessionId,
+          subTerminals: [...subTerminals, newSession],
+          activeSubTerminalId: sessionId,
         }
       }),
     }))
@@ -246,94 +200,52 @@ export const useTabStore = create<TabState>((set, get) => ({
     return sessionId
   },
 
-  closeChatSession: (tabId: string, sessionId: string) => {
+  closeSubTerminal: (tabId: string, terminalSessionId: string) => {
     set((state) => ({
       tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
+        if (tab.id !== tabId || tab.type !== 'agent-chat') return tab
 
-        const chatSessions = tab.chatSessions || []
-        const sessionIndex = chatSessions.findIndex((s) => s.id === sessionId)
-        if (sessionIndex === -1) return tab
+        const subTerminals = tab.subTerminals || []
+        const newSubTerminals = subTerminals.filter((s) => s.id !== terminalSessionId)
 
-        const newSessions = chatSessions.filter((s) => s.id !== sessionId)
-
-        // If closing the active session, activate another
-        let newActiveSessionId = tab.activeChatSessionId
-        if (sessionId === tab.activeChatSessionId && newSessions.length > 0) {
-          const newActiveIndex = Math.max(0, sessionIndex - 1)
-          newActiveSessionId = newSessions[newActiveIndex]?.id || null
-        }
+        // If closing the active sub-terminal, revert to chat (null)
+        const newActiveSubTerminalId =
+          tab.activeSubTerminalId === terminalSessionId ? null : tab.activeSubTerminalId
 
         return {
           ...tab,
-          chatSessions: newSessions,
-          activeChatSessionId: newActiveSessionId,
+          subTerminals: newSubTerminals,
+          activeSubTerminalId: newActiveSubTerminalId,
         }
       }),
     }))
   },
 
-  setActiveChatSession: (tabId: string, sessionId: string) => {
+  setActiveSubTerminal: (tabId: string, id: string | null) => {
     set((state) => ({
       tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
+        if (tab.id !== tabId || tab.type !== 'agent-chat') return tab
 
-        const chatSessions = tab.chatSessions || []
-        // Update lastActive timestamp
+        const subTerminals = tab.subTerminals || []
         return {
           ...tab,
-          activeChatSessionId: sessionId,
-          chatSessions: chatSessions.map((s) =>
-            s.id === sessionId ? { ...s, lastActive: Date.now() } : s
-          ),
+          activeSubTerminalId: id,
+          subTerminals: id
+            ? subTerminals.map((s) =>
+                s.id === id ? { ...s, lastActive: Date.now() } : s
+              )
+            : subTerminals,
         }
       }),
     }))
   },
 
-  updateChatSessionTitle: (tabId: string, sessionId: string, title: string) => {
-    set((state) => ({
-      tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
-
-        const chatSessions = tab.chatSessions || []
-        return {
-          ...tab,
-          chatSessions: chatSessions.map((s) =>
-            s.id === sessionId ? { ...s, title } : s
-          ),
-        }
-      }),
-    }))
-  },
-
-  updateChatSessionAgent: (tabId: string, sessionId: string, agentId: string) => {
-    set((state) => ({
-      tabs: state.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
-
-        const chatSessions = tab.chatSessions || []
-        return {
-          ...tab,
-          chatSessions: chatSessions.map((s) =>
-            s.id === sessionId ? { ...s, agentId } : s
-          ),
-        }
-      }),
-    }))
-  },
-
-  getActiveChatSession: (tabId: string) => {
+  getActiveSubTerminal: (tabId: string) => {
     const state = get()
     const tab = state.tabs.find((t) => t.id === tabId)
-    if (!tab || !tab.activeChatSessionId || !tab.chatSessions) return undefined
-    return tab.chatSessions.find((s) => s.id === tab.activeChatSessionId)
-  },
-
-  getActiveSession: (tabId: string) => {
-    const state = get()
-    const tab = state.tabs.find((t) => t.id === tabId)
-    if (!tab || !tab.activeChatSessionId || !tab.chatSessions) return undefined
-    return tab.chatSessions.find((s) => s.id === tab.activeChatSessionId)
+    if (!tab || tab.type !== 'agent-chat' || !tab.activeSubTerminalId || !tab.subTerminals) {
+      return undefined
+    }
+    return tab.subTerminals.find((s) => s.id === tab.activeSubTerminalId)
   },
 }))

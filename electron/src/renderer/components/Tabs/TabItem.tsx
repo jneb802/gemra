@@ -1,4 +1,4 @@
-import { X, MessageSquare } from 'lucide-react'
+import { X, MessageSquare, Terminal } from 'lucide-react'
 import type { Tab } from '../../stores/tabStore'
 
 interface TabItemProps {
@@ -13,8 +13,7 @@ export function TabItem({ tab, onSelect, onClose }: TabItemProps) {
     onClose()
   }
 
-  // All top-level tabs are now directory tabs (claude-chat)
-  const Icon = MessageSquare
+  const Icon = tab.type === 'terminal' ? Terminal : MessageSquare
 
   return (
     <div
