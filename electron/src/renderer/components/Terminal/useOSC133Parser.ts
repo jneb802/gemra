@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { useBlockStore } from '../../stores/blockStore'
 import type { OSC133Sequence, ParserState } from '../../../shared/types/blocks'
@@ -7,6 +7,7 @@ interface UseOSC133ParserOptions {
   terminal: Terminal | null
   terminalId: string
   workingDir: string
+  pendingCommandRef?: React.MutableRefObject<string>
   onBlockCreated?: (blockId: string) => void
 }
 
@@ -14,6 +15,7 @@ export function useOSC133Parser({
   terminal,
   terminalId,
   workingDir,
+  pendingCommandRef,
   onBlockCreated
 }: UseOSC133ParserOptions) {
   const parserState = useRef<ParserState>({
@@ -59,12 +61,16 @@ export function useOSC133Parser({
           state.currentSequence = sequence
           console.log('[Block] Prompt end, command start')
 
+          // Consume pending command from TerminalInput (set before pty.write)
+          const pendingCmd = pendingCommandRef?.current ?? ''
+          if (pendingCommandRef) pendingCommandRef.current = ''
+
           // Create a new command block (pending)
           const block = createBlock(terminalId, {
             type: 'command',
             status: 'pending',
-            content: '',
-            command: '',
+            content: pendingCmd,
+            command: pendingCmd,
             workingDir,
             promptText: state.promptBuffer,
           })
@@ -81,11 +87,15 @@ export function useOSC133Parser({
           console.log('[Block] Command execution start')
 
           if (state.currentBlock) {
-            // Update command block with actual command
-            updateBlock(terminalId, state.currentBlock.id, {
-              command: state.commandBuffer.trim(),
-              content: state.commandBuffer.trim(),
-            })
+            // Only update command from commandBuffer if it's non-empty
+            // (it's empty when B and C are sent back-to-back without echo in between)
+            const cmdFromBuffer = state.commandBuffer.trim()
+            if (cmdFromBuffer) {
+              updateBlock(terminalId, state.currentBlock.id, {
+                command: cmdFromBuffer,
+                content: cmdFromBuffer,
+              })
+            }
 
             // Start execution
             startBlockExecution(terminalId, state.currentBlock.id)

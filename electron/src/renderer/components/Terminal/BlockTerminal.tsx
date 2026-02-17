@@ -33,6 +33,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const [shellIntegrationActive, setShellIntegrationActive] = useState(false)
   const [useFallback, setUseFallback] = useState(false)
   const [autoInstallAttempted, setAutoInstallAttempted] = useState(false)
+  const pendingCommandRef = useRef('')
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   const prevBlockCountRef = useRef(0)
 
@@ -75,6 +76,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     terminal,
     terminalId,
     workingDir: currentWorkingDir,
+    pendingCommandRef,
     onBlockCreated: (blockId) => {
       console.log('[BlockTerminal] Shell integration active, block created:', blockId)
       setShellIntegrationActive(true)
@@ -186,6 +188,9 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     if (!command.trim()) return
 
     console.log('[BlockTerminal] Sending command:', command)
+
+    // Store command so the OSC 133 B handler can attach it to the block
+    pendingCommandRef.current = command.trim()
 
     // Send command to PTY (with newline)
     window.electron.pty.write(terminalId, command + '\n')
