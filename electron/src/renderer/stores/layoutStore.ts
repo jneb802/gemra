@@ -35,8 +35,6 @@ interface LayoutState {
   // Pane operations
   splitPane: (tabId: string, paneId: string, direction: SplitDirection, newTerminalId: string) => void
   closePane: (tabId: string, paneId: string) => void
-  focusNextPane: (tabId: string) => void
-  focusPreviousPane: (tabId: string) => void
 }
 
 let nodeCounter = 0
@@ -232,37 +230,5 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     }
 
     state.setLayout(tabId, newLayout)
-  },
-
-  focusNextPane: (tabId: string) => {
-    const state = get()
-    const layout = state.layouts.get(tabId)
-    const activePaneId = state.activePaneIds.get(tabId)
-
-    if (!layout || !activePaneId) return
-
-    const allPanes = getAllPaneNodes(layout)
-    const currentIndex = allPanes.findIndex((pane) => pane.id === activePaneId)
-
-    if (currentIndex >= 0) {
-      const nextIndex = (currentIndex + 1) % allPanes.length
-      state.setActivePaneId(tabId, allPanes[nextIndex].id)
-    }
-  },
-
-  focusPreviousPane: (tabId: string) => {
-    const state = get()
-    const layout = state.layouts.get(tabId)
-    const activePaneId = state.activePaneIds.get(tabId)
-
-    if (!layout || !activePaneId) return
-
-    const allPanes = getAllPaneNodes(layout)
-    const currentIndex = allPanes.findIndex((pane) => pane.id === activePaneId)
-
-    if (currentIndex >= 0) {
-      const prevIndex = (currentIndex - 1 + allPanes.length) % allPanes.length
-      state.setActivePaneId(tabId, allPanes[prevIndex].id)
-    }
   },
 }))

@@ -34,16 +34,6 @@ export const IPC_CHANNELS = {
   PTY_DATA: 'pty:data',
   PTY_EXIT: 'pty:exit',
 
-  // Terminal operations
-  TERMINAL_CREATE: 'terminal:create',
-  TERMINAL_CLOSE: 'terminal:close',
-  TERMINAL_LIST: 'terminal:list',
-
-  // Window operations
-  WINDOW_CLOSE: 'window:close',
-  WINDOW_MINIMIZE: 'window:minimize',
-  WINDOW_MAXIMIZE: 'window:maximize',
-
   // Claude usage
   CLAUDE_USAGE: 'claude:usage',
 
