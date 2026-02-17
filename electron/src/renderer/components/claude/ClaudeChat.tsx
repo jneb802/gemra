@@ -243,6 +243,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       // New chat session with Cmd+T
       if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
+        e.stopPropagation()
         const sessionId = useTabStore.getState().createChatSession(activeTabId)
         handleSessionChange(sessionId)
       }
@@ -250,6 +251,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       // Close current chat session with Cmd+W
       if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault()
+        e.stopPropagation()
         const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
         const chatSessions = tab?.chatSessions || []
 
@@ -266,8 +268,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    // Use capture phase to intercept before other handlers
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [agentConfig.mode, agent.currentAgentId, setAgentConfig, activeTabId, handleSessionChange])
 
   return (
