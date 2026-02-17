@@ -10,6 +10,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useInputModeStore } from './stores/inputModeStore'
 import { useRecentStore } from './stores/recentStore'
 import { usePlatform } from './hooks/usePlatform'
+import { TIMING } from '../shared/constants'
 import * as path from 'path'
 
 function App() {
@@ -242,7 +243,6 @@ function App() {
     handleNewClaudeTab,
     handleNewLiteLLMTab,
     activeTabId,
-    handleNewClaudeTab,
     navigateToPreviousTab,
     navigateToNextTab,
   ])
