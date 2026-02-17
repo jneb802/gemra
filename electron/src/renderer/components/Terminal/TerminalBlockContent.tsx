@@ -37,11 +37,19 @@ export function TerminalBlockContent({ block, isGrouped = false }: TerminalBlock
     const outputLines = block.content.split('\n').length
     const isLongOutput = outputLines > 20
 
+    // Only show "(no output)" for completed/failed blocks with no content
+    const showNoOutput = !block.content && (block.status === 'completed' || block.status === 'failed')
+
+    // Don't render the block at all if it's running and has no content yet
+    if (!block.content && block.status === 'running') {
+      return null
+    }
+
     return (
       <div className={`terminal-block terminal-block-output ${isGrouped ? 'grouped' : ''} ${block.collapsed ? 'collapsed' : ''}`}>
         {!block.collapsed ? (
           <pre className="terminal-output-text">
-            {block.content ? ansiToReact(block.content) : <span className="terminal-output-empty">(no output)</span>}
+            {block.content ? ansiToReact(block.content) : showNoOutput && <span className="terminal-output-empty">(no output)</span>}
           </pre>
         ) : (
           <div className="terminal-output-collapsed">

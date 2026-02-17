@@ -521,23 +521,21 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
           />
         </>
       ) : isTerminalSession && activeSession?.terminalId ? (
-        <>
-          <BlockTerminal
-            terminalId={activeSession.terminalId}
-            workingDir={activeSession.workingDir || workingDir}
-          />
-
-          {/* Session tabs - always visible */}
-          {activeTabId && (
-            <SessionTabs
-              tabId={activeTabId}
-              onSessionChange={handleSessionChange}
-              onCreateChatSession={handleCreateNewSession}
-              onCreateTerminalSession={handleCreateTerminalSession}
-              isCreatingSession={isCreatingSession}
-            />
-          )}
-        </>
+        <BlockTerminal
+          terminalId={activeSession.terminalId}
+          workingDir={activeSession.workingDir || workingDir}
+          sessionTabs={
+            activeTabId && (
+              <SessionTabs
+                tabId={activeTabId}
+                onSessionChange={handleSessionChange}
+                onCreateChatSession={handleCreateNewSession}
+                onCreateTerminalSession={handleCreateTerminalSession}
+                isCreatingSession={isCreatingSession}
+              />
+            )
+          }
+        />
       ) : null}
 
       {isCreatingSession && (

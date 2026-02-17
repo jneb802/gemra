@@ -48,6 +48,14 @@ interface AnsiStyle {
  * Parse ANSI escape codes and convert to styled React elements
  */
 export function ansiToReact(text: string): React.ReactNode {
+  // First, strip OSC (Operating System Command) sequences
+  // These include shell integration markers like OSC 133
+  // Format: ESC ] ... (ST | BEL) where ST = ESC \ and BEL = \x07
+  text = text.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+
+  // Also strip any malformed OSC sequences that lost their escape characters
+  text = text.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
+
   // Remove ANSI sequences if they exist, otherwise return plain text
   const ansiRegex = /\x1b\[([0-9;]*)m/g
 
@@ -180,5 +188,10 @@ function styleToCSS(style: AnsiStyle): React.CSSProperties {
  * Strip ANSI codes from text (for copying plain text)
  */
 export function stripAnsi(text: string): string {
+  // Strip OSC sequences
+  text = text.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+  text = text.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
+
+  // Strip CSI sequences (colors/styles)
   return text.replace(/\x1b\[[0-9;]*m/g, '')
 }

@@ -17,6 +17,7 @@ import type { TerminalBlock } from '../../../shared/types/blocks'
 interface BlockTerminalProps {
   terminalId: string
   workingDir?: string
+  sessionTabs?: React.ReactNode
 }
 
 /**
@@ -26,7 +27,7 @@ interface BlockTerminalProps {
  * terminal output into discrete blocks (commands + output).
  * Blocks are rendered using the same MessageList component as chat.
  */
-export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalProps) {
+export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: BlockTerminalProps) {
   const [currentWorkingDir, setCurrentWorkingDir] = useState(workingDir)
   const [gitBranch, setGitBranch] = useState('')
   const [gitStats, setGitStats] = useState({ filesChanged: 0, insertions: 0, deletions: 0 })
@@ -359,6 +360,9 @@ export function BlockTerminal({ terminalId, workingDir = '~' }: BlockTerminalPro
           </div>
         ) : null}
       </div>
+
+      {/* Session tabs - positioned above terminal input */}
+      {sessionTabs}
 
       {/* Terminal input */}
       <TerminalInput

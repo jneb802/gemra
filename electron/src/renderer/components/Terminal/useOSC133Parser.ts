@@ -151,6 +151,15 @@ export function useOSC133Parser({
       return true
     })
 
+    // Helper function to strip OSC sequences from data
+    const stripOSC = (str: string): string => {
+      // Remove OSC sequences: ESC ] ... (BEL | ST)
+      let cleaned = str.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+      // Remove malformed OSC sequences
+      cleaned = cleaned.replace(/\]133;[A-D](?:;[0-9]+)?\s*/g, '')
+      return cleaned
+    }
+
     // Capture terminal output to detect command input
     // Note: We need to intercept data BEFORE it's written to terminal
     // This is tricky with xterm.js - we'll handle it via the write callback
@@ -164,20 +173,21 @@ export function useOSC133Parser({
       // Accumulate data based on current sequence
       switch (state.currentSequence) {
         case 'A':
-          // Accumulating prompt
-          state.promptBuffer += strData
+          // Accumulating prompt (strip OSC sequences)
+          state.promptBuffer += stripOSC(strData)
           break
 
         case 'B':
-          // Accumulating command input
-          state.commandBuffer += strData
+          // Accumulating command input (strip OSC sequences)
+          state.commandBuffer += stripOSC(strData)
           break
 
         case 'C':
-          // Accumulating command output
-          state.outputBuffer += strData
-          if (state.currentBlock) {
-            appendToBlock(terminalId, state.currentBlock.id, strData)
+          // Accumulating command output (strip OSC sequences before appending)
+          const cleanedOutput = stripOSC(strData)
+          state.outputBuffer += cleanedOutput
+          if (state.currentBlock && cleanedOutput) {
+            appendToBlock(terminalId, state.currentBlock.id, cleanedOutput)
           }
           break
       }
