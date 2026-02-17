@@ -249,13 +249,19 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
       // Close current chat session with Cmd+W
       if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault()
         const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
         const chatSessions = tab?.chatSessions || []
 
-        // Only handle if there are multiple chat sessions (don't close the last one)
         if (chatSessions.length > 1 && tab?.activeChatSessionId) {
-          e.preventDefault()
+          // Multiple sessions: close the current one
           useTabStore.getState().closeChatSession(activeTabId, tab.activeChatSessionId)
+        } else if (chatSessions.length === 1 && tab?.activeChatSessionId) {
+          // Last session: clear messages and reset (create a fresh session)
+          const currentSession = chatSessions[0]
+          if (currentSession && agent.currentAgentId) {
+            agent.clearMessages(currentSession.agentId)
+          }
         }
       }
     }
