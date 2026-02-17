@@ -8,12 +8,14 @@ interface MessageListProps {
   messages: ClaudeMessage[]
   isStreaming?: boolean
   currentTurnMetadata?: MessageMetadata | null
+  onRespondToQuest?: (questId: string, response: string | string[]) => void
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
   isStreaming = false,
   currentTurnMetadata,
+  onRespondToQuest,
 }) => {
   const listRef = useRef<ListImperativeAPI | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -99,6 +101,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   const rowProps: MessageItemProps = {
     messages,
     currentTurnMetadata,
+    onRespondToQuest,
   }
 
   return (

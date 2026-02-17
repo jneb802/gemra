@@ -3,10 +3,12 @@ import type { RowComponentProps } from 'react-window'
 import type { ClaudeMessage, MessageMetadata, MessageContent } from '../../../shared/types'
 import { MessageStatusIndicator } from './MessageStatusIndicator'
 import { ToolCallBlock } from './ToolCallBlock'
+import { QuestPrompt } from './QuestPrompt'
 
 export interface MessageItemProps {
   messages: ClaudeMessage[]
   currentTurnMetadata?: MessageMetadata | null
+  onRespondToQuest?: (questId: string, response: string | string[]) => void
 }
 
 // Filter out internal system tags from content
@@ -28,6 +30,7 @@ export const MessageItem = ({
   style,
   messages,
   currentTurnMetadata,
+  onRespondToQuest,
 }: RowComponentProps<MessageItemProps>) => {
   const message = messages[index]
 
@@ -40,6 +43,10 @@ export const MessageItem = ({
     message.role === 'assistant' &&
     currentTurnMetadata &&
     !currentTurnMetadata.isComplete
+
+  // Check if this is a quest prompt message
+  const isQuestPrompt = !!message.questPrompt
+  const isQuestAnswered = !!message.questResponse
 
   // Render message content (handles both string and multimodal)
   const renderContent = () => {
@@ -96,8 +103,8 @@ export const MessageItem = ({
   // Get metadata - use live currentTurnMetadata if streaming, otherwise use message.metadata
   const metadata = isStreaming ? currentTurnMetadata : message.metadata
 
-  // Don't render message if content is null (empty after sanitization) AND no tool calls
-  if (!content || (!content.text && content.images.length === 0 && !metadata?.toolCalls?.length)) {
+  // Don't render message if content is null (empty after sanitization) AND no tool calls AND not a quest
+  if (!isQuestPrompt && (!content || (!content.text && content.images.length === 0 && !metadata?.toolCalls?.length))) {
     return null
   }
 
@@ -106,37 +113,58 @@ export const MessageItem = ({
       <div
         className={`message message-${message.role}${
           isGroupedWithPrevious ? ' message-grouped' : ''
-        }`}
+        }${isQuestPrompt ? ' message-quest' : ''}`}
       >
-        {content.text}
+        {!isQuestPrompt && content && content.text}
+
+        {/* Quest prompt - interactive question UI */}
+        {isQuestPrompt && message.questPrompt && !isQuestAnswered && onRespondToQuest && (
+          <QuestPrompt
+            questPrompt={message.questPrompt}
+            onRespond={(response) => onRespondToQuest(message.id, response)}
+            isLoading={false}
+          />
+        )}
+
+        {/* Quest response - show what user answered */}
+        {isQuestPrompt && isQuestAnswered && (
+          <div className="quest-response">
+            <div className="quest-response-label">Response:</div>
+            <div className="quest-response-value">
+              {Array.isArray(message.questResponse)
+                ? message.questResponse.join(', ')
+                : message.questResponse}
+            </div>
+          </div>
+        )}
 
         {/* Image attachments list (shown below text for user messages) */}
-        {message.role === 'user' && content.images.length > 0 && (
+        {!isQuestPrompt && message.role === 'user' && content && content.images.length > 0 && (
           <div className="message-attachments">
             {content.images}
           </div>
         )}
 
         {/* Tool calls - show for assistant messages */}
-        {message.role === 'assistant' && metadata?.toolCalls && metadata.toolCalls.length > 0 && (
+        {!isQuestPrompt && message.role === 'assistant' && metadata?.toolCalls && metadata.toolCalls.length > 0 && (
           <div className="tool-calls-container">
             {metadata.toolCalls.map((toolCall) => (
               <ToolCallBlock
                 key={toolCall.id}
                 toolCall={toolCall}
-                isStreaming={isStreaming && toolCall.status === 'running'}
+                isStreaming={!!isStreaming && toolCall.status === 'running'}
               />
             ))}
           </div>
         )}
 
         {/* Live status for streaming message */}
-        {message.role === 'assistant' && isStreaming && currentTurnMetadata && (
+        {!isQuestPrompt && message.role === 'assistant' && isStreaming && currentTurnMetadata && (
           <MessageStatusIndicator metadata={currentTurnMetadata} isLive />
         )}
 
         {/* Final status for completed message */}
-        {message.role === 'assistant' && message.metadata?.isComplete && (
+        {!isQuestPrompt && message.role === 'assistant' && message.metadata?.isComplete && (
           <MessageStatusIndicator metadata={message.metadata} isLive={false} />
         )}
       </div>

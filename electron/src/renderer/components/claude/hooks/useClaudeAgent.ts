@@ -313,6 +313,23 @@ export function useClaudeAgent({
       agentStatusActionsRef.current.updateToolCall(data.toolCall)
     })
 
+    // Listen for quest prompts (agent asking questions)
+    const unlistenQuestPrompt = window.electron.claude.onQuestPrompt((data) => {
+      if (data.agentId !== currentAgentIdRef.current) return
+
+      console.log('[useClaudeAgent] Quest prompt received:', data.questId, data.prompt)
+
+      // Create a message with the quest prompt
+      addMessage(data.agentId, {
+        id: data.questId,
+        role: 'assistant',
+        content: data.prompt.question || '',
+        questPrompt: data.prompt,
+        metadata: { isComplete: false },
+        timestamp: Date.now()
+      })
+    })
+
     return () => {
       unlistenText()
       unlistenStatus()
@@ -323,6 +340,7 @@ export function useClaudeAgent({
       unlistenContainer()
       unlistenToolStarted()
       unlistenToolCompleted()
+      unlistenQuestPrompt()
     }
   }, [agentId, addMessage, updateMessage, appendToLastMessage, addTokenUsage, getMessages]) // Simplified dependencies
 
@@ -440,6 +458,43 @@ export function useClaudeAgent({
     [addMessage]
   )
 
+  // Handle quest prompt responses
+  const handleQuestResponse = useCallback(
+    async (questId: string, response: string | string[]) => {
+      const activeAgentId = currentAgentIdRef.current
+      if (!activeAgentId) {
+        console.error('[useClaudeAgent] No agent ID for quest response')
+        return
+      }
+
+      console.log('[useClaudeAgent] Quest response:', questId, response)
+
+      // Update the quest message with the response
+      updateMessage(activeAgentId, questId, {
+        questResponse: response,
+        metadata: { isComplete: true }
+      })
+
+      try {
+        // Send response to agent
+        const result = await window.electron.claude.respondToQuest(
+          activeAgentId,
+          questId,
+          response
+        )
+
+        if (!result.success) {
+          console.error('[useClaudeAgent] Failed to send quest response:', result.error)
+          agentStatusActions.setError(result.error || 'Failed to send response')
+        }
+      } catch (err) {
+        console.error('[useClaudeAgent] Exception sending quest response:', err)
+        agentStatusActions.setError('Failed to send response')
+      }
+    },
+    [updateMessage, agentStatusActions]
+  )
+
   return {
     // State
     currentAgentId: currentAgentIdRef.current,
@@ -456,6 +511,7 @@ export function useClaudeAgent({
     restartAgent,
     sendMessage: handleSend,
     addSystemMessage,
+    respondToQuest: handleQuestResponse,
     clearMessages: (agentId: string) => clearMessages(agentId),
     getMessages: (agentId: string) => getMessages(agentId)
   }

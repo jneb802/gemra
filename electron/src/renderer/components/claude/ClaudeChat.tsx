@@ -2,8 +2,10 @@ import React, { useCallback, useState } from 'react'
 import { MessageList } from './MessageList'
 import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
-import { ChatSessionTabs } from './ChatSessionTabs'
+import { SessionTabs } from './SessionTabs'
+import { BlockTerminal } from '../Terminal/BlockTerminal'
 import { useTabStore, type ChatSession } from '../../stores/tabStore'
+import { useBlockStore } from '../../stores/blockStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
 import { useClaudeAgent } from './hooks/useClaudeAgent'
@@ -43,14 +45,17 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const useDocker = useSettingsStore((state) => state.useDocker)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
 
-  // Get active chat session
-  const activeChatSession = useTabStore((state) => {
+  // Get active session (generic - can be chat or terminal)
+  const activeSession = useTabStore((state) => {
     if (!activeTabId) return undefined
-    return state.getActiveChatSession(activeTabId)
+    return state.getActiveSession(activeTabId)
   })
 
+  const isChatSession = activeSession?.type === 'chat'
+  const isTerminalSession = activeSession?.type === 'terminal'
+
   // Use active chat session's agentId, fallback to prop agentId for backwards compatibility
-  const agentId = activeChatSession?.agentId || propAgentId
+  const agentId = isChatSession ? activeSession?.agentId || propAgentId : propAgentId
 
   // Get messages from store (use agentId if available, otherwise empty array)
   const messages = useClaudeChatStore((state) =>
@@ -88,12 +93,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     onUserMessage,
     onUpdateTabAgent: updateTabAgent,
     onUpdateSessionAgent: (newAgentId: string) => {
-      if (activeTabId && activeChatSession?.id) {
-        updateChatSessionAgent(activeTabId, activeChatSession.id, newAgentId)
+      if (activeTabId && activeSession?.id) {
+        updateChatSessionAgent(activeTabId, activeSession.id, newAgentId)
       }
     },
     activeTabId,
-    activeChatSessionId: activeChatSession?.id,
+    activeChatSessionId: activeSession?.id,
     onContainerStatusUpdate: handleContainerStatusUpdate
   })
 
@@ -209,11 +214,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         const sessionId = generateId.tab()
         const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
         const chatSessions = tab?.chatSessions || []
-        const sessionNumber = chatSessions.length + 1
+        const sessionNumber = chatSessions.filter(s => s.type === 'chat').length + 1
 
         const newSession: ChatSession = {
           id: sessionId,
           title: `Chat ${sessionNumber}`,
+          type: 'chat',
           agentId: result.agentId,
           createdAt: Date.now(),
           lastActive: Date.now()
@@ -243,6 +249,22 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
       setIsCreatingSession(false)
     }
   }, [activeTabId, workingDir, useDocker, isCreatingSession, handleSessionChange, agent])
+
+  // Handle creating a new terminal session
+  const handleCreateTerminalSession = useCallback(async () => {
+    if (!activeTabId || isCreatingSession) return
+
+    setIsCreatingSession(true)
+    try {
+      const sessionId = useTabStore.getState().createTerminalSession(
+        activeTabId,
+        workingDir
+      )
+      handleSessionChange(sessionId)
+    } finally {
+      setIsCreatingSession(false)
+    }
+  }, [activeTabId, workingDir, isCreatingSession, handleSessionChange])
 
   // Handle mode cycling (Shift+Tab) and chat session switching (Cmd+[ / Cmd+])
   React.useEffect(() => {
@@ -301,14 +323,21 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
         }
       }
 
-      // New chat session with Cmd+T
-      if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 't') {
+      // New terminal session with Cmd+T
+      if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 't' && !e.shiftKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleCreateTerminalSession()
+      }
+
+      // New chat session with Cmd+Shift+T
+      if (activeTabId && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'T') {
         e.preventDefault()
         e.stopPropagation()
         handleCreateNewSession()
       }
 
-      // Close current chat session with Cmd+W
+      // Close current session with Cmd+W
       if (activeTabId && (e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault()
         e.stopPropagation()
@@ -317,12 +346,22 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
 
         if (chatSessions.length > 1 && tab?.activeChatSessionId) {
           // Multiple sessions: close the current one
+          const session = chatSessions.find(s => s.id === tab.activeChatSessionId)
+
+          // Cleanup terminal PTY if needed
+          if (session?.type === 'terminal' && session.terminalId) {
+            window.electron.pty.kill(session.terminalId)
+            useBlockStore.getState().clearBlocks(session.terminalId)
+          }
+
           useTabStore.getState().closeChatSession(activeTabId, tab.activeChatSessionId)
         } else if (chatSessions.length === 1 && tab?.activeChatSessionId) {
-          // Last session: clear messages and reset (create a fresh session)
+          // Last session: clear messages/blocks and reset
           const currentSession = chatSessions[0]
-          if (currentSession?.agentId) {
+          if (currentSession?.type === 'chat' && currentSession.agentId) {
             agent.clearMessages(currentSession.agentId)
+          } else if (currentSession?.type === 'terminal' && currentSession.terminalId) {
+            useBlockStore.getState().clearBlocks(currentSession.terminalId)
           }
         }
       }
@@ -331,157 +370,169 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     // Use capture phase to intercept before other handlers
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [agentConfig.mode, agent.currentAgentId, setAgentConfig, activeTabId, handleSessionChange])
+  }, [agentConfig.mode, agent.currentAgentId, setAgentConfig, activeTabId, handleSessionChange, handleCreateNewSession, handleCreateTerminalSession, agent])
 
   return (
     <div className="claude-chat">
-      {/* Show welcome screen when there are no messages */}
-      {messages.length === 0 ? (
-        <WelcomeScreen
-          onCreateProject={onCreateProject}
-          onOpenRepository={onOpenRepository}
-          onCloneRepository={onCloneRepository}
-          onOpenRecent={onOpenRecent}
+      {/* Conditional content based on session type */}
+      {isChatSession ? (
+        <>
+          {/* Show welcome screen when there are no messages */}
+          {messages.length === 0 ? (
+            <WelcomeScreen
+              onCreateProject={onCreateProject}
+              onOpenRepository={onOpenRepository}
+              onCloneRepository={onCloneRepository}
+              onOpenRecent={onOpenRecent}
+            />
+          ) : (
+            <MessageList
+              messages={messages}
+              isStreaming={agent.agentStatus.type === 'streaming'}
+              currentTurnMetadata={agent.currentTurnMetadata}
+              onRespondToQuest={agent.respondToQuest}
+            />
+          )}
+
+          {/* Status indicators */}
+          {agent.agentStatus.type === 'thinking' && (
+            <div className="status-indicator thinking">
+              <span className="status-icon">🤔</span>
+              <span className="status-text">Thinking...</span>
+            </div>
+          )}
+
+          {agent.agentStatus.type === 'streaming' && agent.isWorking && (
+            <div className="status-indicator streaming">
+              <span className="status-icon">✍️</span>
+              <span className="status-text">Writing response...</span>
+            </div>
+          )}
+
+          {agent.agentStatus.type === 'tool_execution' && agent.agentStatus.tool && (
+            <div className="status-indicator tool-execution">
+              <span className="status-icon">🔧</span>
+              <span className="status-text">{getToolDisplayName(agent.agentStatus.tool.name)}</span>
+              {agent.agentStatus.tool.name === 'Read' && agent.agentStatus.tool.input?.file_path && (
+                <span className="status-detail">{agent.agentStatus.tool.input.file_path}</span>
+              )}
+              {agent.agentStatus.tool.name === 'Bash' && agent.agentStatus.tool.input?.command && (
+                <span className="status-detail">{agent.agentStatus.tool.input.command}</span>
+              )}
+              {agent.agentStatus.tool.name === 'Grep' && agent.agentStatus.tool.input?.pattern && (
+                <span className="status-detail">"{agent.agentStatus.tool.input.pattern}"</span>
+              )}
+            </div>
+          )}
+
+          {agent.isInitializingAgent && (
+            <div className="status-indicator thinking">
+              <span className="status-icon">🚀</span>
+              <span className="status-text">Starting Claude Code agent...</span>
+            </div>
+          )}
+
+          {agent.error && <div className="error-message">Error: {agent.error}</div>}
+
+          {/* Input box - only for chat sessions */}
+          <InputBox
+            onSend={agent.sendMessage}
+            disabled={agent.isWorking || agent.isInitializingAgent}
+            customCommands={commands.customCommands}
+            claudeCommands={commands.claudeCommands}
+            onExecuteCommand={commands.handleExecuteCommand}
+            onExecuteCommandFromInput={commands.handleExecuteCommandFromInput}
+            tabId={agent.currentAgentId}
+            showBranchMenu={git.showBranchMenu}
+            branchList={git.branchList}
+            currentBranch={git.gitBranch}
+            onBranchSelect={git.handleBranchSelect}
+            onCloseBranchMenu={git.closeBranchMenu}
+            showWorktreeMenu={worktree.showWorktreeMenu}
+            worktreeList={worktree.worktreeList}
+            worktreeMenuMode={worktree.worktreeMenuMode}
+            onWorktreeSelect={worktree.handleWorktreeSelect}
+            onCloseWorktreeMenu={worktree.closeWorktreeMenu}
+            onWorktreeSubcommand={(subcommand: string, args?: string) => {
+              switch (subcommand) {
+                case 'create':
+                  if (args) {
+                    const [path, branch] = args.split(/\s+/)
+                    if (path && branch) {
+                      worktree.addWorktree(path, branch)
+                    } else {
+                      agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+                    }
+                  } else {
+                    agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+                  }
+                  break
+                case 'remove':
+                  if (args) {
+                    worktree.removeWorktree(args)
+                  } else {
+                    agent.addSystemMessage('Usage: /worktree remove <path>')
+                  }
+                  break
+                case 'prune':
+                  worktree.pruneWorktrees()
+                  break
+                case 'list':
+                  worktree.listWorktrees()
+                  break
+                default:
+                  agent.addSystemMessage(`Unknown worktree subcommand: ${subcommand}`)
+              }
+            }}
+            onShowWorktreeSubcommands={worktree.showSubcommands}
+            onShowWorktreeList={worktree.showList}
+            workingDir={workingDir}
+            gitBranch={git.gitBranch}
+            gitStats={git.gitStats}
+            model={agentConfig.model}
+            onModelChange={(model: string) => {
+              if (agent.currentAgentId) {
+                setAgentConfig(agent.currentAgentId, { model })
+              }
+            }}
+            onBranchClick={git.handleBranchClick}
+            agentMode={agentConfig.mode}
+            onAgentModeChange={(mode: ClaudeMode) => {
+              if (agent.currentAgentId) {
+                setAgentConfig(agent.currentAgentId, { mode })
+              }
+            }}
+            containerStatus={containerStatus}
+            containerError={containerError}
+            onContainerToggle={containerManagement.handleContainerToggle}
+            tokenUsage={tokenUsage}
+            dangerouslySkipPermissions={containerManagement.dangerouslySkipPermissions}
+          />
+        </>
+      ) : isTerminalSession && activeSession?.terminalId ? (
+        <BlockTerminal
+          terminalId={activeSession.terminalId}
+          workingDir={activeSession.workingDir || workingDir}
         />
-      ) : (
-        <MessageList
-          messages={messages}
-          isStreaming={agent.agentStatus.type === 'streaming'}
-          currentTurnMetadata={agent.currentTurnMetadata}
-        />
-      )}
-
-      {/* Status indicators */}
-      {agent.agentStatus.type === 'thinking' && (
-        <div className="status-indicator thinking">
-          <span className="status-icon">🤔</span>
-          <span className="status-text">Thinking...</span>
-        </div>
-      )}
-
-      {agent.agentStatus.type === 'streaming' && agent.isWorking && (
-        <div className="status-indicator streaming">
-          <span className="status-icon">✍️</span>
-          <span className="status-text">Writing response...</span>
-        </div>
-      )}
-
-      {agent.agentStatus.type === 'tool_execution' && agent.agentStatus.tool && (
-        <div className="status-indicator tool-execution">
-          <span className="status-icon">🔧</span>
-          <span className="status-text">{getToolDisplayName(agent.agentStatus.tool.name)}</span>
-          {agent.agentStatus.tool.name === 'Read' && agent.agentStatus.tool.input?.file_path && (
-            <span className="status-detail">{agent.agentStatus.tool.input.file_path}</span>
-          )}
-          {agent.agentStatus.tool.name === 'Bash' && agent.agentStatus.tool.input?.command && (
-            <span className="status-detail">{agent.agentStatus.tool.input.command}</span>
-          )}
-          {agent.agentStatus.tool.name === 'Grep' && agent.agentStatus.tool.input?.pattern && (
-            <span className="status-detail">"{agent.agentStatus.tool.input.pattern}"</span>
-          )}
-        </div>
-      )}
-
-      {agent.isInitializingAgent && (
-        <div className="status-indicator thinking">
-          <span className="status-icon">🚀</span>
-          <span className="status-text">Starting Claude Code agent...</span>
-        </div>
-      )}
+      ) : null}
 
       {isCreatingSession && (
         <div className="status-indicator thinking">
           <span className="status-icon">✨</span>
-          <span className="status-text">Creating new chat session...</span>
+          <span className="status-text">Creating new session...</span>
         </div>
       )}
 
-      {agent.error && <div className="error-message">Error: {agent.error}</div>}
-
-      {/* Chat session tabs */}
+      {/* Session tabs - always visible */}
       {activeTabId && (
-        <ChatSessionTabs
+        <SessionTabs
           tabId={activeTabId}
           onSessionChange={handleSessionChange}
-          onCreateSession={handleCreateNewSession}
+          onCreateChatSession={handleCreateNewSession}
+          onCreateTerminalSession={handleCreateTerminalSession}
           isCreatingSession={isCreatingSession}
         />
       )}
-
-      {/* Input box */}
-      <InputBox
-        onSend={agent.sendMessage}
-        disabled={agent.isWorking || agent.isInitializingAgent}
-        customCommands={commands.customCommands}
-        claudeCommands={commands.claudeCommands}
-        onExecuteCommand={commands.handleExecuteCommand}
-        onExecuteCommandFromInput={commands.handleExecuteCommandFromInput}
-        tabId={agent.currentAgentId}
-        showBranchMenu={git.showBranchMenu}
-        branchList={git.branchList}
-        currentBranch={git.gitBranch}
-        onBranchSelect={git.handleBranchSelect}
-        onCloseBranchMenu={git.closeBranchMenu}
-        showWorktreeMenu={worktree.showWorktreeMenu}
-        worktreeList={worktree.worktreeList}
-        worktreeMenuMode={worktree.worktreeMenuMode}
-        onWorktreeSelect={worktree.handleWorktreeSelect}
-        onCloseWorktreeMenu={worktree.closeWorktreeMenu}
-        onWorktreeSubcommand={(subcommand: string, args?: string) => {
-          switch (subcommand) {
-            case 'create':
-              if (args) {
-                const [path, branch] = args.split(/\s+/)
-                if (path && branch) {
-                  worktree.addWorktree(path, branch)
-                } else {
-                  agent.addSystemMessage('Usage: /worktree create <path> <branch>')
-                }
-              } else {
-                agent.addSystemMessage('Usage: /worktree create <path> <branch>')
-              }
-              break
-            case 'remove':
-              if (args) {
-                worktree.removeWorktree(args)
-              } else {
-                agent.addSystemMessage('Usage: /worktree remove <path>')
-              }
-              break
-            case 'prune':
-              worktree.pruneWorktrees()
-              break
-            case 'list':
-              worktree.listWorktrees()
-              break
-            default:
-              agent.addSystemMessage(`Unknown worktree subcommand: ${subcommand}`)
-          }
-        }}
-        onShowWorktreeSubcommands={worktree.showSubcommands}
-        onShowWorktreeList={worktree.showList}
-        workingDir={workingDir}
-        gitBranch={git.gitBranch}
-        gitStats={git.gitStats}
-        model={agentConfig.model}
-        onModelChange={(model: string) => {
-          if (agent.currentAgentId) {
-            setAgentConfig(agent.currentAgentId, { model })
-          }
-        }}
-        onBranchClick={git.handleBranchClick}
-        agentMode={agentConfig.mode}
-        onAgentModeChange={(mode: ClaudeMode) => {
-          if (agent.currentAgentId) {
-            setAgentConfig(agent.currentAgentId, { mode })
-          }
-        }}
-        containerStatus={containerStatus}
-        containerError={containerError}
-        onContainerToggle={containerManagement.handleContainerToggle}
-        tokenUsage={tokenUsage}
-        dangerouslySkipPermissions={containerManagement.dangerouslySkipPermissions}
-      />
     </div>
   )
 }

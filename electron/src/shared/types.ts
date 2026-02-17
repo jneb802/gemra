@@ -48,6 +48,24 @@ export const IPC_CHANNELS = {
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
 
+// Quest Prompt types (for agent questions)
+export interface QuestOption {
+  label: string
+  value: string
+  description?: string
+}
+
+export interface QuestPrompt {
+  id: string
+  question: string
+  header: string // Short label for UI
+  description?: string
+  answerType: 'text' | 'select' | 'multiselect' | 'confirm'
+  options?: QuestOption[]
+  required?: boolean
+  multiSelect?: boolean
+}
+
 // Claude Agent types
 export interface MessageMetadata {
   // Timing phases (milliseconds)
@@ -104,6 +122,8 @@ export interface ClaudeMessage {
   id: string
   metadata?: MessageMetadata // Per-turn metadata
   timestamp?: number  // Optional timestamp for display
+  questPrompt?: QuestPrompt  // If this message is a question
+  questResponse?: string | string[]  // User's answer (when filled)
 }
 
 export interface ClaudeAgentInfo {

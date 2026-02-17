@@ -129,6 +129,11 @@ contextBridge.exposeInMainWorld('electron', {
     onExit: createIpcListener<{ agentId: string; info: any }>('claude:exit'),
 
     onContainerStatus: createIpcListener<{ agentId: string; status: string; error?: string }>('container:status'),
+
+    respondToQuest: (agentId: string, questId: string, response: string | string[]) =>
+      ipcRenderer.invoke('claude:respond-quest', agentId, questId, response),
+
+    onQuestPrompt: createIpcListener<{ agentId: string; questId: string; prompt: any }>('claude:quest-prompt'),
   },
 })
 
@@ -185,6 +190,8 @@ export interface ElectronAPI {
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void
     onExit: (callback: (data: { agentId: string; info: any }) => void) => () => void
     onContainerStatus: (callback: (data: { agentId: string; status: string; error?: string }) => void) => () => void
+    respondToQuest: (agentId: string, questId: string, response: string | string[]) => Promise<{ success: boolean; error?: string }>
+    onQuestPrompt: (callback: (data: { agentId: string; questId: string; prompt: any }) => void) => () => void
   }
 }
 

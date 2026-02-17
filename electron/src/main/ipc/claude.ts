@@ -134,6 +134,12 @@ function forwardAgentEvents(
     logger.log(`Agent ${agentId} container status:`, data)
     safeSend(mainWindow, 'container:status', { agentId, ...data })
   })
+
+  // Listen for quest prompts (agent asking questions)
+  agent.on('questPrompt', (data: { questId: string; prompt: any }) => {
+    logger.log(`Agent ${agentId} quest prompt:`, data.questId)
+    safeSend(mainWindow, 'claude:quest-prompt', { agentId, questId: data.questId, prompt: data.prompt })
+  })
 }
 
 /**
@@ -221,6 +227,24 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     const agent = getAgentOrThrow(agentId)
     const commands = await agent.getSupportedCommands()
     return { commands }
+  })
+
+  // Respond to quest prompt
+  createIpcHandler('claude:respond-quest', async (agentId: string, questId: string, response: string | string[]) => {
+    logger.log(`Quest response for agent ${agentId}, quest ${questId}:`, response)
+
+    const agent = getAgentOrThrow(agentId)
+
+    // For now, we'll send the response as a regular message
+    // This assumes the agent SDK will handle the response appropriately
+    // If the Claude Agent SDK has a specific method for quest responses, use that instead
+    const formattedResponse = Array.isArray(response)
+      ? `Selected: ${response.join(', ')}`
+      : response
+
+    await agent.sendPrompt(formattedResponse)
+
+    return { success: true }
   })
 
   // Get git branches
