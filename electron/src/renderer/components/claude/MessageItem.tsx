@@ -2,6 +2,7 @@ import React from 'react'
 import type { RowComponentProps } from 'react-window'
 import type { ClaudeMessage, MessageMetadata, MessageContent } from '../../../shared/types'
 import { MessageStatusIndicator } from './MessageStatusIndicator'
+import { ToolCallBlock } from './ToolCallBlock'
 
 export interface MessageItemProps {
   messages: ClaudeMessage[]
@@ -92,8 +93,11 @@ export const MessageItem = ({
 
   const content = renderContent()
 
-  // Don't render message if content is null (empty after sanitization)
-  if (!content || (!content.text && content.images.length === 0)) {
+  // Get metadata - use live currentTurnMetadata if streaming, otherwise use message.metadata
+  const metadata = isStreaming ? currentTurnMetadata : message.metadata
+
+  // Don't render message if content is null (empty after sanitization) AND no tool calls
+  if (!content || (!content.text && content.images.length === 0 && !metadata?.toolCalls?.length)) {
     return null
   }
 
@@ -110,6 +114,19 @@ export const MessageItem = ({
         {message.role === 'user' && content.images.length > 0 && (
           <div className="message-attachments">
             {content.images}
+          </div>
+        )}
+
+        {/* Tool calls - show for assistant messages */}
+        {message.role === 'assistant' && metadata?.toolCalls && metadata.toolCalls.length > 0 && (
+          <div className="tool-calls-container">
+            {metadata.toolCalls.map((toolCall) => (
+              <ToolCallBlock
+                key={toolCall.id}
+                toolCall={toolCall}
+                isStreaming={isStreaming && toolCall.status === 'running'}
+              />
+            ))}
           </div>
         )}
 

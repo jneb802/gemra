@@ -100,6 +100,10 @@ contextBridge.exposeInMainWorld('electron', {
 
     onToolExecution: createIpcListener<{ agentId: string; tool: any }>('claude:toolExecution'),
 
+    onToolStarted: createIpcListener<{ agentId: string; toolCall: any }>('claude:tool-started'),
+
+    onToolCompleted: createIpcListener<{ agentId: string; toolCall: any }>('claude:tool-completed'),
+
     onError: createIpcListener<{ agentId: string; error: string }>('claude:error'),
 
     onExit: createIpcListener<{ agentId: string; info: any }>('claude:exit'),
@@ -146,6 +150,8 @@ export interface ElectronAPI {
     onUsage: (callback: (data: { agentId: string; usage: { inputTokens: number; outputTokens: number; timestamp: number } }) => void) => () => void
     onAgentStatus: (callback: (data: { agentId: string; status: any }) => void) => () => void
     onToolExecution: (callback: (data: { agentId: string; tool: any }) => void) => () => void
+    onToolStarted: (callback: (data: { agentId: string; toolCall: any }) => void) => () => void
+    onToolCompleted: (callback: (data: { agentId: string; toolCall: any }) => void) => () => void
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void
     onExit: (callback: (data: { agentId: string; info: any }) => void) => () => void
     onContainerStatus: (callback: (data: { agentId: string; status: string; error?: string }) => void) => () => void
