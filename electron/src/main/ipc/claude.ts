@@ -235,13 +235,13 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
     const agent = getAgentOrThrow(agentId)
 
-    // For now, we'll send the response as a regular message
-    // This assumes the agent SDK will handle the response appropriately
-    // If the Claude Agent SDK has a specific method for quest responses, use that instead
+    // Format response for AskUserQuestion tool
+    // The SDK's AskUserQuestion expects the selected option labels
     const formattedResponse = Array.isArray(response)
-      ? `Selected: ${response.join(', ')}`
-      : response
+      ? response.join(', ') // Multiple selections
+      : response // Single selection (the label text)
 
+    // Send as a regular message - the SDK handles matching it to the pending AskUserQuestion
     await agent.sendPrompt(formattedResponse)
 
     return { success: true }

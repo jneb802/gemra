@@ -276,7 +276,35 @@ export class ACPClient extends EventEmitter {
         // Handle tool_use blocks
         for (const block of message.content) {
           if (block.type === 'tool_use') {
-            // Tool execution within message
+            // Check if this is AskUserQuestion tool
+            if (block.name === 'AskUserQuestion') {
+              // This is a quest prompt - emit special event
+              this.logger.log('AskUserQuestion tool detected:', block.id)
+
+              // Extract the first question from the input
+              const questions = block.input?.questions || []
+              if (questions.length > 0) {
+                const question = questions[0] // Take first question for now
+
+                // Emit quest prompt event
+                this.emit('questPrompt', {
+                  questId: block.id,
+                  prompt: {
+                    id: block.id,
+                    question: question.question,
+                    header: question.header,
+                    answerType: 'select', // SDK only supports select mode
+                    options: question.options || [],
+                    multiSelect: question.multiSelect || false
+                  }
+                })
+
+                // Don't emit regular tool execution for this
+                continue
+              }
+            }
+
+            // Regular tool execution
             this.currentPhase = 'tool_execution'
             this.emit('toolExecution', {
               id: block.id,

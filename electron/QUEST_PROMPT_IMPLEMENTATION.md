@@ -274,35 +274,48 @@ Added comprehensive styling for quest prompts:
 
 ## Usage Example
 
-When the agent needs to ask a question, it emits a `questPrompt` event:
+When Claude decides to ask a question, it calls the `AskUserQuestion` tool:
 
 ```typescript
-// Agent SDK (conceptual - actual implementation may vary)
-agent.emit('questPrompt', {
-  questId: 'q-12345',
+// The agent (Claude) calls AskUserQuestion tool
+// This happens automatically when Claude uses the tool in conversation
+{
+  type: 'tool_use',
+  id: 'toolu_01ABC123',
+  name: 'AskUserQuestion',
+  input: {
+    questions: [{
+      question: 'Which authentication method should we use?',
+      header: 'Auth',
+      options: [
+        {
+          label: 'OAuth 2.0',
+          description: 'Industry standard, secure, supports third-party'
+        },
+        {
+          label: 'JWT Tokens',
+          description: 'Stateless, simple, good for microservices'
+        },
+        {
+          label: 'Session Cookies',
+          description: 'Simple, secure, traditional approach'
+        }
+      ],
+      multiSelect: false
+    }]
+  }
+}
+
+// ACPClient detects this and emits:
+acpClient.emit('questPrompt', {
+  questId: 'toolu_01ABC123',
   prompt: {
-    id: 'q-12345',
+    id: 'toolu_01ABC123',
     question: 'Which authentication method should we use?',
-    header: 'Auth Method',
-    description: 'Choose the authentication approach for your API',
+    header: 'Auth',
     answerType: 'select',
-    options: [
-      {
-        label: 'OAuth 2.0',
-        value: 'oauth',
-        description: 'Industry standard, secure, supports third-party'
-      },
-      {
-        label: 'JWT Tokens',
-        value: 'jwt',
-        description: 'Stateless, simple, good for microservices'
-      },
-      {
-        label: 'Session Cookies',
-        value: 'session',
-        description: 'Simple, secure, traditional approach'
-      }
-    ]
+    options: [...],
+    multiSelect: false
   }
 })
 ```
@@ -355,19 +368,40 @@ After user selects "OAuth 2.0", the message updates to show:
 
 ## Agent SDK Integration Notes
 
-**Current Implementation:**
-The quest response handler currently forwards the response as a regular message to the agent. This works for basic question/answer flows.
+**✅ SDK Support Confirmed:**
+The Claude Agent SDK (v0.2.38) **already includes** the `AskUserQuestion` tool! The agent can call this tool to ask users questions.
 
-**Future Enhancement:**
-If the Claude Agent SDK provides a dedicated method for quest responses (e.g., `agent.respondToQuestion(questId, response)`), update the handler in `src/main/ipc/claude.ts`:
+**How It Works:**
+1. Agent calls `AskUserQuestion` tool with questions and options
+2. SDK sends `tool_use` block with `name: 'AskUserQuestion'`
+3. ACPClient detects this tool and emits `questPrompt` event
+4. UI shows the question to user via QuestPrompt component
+5. User selects answer and it's sent back as a message
+6. SDK continues agent execution with the answer
 
+**Implementation:**
+The quest response handler sends the answer as a regular message to the agent. The SDK automatically matches it to the pending `AskUserQuestion` call and continues execution.
+
+**Tool Input Format:**
 ```typescript
-// Replace sendPrompt with dedicated method
-await agent.respondToQuestion(questId, response)
+{
+  name: 'AskUserQuestion',
+  input: {
+    questions: [{
+      question: string,      // "Which auth method?"
+      header: string,        // "Auth" (max 12 chars)
+      options: [{           // 2-4 options
+        label: string,      // "OAuth 2.0"
+        description: string // "Industry standard..."
+      }],
+      multiSelect?: boolean
+    }]
+  }
+}
 ```
 
-**Event Listening:**
-The main process needs to listen for `questPrompt` events from the agent. Ensure `ClaudeAgent` class emits this event when the agent asks a question.
+**Detection:**
+ACPClient now detects `AskUserQuestion` tool calls in `handleSDKMessage()` and emits them as `questPrompt` events instead of regular tool executions.
 
 ## Testing Checklist
 
