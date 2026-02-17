@@ -1,6 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
 import { TabBar } from './components/Tabs/TabBar'
-import { TerminalView } from './components/Terminal/TerminalView'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { CreateProjectModal } from './components/Welcome/CreateProjectModal'
