@@ -42,6 +42,9 @@ export function setupCommandsIpc(mainWindow: BrowserWindow): void {
         workflow.steps,
         workingDir,
         apiKey ?? process.env.OPENROUTER_API_KEY ?? '',
+        (stepId, model) => {
+          mainWindow.webContents.send('commands:step-start', { runId, stepId, model })
+        },
         (stepId, output, stepType, command) => {
           mainWindow.webContents.send('commands:step-output', { runId, stepId, output, stepType, command })
         },

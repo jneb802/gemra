@@ -13,6 +13,7 @@ export async function runWorkflow(
   steps: WorkflowStep[],
   workingDir: string,
   apiKey: string,
+  onStepStart: (stepId: string, model: string) => void,
   onStepOutput: (stepId: string, output: string, stepType: 'shell' | 'llm', command?: string) => void,
   signal: AbortSignal
 ): Promise<void> {
@@ -37,6 +38,7 @@ export async function runWorkflow(
       }
     } else if (step.type === 'llm') {
       const prompt = interpolate(step.prompt, ctx)
+      onStepStart(step.id, step.model)
       const output = await callLLM(step, prompt, apiKey)
       ctx[step.id] = output
       onStepOutput(step.id, output, 'llm')

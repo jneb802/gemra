@@ -66,6 +66,9 @@ export function useCommandSystem({
   // Maps runId → terminalId for active workflow runs
   const workflowTerminals = useRef<Map<string, string>>(new Map())
 
+  // Maps "runId:stepId" → blockId for in-flight LLM blocks
+  const workflowLlmBlocks = useRef<Map<string, string>>(new Map())
+
   // Stable ref so the workflow-event effect never needs to re-subscribe when
   // the onAddSystemMessage callback identity changes due to parent re-renders.
   const onAddSystemMessageRef = useRef(onAddSystemMessage)
@@ -134,8 +137,42 @@ export function useCommandSystem({
       }
     }
 
+    const unsubStepStart = window.electron.commands.onStepStart((data) => {
+      const terminalId = workflowTerminals.current.get(data.runId)
+      if (!terminalId) return
+      const { createBlock, startBlockExecution } = useBlockStore.getState()
+      const cwd = workingDirRef.current
+      const block = createBlock(terminalId, {
+        type: 'llm',
+        status: 'pending',
+        model: data.model,
+        content: '',
+        workingDir: cwd,
+      })
+      startBlockExecution(terminalId, block.id)
+      workflowLlmBlocks.current.set(`${data.runId}:${data.stepId}`, block.id)
+    })
+
     const unsubStepOutput = window.electron.commands.onStepOutput((data) => {
       const terminalId = workflowTerminals.current.get(data.runId)
+
+      if (terminalId && data.stepType === 'llm') {
+        const key = `${data.runId}:${data.stepId}`
+        const blockId = workflowLlmBlocks.current.get(key)
+        if (blockId) {
+          const endTime = Date.now()
+          const block = useBlockStore.getState().getBlock(terminalId, blockId)
+          useBlockStore.getState().updateBlock(terminalId, blockId, {
+            content: data.output,
+            status: 'completed',
+            endTime,
+            duration: block ? endTime - block.startTime : undefined,
+          })
+          workflowLlmBlocks.current.delete(key)
+          return
+        }
+      }
+
       if (terminalId) {
         writeToBlocks(terminalId, data.command, data.output)
       } else {
@@ -146,11 +183,23 @@ export function useCommandSystem({
 
     const unsubDone = window.electron.commands.onDone((data) => {
       console.log('[useCommandSystem] onDone:', data.runId)
+      // Clean up any lingering LLM block keys for this run
+      for (const key of workflowLlmBlocks.current.keys()) {
+        if (key.startsWith(`${data.runId}:`)) {
+          workflowLlmBlocks.current.delete(key)
+        }
+      }
       workflowTerminals.current.delete(data.runId)
     })
 
     const unsubError = window.electron.commands.onError((data) => {
       console.error('[useCommandSystem] onError:', data.runId, data.error)
+      // Clean up any lingering LLM block keys for this run
+      for (const key of workflowLlmBlocks.current.keys()) {
+        if (key.startsWith(`${data.runId}:`)) {
+          workflowLlmBlocks.current.delete(key)
+        }
+      }
       const terminalId = workflowTerminals.current.get(data.runId)
       if (terminalId) {
         writeToBlocks(terminalId, undefined, `Workflow error: ${data.error}`)
@@ -161,6 +210,7 @@ export function useCommandSystem({
     })
 
     return () => {
+      unsubStepStart()
       unsubStepOutput()
       unsubDone()
       unsubError()

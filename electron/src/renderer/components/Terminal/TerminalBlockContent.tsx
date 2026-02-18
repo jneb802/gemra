@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { TerminalBlock } from '../../../shared/types/blocks'
 import { ansiToReact } from '../../utils/ansiToReact'
 
@@ -60,11 +60,51 @@ export function TerminalBlockContent({ block, isGrouped = false }: TerminalBlock
     )
   }
 
+  // LLM block (workflow step awaiting / completed model response)
+  if (block.type === 'llm') {
+    if (block.status === 'running') {
+      return <LlmRunningBlock block={block} />
+    }
+
+    const modelShort = block.model?.split('/').pop() ?? 'model'
+    return (
+      <div className="terminal-block terminal-block-llm">
+        <pre className="terminal-llm-response">{block.content}</pre>
+        <div className="message-status-indicator final">
+          {block.duration !== undefined
+            ? `for ${formatDuration(block.duration)} · ${modelShort}`
+            : modelShort}
+        </div>
+      </div>
+    )
+  }
+
   // System block
   return (
     <div className="terminal-block terminal-block-system">
       <span className="terminal-system-icon">ℹ</span>
       <span className="terminal-system-text">{block.content}</span>
+    </div>
+  )
+}
+
+/**
+ * LlmRunningBlock - Live-ticking running state for LLM workflow steps
+ */
+function LlmRunningBlock({ block }: { block: TerminalBlock }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 500)
+    return () => clearInterval(id)
+  }, [])
+  const elapsed = Date.now() - block.startTime
+  const modelShort = block.model?.split('/').pop() ?? 'model'
+  return (
+    <div className="terminal-block terminal-block-llm">
+      <div className="message-status-indicator live">
+        <span className="status-spinner">●</span>
+        <span>Asking {modelShort}… ({formatDuration(elapsed)})</span>
+      </div>
     </div>
   )
 }

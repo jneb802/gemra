@@ -9,6 +9,7 @@ export interface MessageItemProps {
   messages: ClaudeMessage[]
   currentTurnMetadata?: MessageMetadata | null
   onRespondToQuest?: (questId: string, response: string | string[]) => void
+  model?: string
 }
 
 // Filter out internal system tags from content
@@ -59,6 +60,7 @@ export const MessageItem = ({
   messages,
   currentTurnMetadata,
   onRespondToQuest,
+  model,
 }: RowComponentProps<MessageItemProps>) => {
   const message = messages[index]
 
@@ -193,12 +195,12 @@ export const MessageItem = ({
 
         {/* Live status for streaming message */}
         {!isQuestPrompt && message.role === 'assistant' && isStreaming && currentTurnMetadata && (
-          <MessageStatusIndicator metadata={currentTurnMetadata} isLive />
+          <MessageStatusIndicator metadata={currentTurnMetadata} isLive model={model} />
         )}
 
         {/* Final status for completed message */}
         {!isQuestPrompt && message.role === 'assistant' && message.metadata?.isComplete && (
-          <MessageStatusIndicator metadata={message.metadata} isLive={false} />
+          <MessageStatusIndicator metadata={message.metadata} isLive={false} model={model} />
         )}
       </div>
     </div>

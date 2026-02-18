@@ -5,11 +5,13 @@ import { formatTokenCount } from '../../utils/tokenFormatting'
 interface MessageStatusIndicatorProps {
   metadata: MessageMetadata
   isLive?: boolean
+  model?: string
 }
 
 export const MessageStatusIndicator: React.FC<MessageStatusIndicatorProps> = ({
   metadata,
   isLive = false,
+  model,
 }) => {
   const formatDuration = (ms: number): string => {
     const seconds = Math.floor(ms / 1000)
@@ -62,6 +64,10 @@ export const MessageStatusIndicator: React.FC<MessageStatusIndicatorProps> = ({
 
     if (metadata.thinkingTime && metadata.thinkingTime > 1000) {
       parts.push(` · thought for ${formatDuration(metadata.thinkingTime)}`)
+    }
+
+    if (model) {
+      parts.push(` · ${model}`)
     }
 
     return <div className="message-status-indicator final">{parts.join('')}</div>

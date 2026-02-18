@@ -81,6 +81,8 @@ contextBridge.exposeInMainWorld('electron', {
     cancel: (runId: string) =>
       ipcRenderer.invoke('commands:cancel', runId),
 
+    onStepStart: createIpcListener<{ runId: string; stepId: string; model: string }>('commands:step-start'),
+
     onStepOutput: createIpcListener<{ runId: string; stepId: string; output: string; stepType: 'shell' | 'llm'; command?: string }>('commands:step-output'),
 
     onDone: createIpcListener<{ runId: string }>('commands:done'),
@@ -182,6 +184,7 @@ export interface ElectronAPI {
     get: (workingDir: string) => Promise<import('../shared/commandTypes').ProjectCommand[]>
     run: (runId: string, workingDir: string, name: string, args?: string, apiKey?: string) => Promise<{ success: boolean; error?: string }>
     cancel: (runId: string) => Promise<{ success: boolean; error?: string }>
+    onStepStart: (callback: (data: { runId: string; stepId: string; model: string }) => void) => () => void
     onStepOutput: (callback: (data: { runId: string; stepId: string; output: string; stepType: 'shell' | 'llm'; command?: string }) => void) => () => void
     onDone: (callback: (data: { runId: string }) => void) => () => void
     onError: (callback: (data: { runId: string; error: string }) => void) => () => void

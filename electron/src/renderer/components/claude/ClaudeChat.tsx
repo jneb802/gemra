@@ -267,6 +267,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
               isStreaming={agent.agentStatus.type === 'streaming'}
               currentTurnMetadata={agent.currentTurnMetadata}
               onRespondToQuest={agent.respondToQuest}
+              model={agentConfig.model}
             />
           )}
 

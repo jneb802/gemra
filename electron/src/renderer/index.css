@@ -1661,6 +1661,22 @@ code {
   flex: 1;
 }
 
+/* LLM block (workflow step) */
+.terminal-block-llm {
+  padding-left: var(--spacing-md);
+}
+
+.terminal-llm-response {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--spacing-xs) 0;
+}
+
 /* Exit code badge */
 .exit-code-badge {
   display: inline-flex;
