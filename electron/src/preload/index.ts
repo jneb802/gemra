@@ -66,6 +66,24 @@ contextBridge.exposeInMainWorld('electron', {
     installScripts: () => ipcRenderer.invoke('shell-integration:install-scripts'),
   },
 
+  // Custom slash commands
+  commands: {
+    get: (workingDir: string) =>
+      ipcRenderer.invoke('commands:get', workingDir),
+
+    run: (runId: string, workingDir: string, name: string, args?: string, apiKey?: string) =>
+      ipcRenderer.invoke('commands:run', runId, workingDir, name, args, apiKey),
+
+    cancel: (runId: string) =>
+      ipcRenderer.invoke('commands:cancel', runId),
+
+    onStepOutput: createIpcListener<{ runId: string; stepId: string; output: string; stepType: 'shell' | 'llm' }>('commands:step-output'),
+
+    onDone: createIpcListener<{ runId: string }>('commands:done'),
+
+    onError: createIpcListener<{ runId: string; error: string }>('commands:error'),
+  },
+
   // Claude Code operations
   claude: {
     start: (workingDir: string, profileId?: string, useDocker?: boolean, model?: string) =>
@@ -155,6 +173,14 @@ export interface ElectronAPI {
     kill: (id: string) => Promise<{ success: boolean; error?: string }>
     onData: (callback: (data: PtyData) => void) => () => void
     onExit: (callback: (data: { terminalId: string; exitCode: number }) => void) => () => void
+  }
+  commands: {
+    get: (workingDir: string) => Promise<import('../shared/commandTypes').ProjectCommand[]>
+    run: (runId: string, workingDir: string, name: string, args?: string, apiKey?: string) => Promise<{ success: boolean; error?: string }>
+    cancel: (runId: string) => Promise<{ success: boolean; error?: string }>
+    onStepOutput: (callback: (data: { runId: string; stepId: string; output: string; stepType: 'shell' | 'llm' }) => void) => () => void
+    onDone: (callback: (data: { runId: string }) => void) => () => void
+    onError: (callback: (data: { runId: string; error: string }) => void) => () => void
   }
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string

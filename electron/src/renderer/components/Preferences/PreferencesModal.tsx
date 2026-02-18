@@ -202,6 +202,24 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
               </div>
             </FormField>
           </Section>
+
+          {/* Providers */}
+          <Section title="Providers">
+            <FormField label="OpenRouter API Key">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <input
+                  type="password"
+                  value={localSettings.openRouterApiKey}
+                  onChange={(e) => setLocalSettings({ ...localSettings, openRouterApiKey: e.target.value })}
+                  placeholder="sk-or-..."
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: '11px', color: '#888' }}>
+                  Used for workflow slash commands. Get your key at openrouter.ai/keys
+                </span>
+              </div>
+            </FormField>
+          </Section>
         </div>
 
         {/* Footer */}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SlashCommand } from '../SlashCommandMenu'
+import type { ProjectCommand } from '../../../../shared/commandTypes'
 
 /**
  * Hook for managing custom and Claude SDK commands
@@ -11,6 +12,8 @@ type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 interface UseCommandSystemOptions {
   agentId: string | undefined
   workingDir: string
+  activeTerminalId?: string
+  openRouterApiKey?: string
   onSendMessage: (content: string) => void
   onAddSystemMessage: (message: string) => void
   onClearMessages: () => void
@@ -27,8 +30,8 @@ interface UseCommandSystemOptions {
   }
 }
 
-// Define custom commands
-const CUSTOM_COMMANDS: SlashCommand[] = [
+// Built-in custom commands
+const BUILTIN_COMMANDS: SlashCommand[] = [
   { name: 'help', description: 'Show all available commands' },
   { name: 'clear', description: 'Clear chat history' },
   { name: 'mode', description: 'Switch agent mode', argumentHint: '<default|acceptEdits|plan>' },
@@ -43,6 +46,8 @@ const CUSTOM_COMMANDS: SlashCommand[] = [
 export function useCommandSystem({
   agentId,
   workingDir,
+  activeTerminalId,
+  openRouterApiKey,
   onSendMessage,
   onAddSystemMessage,
   onClearMessages,
@@ -52,6 +57,7 @@ export function useCommandSystem({
   worktreeOperations
 }: UseCommandSystemOptions) {
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
+  const [projectCommands, setProjectCommands] = useState<ProjectCommand[]>([])
 
   // Fetch Claude commands from SDK when agent is initialized
   useEffect(() => {
@@ -68,6 +74,51 @@ export function useCommandSystem({
         console.error('[useCommandSystem] Failed to fetch Claude commands:', error)
       })
   }, [agentId])
+
+  // Load project commands from .claude/commands/ when workingDir changes
+  useEffect(() => {
+    if (!workingDir) return
+
+    window.electron.commands
+      .get(workingDir)
+      .then((commands) => {
+        setProjectCommands(commands)
+      })
+      .catch((error) => {
+        console.error('[useCommandSystem] Failed to load project commands:', error)
+      })
+  }, [workingDir])
+
+  // Register listeners for workflow events (persistent for the lifetime of the hook)
+  useEffect(() => {
+    const unsubStepOutput = window.electron.commands.onStepOutput((data) => {
+      const label = data.stepType === 'llm' ? `[LLM: ${data.stepId}]` : `[${data.stepId}]`
+      onAddSystemMessage(`${label}\n${data.output}`)
+    })
+
+    const unsubDone = window.electron.commands.onDone((_data) => {
+      onAddSystemMessage('Workflow complete')
+    })
+
+    const unsubError = window.electron.commands.onError((data) => {
+      onAddSystemMessage(`Workflow error: ${data.error}`)
+    })
+
+    return () => {
+      unsubStepOutput()
+      unsubDone()
+      unsubError()
+    }
+  }, [onAddSystemMessage])
+
+  // Build merged custom commands list (built-in + project)
+  const customCommands: SlashCommand[] = [
+    ...BUILTIN_COMMANDS,
+    ...projectCommands.map((cmd) => ({
+      name: cmd.name,
+      description: cmd.description,
+    }))
+  ]
 
   // Format help text
   const formatHelpText = useCallback((custom: SlashCommand[], claude: SlashCommand[]): string => {
@@ -90,13 +141,44 @@ export function useCommandSystem({
     return help
   }, [])
 
+  // Execute a project-level command
+  const executeProjectCommand = useCallback(
+    (command: ProjectCommand, _args?: string) => {
+      if (command.type === 'shell') {
+        if (!activeTerminalId) {
+          onAddSystemMessage('No active terminal. Open a terminal to run shell commands.')
+          return
+        }
+        window.electron.pty.write(activeTerminalId, command.command + '\n').catch((err: any) => {
+          console.error('[useCommandSystem] pty.write failed:', err)
+        })
+      } else if (command.type === 'workflow') {
+        const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        onAddSystemMessage(`Running workflow: ${command.name}`)
+        window.electron.commands
+          .run(runId, workingDir, command.name, undefined, openRouterApiKey)
+          .catch((err: any) => {
+            onAddSystemMessage(`Failed to start workflow: ${err.message}`)
+          })
+      }
+    },
+    [activeTerminalId, workingDir, openRouterApiKey, onAddSystemMessage]
+  )
+
   // Execute custom commands
   const executeCustomCommand = useCallback(
     (command: SlashCommand, args?: string) => {
+      // Check if it's a project command first
+      const projectCmd = projectCommands.find((c) => c.name === command.name)
+      if (projectCmd) {
+        executeProjectCommand(projectCmd, args)
+        return
+      }
+
       switch (command.name) {
         case 'help':
           {
-            const helpText = formatHelpText(CUSTOM_COMMANDS, claudeCommands)
+            const helpText = formatHelpText(customCommands, claudeCommands)
             onAddSystemMessage(helpText)
           }
           break
@@ -151,13 +233,10 @@ export function useCommandSystem({
 
         case 'checkout':
           {
-            // If args provided, checkout that branch directly
             if (args) {
               gitOperations.checkoutBranch(args)
               return
             }
-
-            // No args - fetch branches and show in menu (handled by InputBox)
             gitOperations.fetchBranches().then((branches) => {
               if (branches.length === 0) {
                 onAddSystemMessage('No branches found')
@@ -172,15 +251,12 @@ export function useCommandSystem({
               onAddSystemMessage('Usage: /branch <name>')
               return
             }
-
-            // Create and checkout new branch
             gitOperations.createBranch(args, true)
           }
           break
 
         case 'worktree':
           {
-            // List worktrees and show in menu (handled by InputBox)
             if (worktreeOperations) {
               worktreeOperations.listWorktrees().then((worktrees) => {
                 if (worktrees.length === 0) {
@@ -198,24 +274,25 @@ export function useCommandSystem({
       }
     },
     [
+      projectCommands,
+      executeProjectCommand,
       formatHelpText,
+      customCommands,
       claudeCommands,
       onAddSystemMessage,
       onClearMessages,
       onModeChange,
       onModelChange,
       gitOperations,
-      worktreeOperations
+      worktreeOperations,
+      agentId
     ]
   )
 
   // Execute Claude commands
   const executeClaudeCommand = useCallback(
     (command: SlashCommand, args?: string) => {
-      // Format command text
       const commandText = args ? `/${command.name} ${args}` : `/${command.name}`
-
-      // Send as regular message - SDK handles interpretation
       onSendMessage(commandText)
     },
     [onSendMessage]
@@ -240,10 +317,8 @@ export function useCommandSystem({
     async (command: string) => {
       console.log('[useCommandSystem] Executing command from input:', command)
 
-      // Show command being executed
       onAddSystemMessage(`$ ${command}`)
 
-      // Send command to Claude with instruction to execute via Bash tool
       const prompt = `Execute this shell command and show me the output:\n\n\`\`\`bash\n${command}\n\`\`\``
       onSendMessage(prompt)
     },
@@ -252,7 +327,7 @@ export function useCommandSystem({
 
   return {
     // State
-    customCommands: CUSTOM_COMMANDS,
+    customCommands,
     claudeCommands,
 
     // Actions

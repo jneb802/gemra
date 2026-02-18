@@ -39,6 +39,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const updateTabAgent = useTabStore((state) => state.updateTabAgent)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const useDocker = useSettingsStore((state) => state.useDocker)
+  const openRouterApiKey = useSettingsStore((state) => state.openRouterApiKey)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
 
   const agentId = propAgentId
@@ -117,6 +118,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const commands = useCommandSystem({
     agentId: agent.currentAgentId,
     workingDir,
+    activeTerminalId: activeSubTerminal?.terminalId,
+    openRouterApiKey,
     onSendMessage: agent.sendMessage,
     onAddSystemMessage: agent.addSystemMessage,
     onClearMessages: () => {
