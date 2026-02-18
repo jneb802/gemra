@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SlashCommand } from '../SlashCommandMenu'
 import type { ProjectCommand } from '../../../../shared/commandTypes'
 import { useTabStore } from '../../../stores/tabStore'
-import { terminalRegistry } from '../../../lib/terminalRegistry'
+import { useBlockStore } from '../../../stores/blockStore'
 
 /**
  * Hook for managing custom and Claude SDK commands
@@ -71,6 +71,10 @@ export function useCommandSystem({
   const onAddSystemMessageRef = useRef(onAddSystemMessage)
   onAddSystemMessageRef.current = onAddSystemMessage
 
+  // Stable ref for workingDir so event callbacks always use the latest value
+  const workingDirRef = useRef(workingDir)
+  workingDirRef.current = workingDir
+
   // Fetch Claude commands from SDK when agent is initialized
   useEffect(() => {
     if (!agentId) return
@@ -102,22 +106,38 @@ export function useCommandSystem({
   }, [workingDir])
 
   // Register listeners for workflow events — registered once for the lifetime of
-  // the hook. Uses onAddSystemMessageRef so we always call the latest callback
-  // without needing to re-subscribe (which would create race-condition windows).
+  // the hook. Uses refs so we always call the latest callbacks without re-subscribing.
   useEffect(() => {
-    const safeWrite = (terminalId: string, text: string) => {
-      const wrote = terminalRegistry.write(terminalId, text + '\n')
-      if (!wrote) {
-        console.warn('[useCommandSystem] safeWrite: terminal not in registry:', terminalId)
+    const writeToBlocks = (terminalId: string, command: string | undefined, output: string) => {
+      const { createBlock, finishBlockExecution } = useBlockStore.getState()
+      const cwd = workingDirRef.current
+
+      if (command) {
+        const cmdBlock = createBlock(terminalId, {
+          type: 'command',
+          status: 'pending',
+          command,
+          content: command,
+          workingDir: cwd,
+        })
+        finishBlockExecution(terminalId, cmdBlock.id, 0)
+      }
+
+      if (output) {
+        const outBlock = createBlock(terminalId, {
+          type: 'output',
+          status: 'pending',
+          content: output.trim(),
+          workingDir: cwd,
+        })
+        finishBlockExecution(terminalId, outBlock.id, 0)
       }
     }
 
     const unsubStepOutput = window.electron.commands.onStepOutput((data) => {
-      console.log('[useCommandSystem] onStepOutput:', data.runId, data.stepId, data.stepType)
       const terminalId = workflowTerminals.current.get(data.runId)
       if (terminalId) {
-        if (data.command) safeWrite(terminalId, `$ ${data.command}`)
-        if (data.output) safeWrite(terminalId, data.output)
+        writeToBlocks(terminalId, data.command, data.output)
       } else {
         const label = data.stepType === 'llm' ? `[LLM: ${data.stepId}]` : `[${data.stepId}]`
         onAddSystemMessageRef.current(`${label}\n${data.output}`)
@@ -133,7 +153,7 @@ export function useCommandSystem({
       console.error('[useCommandSystem] onError:', data.runId, data.error)
       const terminalId = workflowTerminals.current.get(data.runId)
       if (terminalId) {
-        safeWrite(terminalId, `Workflow error: ${data.error}`)
+        writeToBlocks(terminalId, undefined, `Workflow error: ${data.error}`)
         workflowTerminals.current.delete(data.runId)
       } else {
         onAddSystemMessageRef.current(`Workflow error: ${data.error}`)
@@ -202,14 +222,14 @@ export function useCommandSystem({
           }
         }
 
-        // Delay so BlockTerminal has time to spawn the PTY before first write
+        // Small delay so React can commit the BlockTerminal mount before the first event fires
         setTimeout(() => {
           window.electron.commands
             .run(runId, workingDir, command.name, undefined, openRouterApiKey)
             .catch((err: any) => {
               onAddSystemMessage(`Failed to start workflow: ${err.message}`)
             })
-        }, 400)
+        }, 50)
       }
     },
     [tabId, activeTerminalId, workingDir, openRouterApiKey, onAddSystemMessage]
