@@ -83,6 +83,16 @@ const CONVERSATIONAL_PHRASES = [
 // Shell operators that strongly suggest command
 const SHELL_OPERATORS = ['|', '&&', '||', ';', '>', '>>', '<', '<<', '2>&1', '&']
 
+// Module-level RegExp constants — compiled once, not per keystroke
+const PATH_REGEX = /(^|\s)(\.\/|~\/|\/[a-zA-Z])/
+const VARIABLE_REGEX = /\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}|\$\(/
+const FLAG_REGEX = /(^|\s)-[a-zA-Z]|\s--[a-z][a-z-]+/
+const SEMICOLON_REGEX = /[;&]$/
+const BACKTICK_REGEX = /`[^`]+`/
+const SENTENCE_SPLIT_REGEX = /[.!?]+/
+const ARTICLES_REGEX = /\b(the|a|an|this|that|these|those)\b/i
+const POLITE_REGEX = /\b(thanks|thank you|sorry|excuse me)\b/i
+
 /**
  * Detect whether input is a command or AI query using heuristic scoring
  * Score range: -100 to +100 (negative = AI, positive = Command)
@@ -120,27 +130,27 @@ export function detectInputType(input: string): DetectedType {
   }
 
   // Path references (+50 - strong signal)
-  if (/(^|\s)(\.\/|~\/|\/[a-zA-Z])/.test(trimmed)) {
+  if (PATH_REGEX.test(trimmed)) {
     score += 50
   }
 
   // Variables (+40 - moderate signal)
-  if (/\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}|\$\(/.test(trimmed)) {
+  if (VARIABLE_REGEX.test(trimmed)) {
     score += 40
   }
 
   // Command flags (+30 - moderate signal)
-  if (/(^|\s)-[a-zA-Z]|\s--[a-z][a-z-]+/.test(trimmed)) {
+  if (FLAG_REGEX.test(trimmed)) {
     score += 30
   }
 
   // Ends with semicolon or ampersand (+25)
-  if (/[;&]$/.test(trimmed)) {
+  if (SEMICOLON_REGEX.test(trimmed)) {
     score += 25
   }
 
   // Command substitution (+40)
-  if (/`[^`]+`/.test(trimmed)) {
+  if (BACKTICK_REGEX.test(trimmed)) {
     score += 40
   }
 
@@ -164,7 +174,7 @@ export function detectInputType(input: string): DetectedType {
   }
 
   // Multiple sentences (-70 - strong signal)
-  const sentences = trimmed.split(/[.!?]+/).filter(s => s.trim())
+  const sentences = trimmed.split(SENTENCE_SPLIT_REGEX).filter(s => s.trim())
   if (sentences.length > 2) {
     score -= 70
   }
@@ -175,12 +185,12 @@ export function detectInputType(input: string): DetectedType {
   }
 
   // Natural language patterns (-40)
-  if (/\b(the|a|an|this|that|these|those)\b/i.test(trimmed)) {
+  if (ARTICLES_REGEX.test(trimmed)) {
     score -= 40
   }
 
   // Polite language (-50)
-  if (/\b(thanks|thank you|sorry|excuse me)\b/i.test(trimmed)) {
+  if (POLITE_REGEX.test(trimmed)) {
     score -= 50
   }
 
@@ -226,11 +236,11 @@ export function explainDetection(input: string): string {
     }
   }
 
-  if (/(^|\s)(\.\/|~\/|\/[a-zA-Z])/.test(trimmed)) {
+  if (PATH_REGEX.test(trimmed)) {
     reasons.push(`✓ Contains path reference`)
   }
 
-  if (/\$[A-Za-z_]/.test(trimmed)) {
+  if (VARIABLE_REGEX.test(trimmed)) {
     reasons.push(`✓ Contains variable reference`)
   }
 

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import os from 'os'
 import { IPC_CHANNELS } from '@shared/types'
 import type { PtyOptions, PtyData, PtyResize, MessageContent } from '@shared/types'
 
@@ -43,6 +44,9 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Platform info
   platform: process.platform,
+
+  // Home directory (resolved at preload time)
+  homeDir: os.homedir(),
 
   // Dialog operations
   dialog: {
@@ -184,6 +188,7 @@ export interface ElectronAPI {
   }
   onMenuEvent: (channel: string, callback: () => void) => () => void
   platform: string
+  homeDir: string
   dialog: {
     selectDirectory: () => Promise<{ success: boolean; path: string | null; error?: string }>
     createDirectory: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>

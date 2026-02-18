@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { TabBar } from './components/Tabs/TabBar'
 import { ClaudeChat } from './components/claude/ClaudeChat'
 import { BlockTerminal } from './components/Terminal/BlockTerminal'
@@ -31,14 +31,18 @@ function App() {
   const useDocker = useSettingsStore((state) => state.useDocker)
   const cycleMode = useInputModeStore((state) => state.cycleMode)
   const addRecent = useRecentStore((state) => state.addRecent)
-  const recentItems = useRecentStore((state) => state.getRecent())
+  const recentItems = useRecentStore((state) => state.items)
+
+  // Keep a ref to tabs so the cleanup interval doesn't need to re-register on every tab change
+  const tabsRef = useRef(tabs)
+  useEffect(() => { tabsRef.current = tabs }, [tabs])
 
   // Periodic cleanup of old agents to prevent memory leaks
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const activeAgentIds = new Set<string>()
 
-      tabs.forEach(tab => {
+      tabsRef.current.forEach(tab => {
         if (tab.type === 'agent-chat' && tab.agentId) {
           activeAgentIds.add(tab.agentId)
         }
@@ -48,7 +52,7 @@ function App() {
     }, 60000)
 
     return () => clearInterval(cleanupInterval)
-  }, [tabs])
+  }, []) // stable — runs once
 
   // Handler for closing tabs with agent/PTY cleanup
   const handleCloseTab = useCallback(async (tabId: string) => {
@@ -105,7 +109,7 @@ function App() {
   // For regular new tabs: create immediately with lazy agent init (like the initial tab)
   // For LiteLLM: start agent with specific profile eagerly
   const handleNewClaudeTab = useCallback(async (profileId?: string) => {
-    const workingDir = '/Users/benjmarston/Develop/gemra'
+    const workingDir = recentItems[0]?.path || window.electron.homeDir
 
     if (!profileId) {
       // Create tab immediately — agent initializes lazily on first message
@@ -121,14 +125,14 @@ function App() {
       console.error('Failed to start Claude agent:', result.error)
       createTab({ type: 'agent-chat', workingDir })
     }
-  }, [createClaudeTab, createTab, useDocker])
+  }, [createClaudeTab, createTab, useDocker, recentItems])
 
   // Handler for creating standalone terminal tabs
   const handleNewTerminalTab = useCallback(() => {
     const activeTab = tabs.find((t) => t.id === activeTabId)
-    const workingDir = activeTab?.workingDir || '/Users/benjmarston/Develop/gemra'
+    const workingDir = activeTab?.workingDir || recentItems[0]?.path || window.electron.homeDir
     createTab({ type: 'terminal', workingDir })
-  }, [createTab, tabs, activeTabId])
+  }, [createTab, tabs, activeTabId, recentItems])
 
   // Handler for creating LiteLLM chat tabs
   const handleNewLiteLLMTab = useCallback(async () => {
@@ -158,7 +162,7 @@ function App() {
   // Create initial tab on mount with last used directory
   useEffect(() => {
     if (tabs.length === 0) {
-      const lastUsedDir = recentItems[0]?.path || '/Users/benjmarston/Develop/gemra'
+      const lastUsedDir = recentItems[0]?.path || window.electron.homeDir
       createTab({
         type: 'agent-chat',
         workingDir: lastUsedDir
@@ -347,6 +351,8 @@ function App() {
     cycleMode,
   ])
 
+  const activeTab = tabs.find((tab) => tab.isActive)
+
   return (
     <div className="app-root">
       {/* Tab bar */}
@@ -359,32 +365,27 @@ function App() {
       {/* Main content area */}
       <div className="app-content">
         <div className="app-terminal-container">
-          {(() => {
-            const activeTab = tabs.find((tab) => tab.isActive)
-            if (!activeTab) return null
-
-            return (
-              <div key={activeTab.id} className="app-tab-content active">
-                {activeTab.type === 'agent-chat' && activeTab.workingDir ? (
-                  <ClaudeChat
-                    agentId={activeTab.agentId}
-                    workingDir={activeTab.workingDir}
-                    onCreateProject={() => setShowCreateModal(true)}
-                    onOpenRepository={handleOpenDirectory}
-                    onCloneRepository={() => setShowCloneModal(true)}
-                    onOpenRecent={handleOpenRecentDirectory}
-                  />
-                ) : activeTab.type === 'terminal' && activeTab.terminalId ? (
-                  <BlockTerminal
-                    terminalId={activeTab.terminalId}
-                    workingDir={activeTab.workingDir || '~'}
-                  />
-                ) : (
-                  <div className="error-message">Unknown tab type: {activeTab.type}</div>
-                )}
-              </div>
-            )
-          })()}
+          {activeTab && (
+            <div key={activeTab.id} className="app-tab-content active">
+              {activeTab.type === 'agent-chat' && activeTab.workingDir ? (
+                <ClaudeChat
+                  agentId={activeTab.agentId}
+                  workingDir={activeTab.workingDir}
+                  onCreateProject={() => setShowCreateModal(true)}
+                  onOpenRepository={handleOpenDirectory}
+                  onCloneRepository={() => setShowCloneModal(true)}
+                  onOpenRecent={handleOpenRecentDirectory}
+                />
+              ) : activeTab.type === 'terminal' && activeTab.terminalId ? (
+                <BlockTerminal
+                  terminalId={activeTab.terminalId}
+                  workingDir={activeTab.workingDir || '~'}
+                />
+              ) : (
+                <div className="error-message">Unknown tab type: {activeTab.type}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

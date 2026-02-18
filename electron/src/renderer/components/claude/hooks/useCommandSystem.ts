@@ -66,6 +66,11 @@ export function useCommandSystem({
   // Maps runId → terminalId for active workflow runs
   const workflowTerminals = useRef<Map<string, string>>(new Map())
 
+  // Stable ref so the workflow-event effect never needs to re-subscribe when
+  // the onAddSystemMessage callback identity changes due to parent re-renders.
+  const onAddSystemMessageRef = useRef(onAddSystemMessage)
+  onAddSystemMessageRef.current = onAddSystemMessage
+
   // Fetch Claude commands from SDK when agent is initialized
   useEffect(() => {
     if (!agentId) return
@@ -96,38 +101,42 @@ export function useCommandSystem({
       })
   }, [workingDir])
 
-  // Register listeners for workflow events (persistent for the lifetime of the hook)
+  // Register listeners for workflow events — registered once for the lifetime of
+  // the hook. Uses onAddSystemMessageRef so we always call the latest callback
+  // without needing to re-subscribe (which would create race-condition windows).
   useEffect(() => {
-    // Write arbitrary text directly to the xterm.js display, bypassing the shell.
-    // terminalRegistry.write() calls terminal.write() on the live xterm.js instance,
-    // so there is no shell interpretation, no echo, and no PTY buffer limits.
     const safeWrite = (terminalId: string, text: string) => {
-      terminalRegistry.write(terminalId, text + '\n')
+      const wrote = terminalRegistry.write(terminalId, text + '\n')
+      if (!wrote) {
+        console.warn('[useCommandSystem] safeWrite: terminal not in registry:', terminalId)
+      }
     }
 
     const unsubStepOutput = window.electron.commands.onStepOutput((data) => {
+      console.log('[useCommandSystem] onStepOutput:', data.runId, data.stepId, data.stepType)
       const terminalId = workflowTerminals.current.get(data.runId)
       if (terminalId) {
         if (data.command) safeWrite(terminalId, `$ ${data.command}`)
         if (data.output) safeWrite(terminalId, data.output)
       } else {
-        // Fallback: show in chat
         const label = data.stepType === 'llm' ? `[LLM: ${data.stepId}]` : `[${data.stepId}]`
-        onAddSystemMessage(`${label}\n${data.output}`)
+        onAddSystemMessageRef.current(`${label}\n${data.output}`)
       }
     })
 
     const unsubDone = window.electron.commands.onDone((data) => {
+      console.log('[useCommandSystem] onDone:', data.runId)
       workflowTerminals.current.delete(data.runId)
     })
 
     const unsubError = window.electron.commands.onError((data) => {
+      console.error('[useCommandSystem] onError:', data.runId, data.error)
       const terminalId = workflowTerminals.current.get(data.runId)
       if (terminalId) {
         safeWrite(terminalId, `Workflow error: ${data.error}`)
         workflowTerminals.current.delete(data.runId)
       } else {
-        onAddSystemMessage(`Workflow error: ${data.error}`)
+        onAddSystemMessageRef.current(`Workflow error: ${data.error}`)
       }
     })
 
@@ -136,7 +145,7 @@ export function useCommandSystem({
       unsubDone()
       unsubError()
     }
-  }, [onAddSystemMessage])
+  }, []) // empty — listeners are stable; callbacks accessed via refs
 
   // Build merged custom commands list (built-in + project)
   const customCommands: SlashCommand[] = [

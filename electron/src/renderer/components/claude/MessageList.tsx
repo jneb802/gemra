@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { List, useDynamicRowHeight, type ListImperativeAPI } from 'react-window'
 import type { ClaudeMessage, MessageMetadata } from '../../../shared/types'
 import { estimateMessageHeight, useMessageGrouping } from './useMessageHeights'
@@ -28,14 +28,20 @@ export const MessageList: React.FC<MessageListProps> = ({
   const { isGroupedWithPrevious } = useMessageGrouping(messages)
 
   // Calculate default row height (average)
-  const defaultRowHeight = messages.length > 0
-    ? estimateMessageHeight(messages[0], false)
-    : 100
+  const defaultRowHeight = useMemo(
+    () => messages.length > 0 ? estimateMessageHeight(messages[0], false) : 100,
+    [messages]
+  )
+
+  const messageKey = useMemo(
+    () => messages.map(m => m.id).join('-'),
+    [messages]
+  )
 
   // Use dynamic row height for variable-sized rows
   const rowHeight = useDynamicRowHeight({
     defaultRowHeight,
-    key: messages.map(m => m.id).join('-'), // Re-initialize when messages change
+    key: messageKey, // Re-initialize when messages change
   })
 
   // Measure container height
@@ -111,11 +117,11 @@ export const MessageList: React.FC<MessageListProps> = ({
   }
 
   // Row props passed to each MessageItem
-  const rowProps: MessageItemProps = {
+  const rowProps = useMemo<MessageItemProps>(() => ({
     messages,
     currentTurnMetadata,
     onRespondToQuest,
-  }
+  }), [messages, currentTurnMetadata, onRespondToQuest])
 
   return (
     <div ref={containerRef} className="message-list">

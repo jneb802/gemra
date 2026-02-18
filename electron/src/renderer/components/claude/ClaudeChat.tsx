@@ -27,6 +27,22 @@ interface ClaudeChatProps {
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  Read: 'Reading file',
+  Write: 'Writing file',
+  Edit: 'Editing file',
+  Bash: 'Running command',
+  Grep: 'Searching code',
+  Glob: 'Finding files',
+  Task: 'Spawning agent',
+  WebSearch: 'Searching web',
+  WebFetch: 'Fetching URL'
+}
+
+function getToolDisplayName(toolName: string): string {
+  return TOOL_DISPLAY_NAMES[toolName] || `Running ${toolName}`
+}
+
 export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   agentId: propAgentId,
   workingDir,
@@ -73,17 +89,19 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     }
   }, [])
 
+  const handleUpdateSessionAgent = useCallback((newAgentId: string) => {
+    if (activeTabId) {
+      updateTabAgent(activeTabId, newAgentId)
+    }
+  }, [activeTabId, updateTabAgent])
+
   const agent = useClaudeAgent({
     agentId,
     workingDir,
     useDocker,
     onUserMessage,
     onUpdateTabAgent: updateTabAgent,
-    onUpdateSessionAgent: (newAgentId: string) => {
-      if (activeTabId) {
-        updateTabAgent(activeTabId, newAgentId)
-      }
-    },
+    onUpdateSessionAgent: handleUpdateSessionAgent,
     activeTabId,
     activeChatSessionId: undefined,
     onContainerStatusUpdate: handleContainerStatusUpdate
@@ -115,6 +133,24 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     setContainerError(containerManagement.containerError)
   }, [containerManagement.containerStatus, containerManagement.containerError])
 
+  const handleClearMessages = useCallback(() => {
+    if (agent.currentAgentId) {
+      agent.clearMessages(agent.currentAgentId)
+    }
+  }, [agent.currentAgentId, agent.clearMessages])
+
+  const handleModeChange = useCallback((mode: ClaudeMode) => {
+    if (agent.currentAgentId) {
+      setAgentConfig(agent.currentAgentId, { mode })
+    }
+  }, [agent.currentAgentId, setAgentConfig])
+
+  const handleModelChange = useCallback((model: string) => {
+    if (agent.currentAgentId) {
+      setAgentConfig(agent.currentAgentId, { model })
+    }
+  }, [agent.currentAgentId, setAgentConfig])
+
   const commands = useCommandSystem({
     agentId: agent.currentAgentId,
     workingDir,
@@ -123,21 +159,9 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     openRouterApiKey,
     onSendMessage: agent.sendMessage,
     onAddSystemMessage: agent.addSystemMessage,
-    onClearMessages: () => {
-      if (agent.currentAgentId) {
-        agent.clearMessages(agent.currentAgentId)
-      }
-    },
-    onModeChange: (mode: ClaudeMode) => {
-      if (agent.currentAgentId) {
-        setAgentConfig(agent.currentAgentId, { mode })
-      }
-    },
-    onModelChange: (model: string) => {
-      if (agent.currentAgentId) {
-        setAgentConfig(agent.currentAgentId, { model })
-      }
-    },
+    onClearMessages: handleClearMessages,
+    onModeChange: handleModeChange,
+    onModelChange: handleModelChange,
     gitOperations: {
       checkoutBranch: git.checkoutBranch,
       createBranch: git.createBranch,
@@ -155,20 +179,37 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
     onMetadataUpdate: (_meta) => {}
   })
 
-  const getToolDisplayName = (toolName: string): string => {
-    const toolMap: Record<string, string> = {
-      Read: 'Reading file',
-      Write: 'Writing file',
-      Edit: 'Editing file',
-      Bash: 'Running command',
-      Grep: 'Searching code',
-      Glob: 'Finding files',
-      Task: 'Spawning agent',
-      WebSearch: 'Searching web',
-      WebFetch: 'Fetching URL'
+  const handleWorktreeSubcommand = useCallback((subcommand: string, args?: string) => {
+    switch (subcommand) {
+      case 'create':
+        if (args) {
+          const [path, branch] = args.split(/\s+/)
+          if (path && branch) {
+            worktree.addWorktree(path, branch)
+          } else {
+            agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+          }
+        } else {
+          agent.addSystemMessage('Usage: /worktree create <path> <branch>')
+        }
+        break
+      case 'remove':
+        if (args) {
+          worktree.removeWorktree(args)
+        } else {
+          agent.addSystemMessage('Usage: /worktree remove <path>')
+        }
+        break
+      case 'prune':
+        worktree.pruneWorktrees()
+        break
+      case 'list':
+        worktree.listWorktrees()
+        break
+      default:
+        agent.addSystemMessage(`Unknown worktree subcommand: ${subcommand}`)
     }
-    return toolMap[toolName] || `Running ${toolName}`
-  }
+  }, [agent.addSystemMessage, worktree.addWorktree, worktree.removeWorktree, worktree.pruneWorktrees, worktree.listWorktrees])
 
   const handleCreateSubTerminal = useCallback(() => {
     if (!activeTabId) return
@@ -293,55 +334,17 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
             worktreeMenuMode={worktree.worktreeMenuMode}
             onWorktreeSelect={worktree.handleWorktreeSelect}
             onCloseWorktreeMenu={worktree.closeWorktreeMenu}
-            onWorktreeSubcommand={(subcommand: string, args?: string) => {
-              switch (subcommand) {
-                case 'create':
-                  if (args) {
-                    const [path, branch] = args.split(/\s+/)
-                    if (path && branch) {
-                      worktree.addWorktree(path, branch)
-                    } else {
-                      agent.addSystemMessage('Usage: /worktree create <path> <branch>')
-                    }
-                  } else {
-                    agent.addSystemMessage('Usage: /worktree create <path> <branch>')
-                  }
-                  break
-                case 'remove':
-                  if (args) {
-                    worktree.removeWorktree(args)
-                  } else {
-                    agent.addSystemMessage('Usage: /worktree remove <path>')
-                  }
-                  break
-                case 'prune':
-                  worktree.pruneWorktrees()
-                  break
-                case 'list':
-                  worktree.listWorktrees()
-                  break
-                default:
-                  agent.addSystemMessage(`Unknown worktree subcommand: ${subcommand}`)
-              }
-            }}
+            onWorktreeSubcommand={handleWorktreeSubcommand}
             onShowWorktreeSubcommands={worktree.showSubcommands}
             onShowWorktreeList={worktree.showList}
             workingDir={workingDir}
             gitBranch={git.gitBranch}
             gitStats={git.gitStats}
             model={agentConfig.model}
-            onModelChange={(model: string) => {
-              if (agent.currentAgentId) {
-                setAgentConfig(agent.currentAgentId, { model })
-              }
-            }}
+            onModelChange={handleModelChange}
             onBranchClick={git.handleBranchClick}
             agentMode={agentConfig.mode}
-            onAgentModeChange={(mode: ClaudeMode) => {
-              if (agent.currentAgentId) {
-                setAgentConfig(agent.currentAgentId, { mode })
-              }
-            }}
+            onAgentModeChange={handleModeChange}
             containerStatus={containerStatus}
             containerError={containerError}
             onContainerToggle={containerManagement.handleContainerToggle}
