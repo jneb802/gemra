@@ -7,7 +7,9 @@ export default defineConfig({
     build: {
       outDir: 'dist-electron/main'
     },
-    plugins: [externalizeDepsPlugin()],
+    // Exclude ESM-only packages so Vite bundles them (converts ESM→CJS).
+    // externalizeDepsPlugin leaves them as require() calls which fails at runtime.
+    plugins: [externalizeDepsPlugin({ exclude: ['@agentclientprotocol/sdk', '@anthropic-ai/claude-agent-sdk'] })],
     resolve: {
       alias: {
         '@main': resolve('src/main'),
