@@ -46,7 +46,6 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
 
   // Get blocks from store
   const blocks = useBlockStore(s => s.getBlocks(terminalId))
-  const clearBlocks = useBlockStore(s => s.clearBlocks)
   const toggleBlockCollapse = useBlockStore(s => s.toggleBlockCollapse)
   const getActiveBlock = useBlockStore(s => s.getActiveBlock)
 
@@ -162,9 +161,10 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     return () => {
       console.log('[BlockTerminal] Cleaning up terminal:', terminalId)
       window.electron.pty.kill(terminalId)
-      clearBlocks(terminalId)
+      // Note: blocks are intentionally NOT cleared here so they persist when switching tabs.
+      // App.tsx handleTabClose clears blocks when the tab is actually closed.
     }
-  }, [terminalId, terminal, clearBlocks, focus])
+  }, [terminalId, terminal, focus])
 
   // Fetch git info periodically (only when tab is active)
   useEffect(() => {
