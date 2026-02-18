@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SlashCommand } from '../SlashCommandMenu'
 import type { ProjectCommand } from '../../../../shared/commandTypes'
+import { useTabStore } from '../../../stores/tabStore'
 
 /**
  * Hook for managing custom and Claude SDK commands
@@ -12,6 +13,7 @@ type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 interface UseCommandSystemOptions {
   agentId: string | undefined
   workingDir: string
+  tabId?: string | null
   activeTerminalId?: string
   openRouterApiKey?: string
   onSendMessage: (content: string) => void
@@ -46,6 +48,7 @@ const BUILTIN_COMMANDS: SlashCommand[] = [
 export function useCommandSystem({
   agentId,
   workingDir,
+  tabId,
   activeTerminalId,
   openRouterApiKey,
   onSendMessage,
@@ -58,6 +61,9 @@ export function useCommandSystem({
 }: UseCommandSystemOptions) {
   const [claudeCommands, setClaudeCommands] = useState<SlashCommand[]>([])
   const [projectCommands, setProjectCommands] = useState<ProjectCommand[]>([])
+
+  // Maps runId → terminalId for active workflow runs
+  const workflowTerminals = useRef<Map<string, string>>(new Map())
 
   // Fetch Claude commands from SDK when agent is initialized
   useEffect(() => {
@@ -91,17 +97,51 @@ export function useCommandSystem({
 
   // Register listeners for workflow events (persistent for the lifetime of the hook)
   useEffect(() => {
+    // Write arbitrary text to the terminal safely.
+    //
+    // Approach: one printf per line using $'...' ANSI-C quoting.
+    // Why line-by-line: macOS PTY canonical mode MAX_CANON = 1024 bytes. A single
+    // large command (e.g. a full git diff) gets silently truncated, breaking the
+    // $'...' quoting and sending the remainder as bare shell commands.
+    //
+    // Echo suppression: stty -echo before the writes, stty echo after. The stty
+    // commands are queued in the PTY input buffer and the shell processes them in
+    // FIFO order, so echo is off by the time the printf commands are read.
+    const safeWrite = (terminalId: string, text: string) => {
+      // Disable terminal echo so printf commands don't appear as visible input
+      window.electron.pty.write(terminalId, 'stty -echo 2>/dev/null\n').catch(() => {})
+      for (const line of text.split('\n')) {
+        // Each line: escape only backslash and single-quote (no newlines present)
+        const esc = line.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        window.electron.pty.write(terminalId, `printf '%s\\n' $'${esc}'\n`).catch(() => {})
+      }
+      window.electron.pty.write(terminalId, 'stty echo 2>/dev/null\n').catch(() => {})
+    }
+
     const unsubStepOutput = window.electron.commands.onStepOutput((data) => {
-      const label = data.stepType === 'llm' ? `[LLM: ${data.stepId}]` : `[${data.stepId}]`
-      onAddSystemMessage(`${label}\n${data.output}`)
+      const terminalId = workflowTerminals.current.get(data.runId)
+      if (terminalId) {
+        if (data.command) safeWrite(terminalId, `$ ${data.command}`)
+        if (data.output) safeWrite(terminalId, data.output)
+      } else {
+        // Fallback: show in chat
+        const label = data.stepType === 'llm' ? `[LLM: ${data.stepId}]` : `[${data.stepId}]`
+        onAddSystemMessage(`${label}\n${data.output}`)
+      }
     })
 
-    const unsubDone = window.electron.commands.onDone((_data) => {
-      onAddSystemMessage('Workflow complete')
+    const unsubDone = window.electron.commands.onDone((data) => {
+      workflowTerminals.current.delete(data.runId)
     })
 
     const unsubError = window.electron.commands.onError((data) => {
-      onAddSystemMessage(`Workflow error: ${data.error}`)
+      const terminalId = workflowTerminals.current.get(data.runId)
+      if (terminalId) {
+        safeWrite(terminalId, `Workflow error: ${data.error}`)
+        workflowTerminals.current.delete(data.runId)
+      } else {
+        onAddSystemMessage(`Workflow error: ${data.error}`)
+      }
     })
 
     return () => {
@@ -154,15 +194,29 @@ export function useCommandSystem({
         })
       } else if (command.type === 'workflow') {
         const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2)}`
-        onAddSystemMessage(`Running workflow: ${command.name}`)
-        window.electron.commands
-          .run(runId, workingDir, command.name, undefined, openRouterApiKey)
-          .catch((err: any) => {
-            onAddSystemMessage(`Failed to start workflow: ${err.message}`)
-          })
+
+        // Create a sub-terminal in the current agent-chat tab to show workflow output
+        if (tabId) {
+          const sessionId = useTabStore.getState().addSubTerminal(tabId, workingDir, `/${command.name}`)
+          // Re-read state after mutation to get the newly added session
+          const tab = useTabStore.getState().tabs.find((t) => t.id === tabId)
+          const session = tab?.subTerminals?.find((s) => s.id === sessionId)
+          if (session?.terminalId) {
+            workflowTerminals.current.set(runId, session.terminalId)
+          }
+        }
+
+        // Delay so BlockTerminal has time to spawn the PTY before first write
+        setTimeout(() => {
+          window.electron.commands
+            .run(runId, workingDir, command.name, undefined, openRouterApiKey)
+            .catch((err: any) => {
+              onAddSystemMessage(`Failed to start workflow: ${err.message}`)
+            })
+        }, 400)
       }
     },
-    [activeTerminalId, workingDir, openRouterApiKey, onAddSystemMessage]
+    [tabId, activeTerminalId, workingDir, openRouterApiKey, onAddSystemMessage]
   )
 
   // Execute custom commands

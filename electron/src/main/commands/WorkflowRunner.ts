@@ -13,7 +13,7 @@ export async function runWorkflow(
   steps: WorkflowStep[],
   workingDir: string,
   apiKey: string,
-  onStepOutput: (stepId: string, output: string, stepType: 'shell' | 'llm') => void,
+  onStepOutput: (stepId: string, output: string, stepType: 'shell' | 'llm', command?: string) => void,
   signal: AbortSignal
 ): Promise<void> {
   const ctx: Record<string, string> = {}
@@ -29,11 +29,11 @@ export async function runWorkflow(
         const { stdout, stderr } = await execAsync(cmd, { cwd: workingDir })
         const output = (stdout + stderr).trim()
         ctx[step.id] = output
-        onStepOutput(step.id, output, 'shell')
+        onStepOutput(step.id, output, 'shell', cmd)
       } catch (err: any) {
         const output = ((err.stdout ?? '') + (err.stderr ?? err.message ?? '')).trim()
         ctx[step.id] = output
-        onStepOutput(step.id, output, 'shell')
+        onStepOutput(step.id, output, 'shell', cmd)
       }
     } else if (step.type === 'llm') {
       const prompt = interpolate(step.prompt, ctx)

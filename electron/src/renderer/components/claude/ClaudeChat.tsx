@@ -118,6 +118,7 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   const commands = useCommandSystem({
     agentId: agent.currentAgentId,
     workingDir,
+    tabId: activeTabId,
     activeTerminalId: activeSubTerminal?.terminalId,
     openRouterApiKey,
     onSendMessage: agent.sendMessage,

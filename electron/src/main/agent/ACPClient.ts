@@ -1,3 +1,4 @@
+// test comment for /commit command
 import { EventEmitter } from 'events'
 import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { Logger } from '../../shared/utils/logger'

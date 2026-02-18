@@ -25,3 +25,7 @@ CLAUDE.md
 features/
 
 /node_modules
+
+/.agents
+
+/.claude

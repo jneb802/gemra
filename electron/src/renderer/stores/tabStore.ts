@@ -50,7 +50,7 @@ interface TabState {
   getTabByIndex: (index: number) => Tab | undefined
 
   // Sub-terminal actions (for agent-chat tabs)
-  addSubTerminal: (tabId: string, workingDir: string) => string
+  addSubTerminal: (tabId: string, workingDir: string, title?: string) => string
   closeSubTerminal: (tabId: string, terminalSessionId: string) => void
   setActiveSubTerminal: (tabId: string, id: string | null) => void
   getActiveSubTerminal: (tabId: string) => TerminalSession | undefined
@@ -170,7 +170,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     return state.tabs[index]
   },
 
-  addSubTerminal: (tabId: string, workingDir: string) => {
+  addSubTerminal: (tabId: string, workingDir: string, title?: string) => {
     const sessionId = generateId.tab()
     const terminalId = generateId.tab()
 
@@ -182,7 +182,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         const sessionNumber = subTerminals.length + 1
         const newSession: TerminalSession = {
           id: sessionId,
-          title: `Terminal ${sessionNumber}`,
+          title: title || `Terminal ${sessionNumber}`,
           terminalId,
           workingDir,
           createdAt: Date.now(),
