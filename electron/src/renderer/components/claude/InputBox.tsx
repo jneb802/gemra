@@ -45,6 +45,8 @@ interface InputBoxProps {
   onContainerToggle: () => void
   tokenUsage: { inputTokens: number; outputTokens: number }
   dangerouslySkipPermissions?: boolean
+  isWorking?: boolean
+  onStop?: () => void
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -81,6 +83,8 @@ export const InputBox: React.FC<InputBoxProps> = ({
   onContainerToggle,
   tokenUsage,
   dangerouslySkipPermissions = false,
+  isWorking = false,
+  onStop,
 }) => {
   const [text, setText] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -491,6 +495,16 @@ export const InputBox: React.FC<InputBoxProps> = ({
           onModelChange={onModelChange}
           disabled={disabled}
         />
+
+        {isWorking && onStop && (
+          <button
+            className="input-stop-button"
+            onClick={onStop}
+            title="Stop generation (Esc)"
+          >
+            <span className="input-stop-icon" />
+          </button>
+        )}
       </div>
     </div>
   )

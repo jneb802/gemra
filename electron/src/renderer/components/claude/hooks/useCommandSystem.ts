@@ -114,6 +114,11 @@ export function useCommandSystem({
               return
             }
             onModeChange(args as ClaudeMode)
+            if (agentId) {
+              window.electron.claude.setMode(agentId, args).catch((err) => {
+                console.error('[useCommandSystem] setMode failed:', err)
+              })
+            }
             onAddSystemMessage(`Mode changed to: ${args}`)
           }
           break
@@ -126,6 +131,11 @@ export function useCommandSystem({
               return
             }
             onModelChange(args)
+            if (agentId) {
+              window.electron.claude.setModel(agentId, args).catch((err) => {
+                console.error('[useCommandSystem] setModel failed:', err)
+              })
+            }
             onAddSystemMessage(`Model changed to: ${args}`)
           }
           break

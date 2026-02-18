@@ -68,8 +68,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Claude Code operations
   claude: {
-    start: (workingDir: string, profileId?: string, useDocker?: boolean) =>
-      ipcRenderer.invoke('claude:start', workingDir, profileId, useDocker),
+    start: (workingDir: string, profileId?: string, useDocker?: boolean, model?: string) =>
+      ipcRenderer.invoke('claude:start', workingDir, profileId, useDocker, model),
 
     send: (agentId: string, content: string | MessageContent[]) =>
       ipcRenderer.invoke('claude:send', agentId, content),
@@ -130,8 +130,17 @@ contextBridge.exposeInMainWorld('electron', {
 
     onContainerStatus: createIpcListener<{ agentId: string; status: string; error?: string }>('container:status'),
 
-    respondToQuest: (agentId: string, questId: string, response: string | string[]) =>
-      ipcRenderer.invoke('claude:respond-quest', agentId, questId, response),
+    respondToQuest: (agentId: string, questId: string, optionId: string) =>
+      ipcRenderer.invoke('claude:respond-quest', agentId, questId, optionId),
+
+    cancel: (agentId: string) =>
+      ipcRenderer.invoke('claude:cancel', { agentId }),
+
+    setMode: (agentId: string, modeId: string) =>
+      ipcRenderer.invoke('claude:set-mode', { agentId, modeId }),
+
+    setModel: (agentId: string, modelId: string) =>
+      ipcRenderer.invoke('claude:set-model', { agentId, modelId }),
 
     onQuestPrompt: createIpcListener<{ agentId: string; questId: string; prompt: any }>('claude:quest-prompt'),
   },
@@ -166,7 +175,7 @@ export interface ElectronAPI {
     installScripts: () => Promise<{ success: boolean; error?: string }>
   }
   claude: {
-    start: (workingDir: string, profileId?: string, useDocker?: boolean) => Promise<{ success: boolean; agentId?: string; error?: string }>
+    start: (workingDir: string, profileId?: string, useDocker?: boolean, model?: string) => Promise<{ success: boolean; agentId?: string; error?: string }>
     send: (agentId: string, content: string | MessageContent[]) => Promise<{ success: boolean; error?: string }>
     stop: (agentId: string) => Promise<{ success: boolean; error?: string }>
     getGitBranch: (workingDir: string) => Promise<{ success: boolean; branch: string }>
@@ -190,7 +199,10 @@ export interface ElectronAPI {
     onError: (callback: (data: { agentId: string; error: string }) => void) => () => void
     onExit: (callback: (data: { agentId: string; info: any }) => void) => () => void
     onContainerStatus: (callback: (data: { agentId: string; status: string; error?: string }) => void) => () => void
-    respondToQuest: (agentId: string, questId: string, response: string | string[]) => Promise<{ success: boolean; error?: string }>
+    respondToQuest: (agentId: string, questId: string, optionId: string) => Promise<{ success: boolean; error?: string }>
+    cancel: (agentId: string) => Promise<{ success: boolean; error?: string }>
+    setMode: (agentId: string, modeId: string) => Promise<{ success: boolean; error?: string }>
+    setModel: (agentId: string, modelId: string) => Promise<{ success: boolean; error?: string }>
     onQuestPrompt: (callback: (data: { agentId: string; questId: string; prompt: any }) => void) => () => void
   }
 }

@@ -343,6 +343,8 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
             onContainerToggle={containerManagement.handleContainerToggle}
             tokenUsage={tokenUsage}
             dangerouslySkipPermissions={containerManagement.dangerouslySkipPermissions}
+            isWorking={agent.isWorking}
+            onStop={agent.cancelTurn}
           />
         </>
       )}

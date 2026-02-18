@@ -47,6 +47,7 @@ export function useClaudeAgent({
   const addTokenUsage = useClaudeChatStore((state) => state.addTokenUsage)
   const clearMessages = useClaudeChatStore((state) => state.clearMessages)
   const getMessages = useClaudeChatStore((state) => state.getMessages)
+  const getAgentConfig = useClaudeChatStore((state) => state.getAgentConfig)
 
   // Sync currentAgentIdRef with prop changes and reset status when switching agents
   useEffect(() => {
@@ -73,7 +74,9 @@ export function useClaudeAgent({
     }
 
     try {
-      const result = await window.electron.claude.start(workingDir, undefined, useDocker)
+      // Thread model from agent config if available
+      const model = agentId ? getAgentConfig(agentId).model : undefined
+      const result = await window.electron.claude.start(workingDir, undefined, useDocker, model)
 
       if (result.success && result.agentId) {
         console.log('[useClaudeAgent] Agent initialized:', result.agentId)
@@ -112,7 +115,9 @@ export function useClaudeAgent({
     activeTabId,
     activeChatSessionId,
     onContainerStatusUpdate,
-    agentStatusActions
+    agentStatusActions,
+    agentId,
+    getAgentConfig,
   ])
 
   // Restart agent with new Docker mode
@@ -473,6 +478,20 @@ export function useClaudeAgent({
     [addMessage]
   )
 
+  // Cancel the current turn
+  const cancelTurn = useCallback(async () => {
+    const activeAgentId = currentAgentIdRef.current
+    if (!activeAgentId) return
+
+    console.log('[useClaudeAgent] Cancelling turn for agent:', activeAgentId)
+    try {
+      await window.electron.claude.cancel(activeAgentId)
+      agentStatusActions.setWorking(false)
+    } catch (err) {
+      console.error('[useClaudeAgent] Failed to cancel turn:', err)
+    }
+  }, [agentStatusActions])
+
   // Handle quest prompt responses
   const handleQuestResponse = useCallback(
     async (questId: string, response: string | string[]) => {
@@ -490,12 +509,15 @@ export function useClaudeAgent({
         metadata: { isComplete: true }
       })
 
+      // Extract single optionId (value field = optionId for ACP permissions)
+      const optionId = Array.isArray(response) ? response[0] : response
+
       try {
-        // Send response to agent
+        // Send response to agent — resolves the pending permission Promise
         const result = await window.electron.claude.respondToQuest(
           activeAgentId,
           questId,
-          response
+          optionId
         )
 
         if (!result.success) {
@@ -525,6 +547,7 @@ export function useClaudeAgent({
     initializeAgent,
     restartAgent,
     sendMessage: handleSend,
+    cancelTurn,
     addSystemMessage,
     respondToQuest: handleQuestResponse,
     clearMessages: (agentId: string) => clearMessages(agentId),

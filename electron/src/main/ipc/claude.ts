@@ -151,16 +151,17 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
   // Start a new Claude agent
   createIpcHandler(
     'claude:start',
-    async (workingDir: string, profileId?: string, useDocker?: boolean) => {
+    async (workingDir: string, profileId?: string, useDocker?: boolean, model?: string) => {
       const agentId = generateId.agent()
       logger.log(
-        `Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'} (Docker: ${useDocker})`
+        `Starting agent ${agentId} in ${workingDir} with profile ${profileId || 'anthropic'} (Docker: ${useDocker}, model: ${model})`
       )
 
       try {
         const agent = new ClaudeAgent(agentId, {
           workingDirectory: workingDir,
           profileId: profileId,
+          model: model,
           dockerOptions: useDocker ? { enabled: true } : undefined,
         })
 
@@ -229,20 +230,42 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
     return { commands }
   })
 
-  // Respond to quest prompt
-  createIpcHandler('claude:respond-quest', async (agentId: string, questId: string, response: string | string[]) => {
-    logger.log(`Quest response for agent ${agentId}, quest ${questId}:`, response)
+  // Respond to quest/permission prompt
+  createIpcHandler('claude:respond-quest', async (agentId: string, questId: string, optionId: string) => {
+    logger.log(`Quest response for agent ${agentId}, quest ${questId}, option: ${optionId}`)
 
     const agent = getAgentOrThrow(agentId)
+    agent.respondToPermission(questId, optionId)
 
-    // Format response for AskUserQuestion tool
-    // The SDK's AskUserQuestion expects the selected option labels
-    const formattedResponse = Array.isArray(response)
-      ? response.join(', ') // Multiple selections
-      : response // Single selection (the label text)
+    return { success: true }
+  })
 
-    // Send as a regular message - the SDK handles matching it to the pending AskUserQuestion
-    await agent.sendPrompt(formattedResponse)
+  // Cancel the current turn
+  createIpcHandler('claude:cancel', async ({ agentId }: { agentId: string }) => {
+    logger.log(`Cancelling turn for agent ${agentId}`)
+
+    const agent = getAgentOrThrow(agentId)
+    await agent.cancelCurrentTurn()
+
+    return { success: true }
+  })
+
+  // Set session mode
+  createIpcHandler('claude:set-mode', async ({ agentId, modeId }: { agentId: string; modeId: string }) => {
+    logger.log(`Setting mode for agent ${agentId}: ${modeId}`)
+
+    const agent = getAgentOrThrow(agentId)
+    await agent.setMode(modeId)
+
+    return { success: true }
+  })
+
+  // Set session model
+  createIpcHandler('claude:set-model', async ({ agentId, modelId }: { agentId: string; modelId: string }) => {
+    logger.log(`Setting model for agent ${agentId}: ${modelId}`)
+
+    const agent = getAgentOrThrow(agentId)
+    await agent.setModel(modelId)
 
     return { success: true }
   })

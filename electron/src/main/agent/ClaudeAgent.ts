@@ -1,12 +1,13 @@
 import { EventEmitter } from 'events'
 import { ACPClient } from './ACPClient'
-import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
+import { DockerOptions, MessageContent } from '../../shared/types'
 import { getProfile } from '../../shared/profiles'
 import { Logger } from '../../shared/utils/logger'
 
 export interface ClaudeAgentOptions {
   workingDirectory: string
   profileId?: string
+  model?: string
   dockerOptions?: DockerOptions
 }
 
@@ -24,7 +25,6 @@ export class ClaudeAgent extends EventEmitter {
 
     this.logger = new Logger(`ClaudeAgent ${id}`)
 
-    // Get profile and merge env vars
     const profile = getProfile(options.profileId || 'anthropic')
     this.logger.log(`Using profile: ${profile.name}`)
 
@@ -34,13 +34,13 @@ export class ClaudeAgent extends EventEmitter {
 
     this.client = new ACPClient({
       workingDirectory: options.workingDirectory,
+      model: options.model,
       customEnv: profile.env,
       dockerOptions: options.dockerOptions,
     })
 
-    // Forward client events
-    this.client.on('message', (message: ACPMessage) => {
-      this.handleMessage(message)
+    this.client.on('text', (text: string) => {
+      this.emit('text', text)
     })
 
     this.client.on('error', (error: Error) => {
@@ -53,14 +53,34 @@ export class ClaudeAgent extends EventEmitter {
       this.emit('exit', info)
     })
 
-    // Forward tool execution events with enhanced tracking
     this.client.on('toolExecution', (toolInfo: any) => {
       this.handleToolExecution(toolInfo)
     })
 
-    // Forward agent status events
+    this.client.on('toolCompleted', (toolInfo: any) => {
+      this.handleToolCompleted(toolInfo)
+    })
+
     this.client.on('agentStatus', (status: any) => {
       this.emit('agentStatus', status)
+    })
+
+    this.client.on('usage', (usage: any) => {
+      this.emit('usage', usage)
+    })
+
+    this.client.on('containerStatus', (data: any) => {
+      this.emit('containerStatus', data)
+    })
+
+    this.client.on('questPrompt', (data: any) => {
+      this.emit('questPrompt', data)
+    })
+
+    this.client.on('promptComplete', (data: any) => {
+      this.status = 'idle'
+      this.emit('status', 'idle')
+      this.emit('promptComplete', data)
     })
   }
 
@@ -72,9 +92,7 @@ export class ClaudeAgent extends EventEmitter {
     const toolName = toolInfo.name || 'unknown'
     const toolInput = toolInfo.input || {}
 
-    // Check if this is a new tool call or an existing one
     if (!this.activeToolCalls.has(toolId)) {
-      // New tool execution started
       const startTime = Date.now()
       this.activeToolCalls.set(toolId, {
         id: toolId,
@@ -83,7 +101,6 @@ export class ClaudeAgent extends EventEmitter {
         startTime,
       })
 
-      // Emit tool-started event
       this.emit('tool-started', {
         id: toolId,
         name: toolName,
@@ -95,36 +112,34 @@ export class ClaudeAgent extends EventEmitter {
       this.logger.log(`Tool started: ${toolName} (${toolId})`)
     }
 
-    // Forward the toolExecution event as well for backward compatibility
     this.emit('toolExecution', toolInfo)
   }
 
   /**
-   * Complete all active tool calls
+   * Handle individual tool completion from ACP tool_call_update events
    */
-  private completeAllActiveTools(): void {
+  private handleToolCompleted(toolInfo: any): void {
+    const toolId = toolInfo.id
+    const toolData = this.activeToolCalls.get(toolId)
     const now = Date.now()
 
-    for (const [toolId, toolData] of this.activeToolCalls.entries()) {
+    if (toolData) {
       const duration = now - toolData.startTime
 
-      // Emit tool-completed event
       this.emit('tool-completed', {
         id: toolId,
         name: toolData.name,
         input: toolData.input,
-        status: 'completed',
+        status: toolInfo.status === 'failed' ? 'error' : 'completed',
         startTime: toolData.startTime,
         endTime: now,
         duration,
-        output: undefined, // We don't have output tracking yet
+        output: toolInfo.output,
       })
 
+      this.activeToolCalls.delete(toolId)
       this.logger.log(`Tool completed: ${toolData.name} (${toolId}) - ${duration}ms`)
     }
-
-    // Clear all active tools
-    this.activeToolCalls.clear()
   }
 
   /**
@@ -155,58 +170,34 @@ export class ClaudeAgent extends EventEmitter {
   }
 
   /**
-   * Handle incoming ACP messages
+   * Cancel the current turn
    */
-  private handleMessage(message: ACPMessage): void {
-    this.logger.log('Handling message:', JSON.stringify(message, null, 2))
+  async cancelCurrentTurn(): Promise<void> {
+    this.logger.log('Cancelling current turn...')
+    await this.client.cancelCurrentTurn()
+    this.status = 'idle'
+    this.emit('status', 'idle')
+  }
 
-    // Handle session/update messages (agent streaming responses)
-    if (message.method === 'session/update') {
-      const update = message.params?.update
+  /**
+   * Set the session mode
+   */
+  async setMode(modeId: string): Promise<void> {
+    await this.client.setMode(modeId)
+  }
 
-      this.logger.log('Update:', JSON.stringify(update, null, 2))
+  /**
+   * Set the session model
+   */
+  async setModel(modelId: string): Promise<void> {
+    await this.client.setModel(modelId)
+  }
 
-      if (update?.sessionUpdate === 'agent_message_chunk') {
-        const content = update.content
-
-        this.logger.log('Content:', JSON.stringify(content, null, 2))
-
-        // Handle single content object or array
-        const blocks = Array.isArray(content) ? content : [content]
-
-        for (const block of blocks) {
-          this.logger.log('Block:', JSON.stringify(block, null, 2))
-          if (block.type === 'text' && block.text) {
-            this.logger.log('Emitting text:', block.text)
-            this.emit('text', block.text)
-          }
-        }
-      }
-    }
-
-    // Check if it's a response with result (prompt completed)
-    if (message.result) {
-      // Complete any remaining active tool calls
-      this.completeAllActiveTools()
-
-      // Extract token usage if available
-      if (message.result.usage) {
-        const usage = {
-          inputTokens: message.result.usage.input_tokens || 0,
-          outputTokens: message.result.usage.output_tokens || 0,
-          timestamp: Date.now(),
-        }
-        this.logger.log('Usage:', usage)
-        this.emit('usage', usage)
-      }
-
-      // Agent finished processing
-      this.status = 'idle'
-      this.emit('status', 'idle')
-    }
-
-    // Forward all messages for debugging
-    this.emit('message', message)
+  /**
+   * Respond to a permission/quest prompt
+   */
+  respondToPermission(questId: string, optionId: string): void {
+    this.client.respondToPermission(questId, optionId)
   }
 
   /**
@@ -232,7 +223,7 @@ export class ClaudeAgent extends EventEmitter {
   }
 
   /**
-   * Get supported slash commands from SDK
+   * Get supported slash commands
    */
   async getSupportedCommands(): Promise<any[]> {
     return this.client.getSupportedCommands()

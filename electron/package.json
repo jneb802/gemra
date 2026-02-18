@@ -15,6 +15,7 @@
     "package:mac:x64": "npm run build && electron-builder --mac --x64"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.14.1",
     "@anthropic-ai/claude-agent-sdk": "^0.2.38",
     "@types/react-window": "^2.0.0",
     "@xterm/addon-fit": "^0.10.0",
@@ -30,6 +31,7 @@
     "react-resizable-panels": "^2.0.19",
     "react-window": "^2.2.7",
     "remark-gfm": "^4.0.1",
+    "zod": "^4.3.6",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
@@ -71,7 +73,8 @@
     ],
     "asarUnpack": [
       "node_modules/node-pty/**/*",
-      "node_modules/@anthropic-ai/claude-agent-sdk/**/*"
+      "node_modules/@anthropic-ai/claude-agent-sdk/**/*",
+      "node_modules/@agentclientprotocol/**/*"
     ],
     "directories": {
       "output": "release"

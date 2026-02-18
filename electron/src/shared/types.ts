@@ -52,6 +52,7 @@ export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
 export interface QuestOption {
   label: string
   value: string
+  optionId?: string  // ACP permission option ID (for respondToPermission)
   description?: string
 }
 
