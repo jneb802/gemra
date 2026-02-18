@@ -188,6 +188,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
+      requestAnimationFrame(() => textareaRef.current?.focus())
       return
     }
 
@@ -210,6 +211,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
+      requestAnimationFrame(() => textareaRef.current?.focus())
       return
     }
 
@@ -251,10 +253,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
     setText('')
     setAttachedImages([])
 
-    // Reset textarea height
+    // Reset textarea height and restore focus
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   const handleSelectCommand = (command: SlashCommand, category: 'custom' | 'claude') => {
