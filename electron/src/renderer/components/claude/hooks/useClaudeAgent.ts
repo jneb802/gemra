@@ -452,16 +452,16 @@ export function useClaudeAgent({
     ]
   )
 
-  // Process queued messages when agent becomes idle
+  // Process queued messages when agent becomes idle (and fully initialized)
   useEffect(() => {
-    if (!agentStatusState.isWorking && messageQueue.length > 0) {
+    if (!agentStatusState.isWorking && !agentStatusState.isInitializingAgent && messageQueue.length > 0) {
       const [nextMessage, ...remainingQueue] = messageQueue
       console.log('[useClaudeAgent] Agent idle, processing queued message:', nextMessage)
       setMessageQueue(remainingQueue)
       // Delay before processing queued messages to ensure clean state
       setTimeout(() => sendMessageInternal(nextMessage), TIMING.MESSAGE_QUEUE_DELAY)
     }
-  }, [agentStatusState.isWorking, messageQueue, sendMessageInternal])
+  }, [agentStatusState.isWorking, agentStatusState.isInitializingAgent, messageQueue, sendMessageInternal])
 
   // Helper to add system messages
   const addSystemMessage = useCallback(
