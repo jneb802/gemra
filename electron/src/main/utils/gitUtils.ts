@@ -7,21 +7,30 @@ export function execGit(command: string, workingDir: string): string {
   return execSync(`git ${command}`, {
     cwd: workingDir,
     encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe'],
   }).trim()
 }
 
 /**
- * Get the current git branch name
+ * Get the current git branch name, or null if not a git repo
  */
-export function getGitBranch(workingDir: string): string {
-  return execGit('rev-parse --abbrev-ref HEAD', workingDir)
+export function getGitBranch(workingDir: string): string | null {
+  try {
+    return execGit('rev-parse --abbrev-ref HEAD', workingDir)
+  } catch {
+    return null
+  }
 }
 
 /**
- * Get git diff shortstat output
+ * Get git diff shortstat output, or empty string if not a git repo
  */
 export function getGitDiffShortstat(workingDir: string): string {
-  return execGit('diff --shortstat', workingDir)
+  try {
+    return execGit('diff --shortstat', workingDir)
+  } catch {
+    return ''
+  }
 }
 
 /**

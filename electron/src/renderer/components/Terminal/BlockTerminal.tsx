@@ -195,6 +195,14 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     return () => clearInterval(interval)
   }, [currentWorkingDir, isActiveTab])
 
+  // Handle slash commands from terminal input
+  const handleSlashCommand = useCallback((name: string) => {
+    if (name === 'claude') {
+      const newTabId = createTab({ type: 'agent-chat', workingDir: currentWorkingDir })
+      setActiveTab(newTabId)
+    }
+  }, [createTab, setActiveTab, currentWorkingDir])
+
   // Send command to PTY
   const handleSendCommand = useCallback((command: string) => {
     if (!command.trim()) return
@@ -340,6 +348,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
         gitBranch={gitBranch}
         gitStats={gitStats}
         onSendCommand={handleSendCommand}
+        onSlashCommand={handleSlashCommand}
         disabled={commandRunning}
       />
 

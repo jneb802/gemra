@@ -207,16 +207,12 @@ export function setupClaudeIpc(mainWindow: BrowserWindow): void {
 
   // Get git branch
   createIpcHandler('claude:get-git-branch', async (workingDir: string) => {
-    logger.log(`Getting git branch for ${workingDir}`)
-
     const branch = getGitBranch(workingDir)
     return { branch }
   })
 
   // Get git stats
   createIpcHandler('claude:get-git-stats', async (workingDir: string) => {
-    logger.log(`Getting git stats for ${workingDir}`)
-
     const stats = getGitStats(workingDir)
     return stats
   })

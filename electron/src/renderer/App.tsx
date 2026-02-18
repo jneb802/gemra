@@ -140,8 +140,8 @@ function App() {
   }, [handleNewClaudeTab])
 
   const handleNewTab = useCallback(() => {
-    handleNewClaudeTab()
-  }, [handleNewClaudeTab])
+    handleNewTerminalTab()
+  }, [handleNewTerminalTab])
 
   // Helper to start Claude chat in a directory
   const startClaudeChatInDirectory = useCallback(async (workingDir: string) => {
@@ -164,7 +164,7 @@ function App() {
     if (tabs.length === 0) {
       const lastUsedDir = recentItems[0]?.path || window.electron.homeDir
       createTab({
-        type: 'agent-chat',
+        type: 'terminal',
         workingDir: lastUsedDir
       })
     }

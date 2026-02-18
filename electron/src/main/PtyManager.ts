@@ -43,12 +43,7 @@ export class PtyManager extends EventEmitter {
    * Get a terminal instance by ID
    */
   private getTerminal(id: string): PtyInstance | null {
-    const terminal = this.terminals.get(id)
-    if (!terminal) {
-      console.error(`Terminal ${id} not found`)
-      return null
-    }
-    return terminal
+    return this.terminals.get(id) ?? null
   }
 
   private touchActivity(id: string): void {

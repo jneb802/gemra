@@ -1,12 +1,17 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { StatusChips } from '../claude/StatusChips'
 
+const TERMINAL_COMMANDS = [
+  { name: 'claude', description: 'Open Claude chat for this directory' },
+]
+
 interface TerminalInputProps {
   terminalId: string
   workingDir: string
   gitBranch?: string
   gitStats?: { filesChanged: number; insertions: number; deletions: number }
   onSendCommand: (command: string) => void
+  onSlashCommand?: (name: string) => void
   disabled?: boolean
 }
 
@@ -21,12 +26,26 @@ export function TerminalInput({
   gitBranch = '',
   gitStats = { filesChanged: 0, insertions: 0, deletions: 0 },
   onSendCommand,
+  onSlashCommand,
   disabled = false,
 }: TerminalInputProps) {
   const [text, setText] = useState('')
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [commandHistory, setCommandHistory] = useState<string[]>([])
+  const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [slashQuery, setSlashQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const filtered = TERMINAL_COMMANDS.filter(cmd =>
+    cmd.name.startsWith(slashQuery.toLowerCase())
+  )
+
+  const executeSlashCommand = (name: string) => {
+    onSlashCommand?.(name)
+    setText('')
+    setShowSlashMenu(false)
+  }
 
   // Autofocus on mount
   useEffect(() => {
@@ -60,6 +79,13 @@ export function TerminalInput({
   const handleSend = () => {
     if (!text.trim() || disabled) return
 
+    // Intercept slash commands
+    if (text.startsWith('/')) {
+      const name = text.slice(1).trim().split(/\s+/)[0]
+      executeSlashCommand(name)
+      return
+    }
+
     onSendCommand(text)
     addToHistory(text)
     setText('')
@@ -71,6 +97,30 @@ export function TerminalInput({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Slash menu navigation takes priority
+    if (showSlashMenu) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex(i => Math.max(0, i - 1))
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex(i => Math.min(filtered.length - 1, i + 1))
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowSlashMenu(false)
+        return
+      }
+      if (e.key === 'Enter' && filtered[selectedIndex]) {
+        e.preventDefault()
+        executeSlashCommand(filtered[selectedIndex].name)
+        return
+      }
+    }
+
     // Enter to send (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -128,6 +178,14 @@ export function TerminalInput({
     const value = e.target.value
     setText(value)
 
+    if (value.startsWith('/')) {
+      setShowSlashMenu(true)
+      setSlashQuery(value.slice(1))
+      setSelectedIndex(0)
+    } else {
+      setShowSlashMenu(false)
+    }
+
     // Auto-grow textarea
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -147,23 +205,39 @@ export function TerminalInput({
         onContainerToggle={() => {}}
       />
 
-      {/* Input area */}
-      <div className="terminal-input-row">
-        <div className="terminal-input-prompt">$</div>
-        <textarea
-          ref={textareaRef}
-          className="terminal-input-textarea"
-          placeholder={
-            disabled
-              ? 'Waiting for command to complete...'
-              : 'Type a command... (↑/↓ for history, Enter to run)'
-          }
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          rows={1}
-        />
+      {/* Input area with slash menu */}
+      <div style={{ position: 'relative' }}>
+        {showSlashMenu && filtered.length > 0 && (
+          <div className="terminal-slash-menu">
+            {filtered.map((cmd, i) => (
+              <div
+                key={cmd.name}
+                className={`terminal-slash-item${i === selectedIndex ? ' selected' : ''}`}
+                onClick={() => executeSlashCommand(cmd.name)}
+              >
+                <span className="slash-item-name">/{cmd.name}</span>
+                <span className="slash-item-desc">{cmd.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="terminal-input-row">
+          <div className="terminal-input-prompt">$</div>
+          <textarea
+            ref={textareaRef}
+            className="terminal-input-textarea"
+            placeholder={
+              disabled
+                ? 'Waiting for command to complete...'
+                : 'Type a command... (↑/↓ for history, / for commands, Enter to run)'
+            }
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            rows={1}
+          />
+        </div>
       </div>
 
       {/* Hints */}
