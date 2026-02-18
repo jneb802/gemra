@@ -3,32 +3,32 @@
    ========================================================================== */
 
 :root {
-  /* Colors - Background (cool dark, precision tool aesthetic) */
-  --bg-primary: #111318;
-  --bg-secondary: #181d26;
-  --bg-user-message: #1d2233;
-  --bg-error: #2c1212;
+  /* Colors - Background */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #2d2d2d;
+  --bg-user-message: #2a2a2a;
+  --bg-error: #3e1f1f;
 
-  /* Colors - Borders (rgba for softness, not VS Code solid gray) */
+  /* Colors - Borders (rgba for softness) */
   --border-color: rgba(255, 255, 255, 0.08);
-  --border-color-focus: #4a8cf0;
-  --border-color-error: #e05252;
+  --border-color-focus: #569cd6;
+  --border-color-error: #ff5555;
   --border-color-system: rgba(255, 255, 255, 0.2);
 
   /* Colors - Text */
-  --text-primary: #dde4f0;
-  --text-muted: #525c72;
-  --text-error: #e05252;
+  --text-primary: #d4d4d4;
+  --text-muted: #888;
+  --text-error: #ff5555;
   --text-thinking: #9cdcfe;
   --text-streaming: #4ec9b0;
   --text-tool: #dcdcaa;
 
   /* Colors - Interactive */
-  --button-primary: #4a8cf0;
-  --button-primary-hover: #6099f5;
+  --button-primary: #569cd6;
+  --button-primary-hover: #6aadee;
 
   /* Colors - Scrollbar */
-  --scrollbar-track: #111318;
+  --scrollbar-track: #1e1e1e;
   --scrollbar-thumb: rgba(255, 255, 255, 0.10);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 
@@ -68,10 +68,10 @@
   --radius-xl: 12px;
 
   /* Colors - Additional UI elements */
-  --bg-hover: #1a1f2c;
-  --bg-active: #232b3e;
-  --text-secondary: #8890a6;
-  --text-tertiary: #3f4a60;
+  --bg-hover: #252525;
+  --bg-active: #3a3a3a;
+  --text-secondary: #b0b0b0;
+  --text-tertiary: #666;
   --border-separator: rgba(255, 255, 255, 0.08);
 
   /* Container status colors */

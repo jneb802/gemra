@@ -10,26 +10,26 @@
 
 ## Palette
 
-Cool-dark with a slight blue cast. Distinct from VS Code's neutral gray.
+Neutral dark. No temperature cast — pure gray backgrounds, original VS Code-adjacent values preferred.
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg-primary` | `#111318` | App base, tab bar |
-| `--bg-secondary` | `#181d26` | Elevated surfaces, input box, header |
-| `--bg-user-message` | `#1d2233` | User message backgrounds |
-| `--bg-hover` | `#1a1f2c` | Hover states |
-| `--bg-active` | `#232b3e` | Active/pressed states |
-| `--button-primary` | `#4a8cf0` | Accent (more saturated than VS Code blue) |
-| `--button-primary-hover` | `#6099f5` | Accent hover |
+| `--bg-primary` | `#1e1e1e` | App base, tab bar |
+| `--bg-secondary` | `#2d2d2d` | Elevated surfaces, input box, header |
+| `--bg-user-message` | `#2a2a2a` | User message backgrounds |
+| `--bg-hover` | `#252525` | Hover states |
+| `--bg-active` | `#3a3a3a` | Active/pressed states |
+| `--button-primary` | `#569cd6` | Accent |
+| `--button-primary-hover` | `#6aadee` | Accent hover |
 
 ## Text
 
 | Token | Value | Use |
 |---|---|---|
-| `--text-primary` | `#dde4f0` | Default text (cool white) |
-| `--text-secondary` | `#8890a6` | Supporting text |
-| `--text-muted` | `#525c72` | Metadata, hints |
-| `--text-tertiary` | `#3f4a60` | Timestamps, disabled |
+| `--text-primary` | `#d4d4d4` | Default text |
+| `--text-secondary` | `#b0b0b0` | Supporting text |
+| `--text-muted` | `#888` | Metadata, hints |
+| `--text-tertiary` | `#666` | Timestamps, disabled |
 
 ## Borders
 
