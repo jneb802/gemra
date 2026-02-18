@@ -23,7 +23,6 @@ export function useOSC133Parser({
   const parserState = useRef<ParserState>({
     promptBuffer: '',
     commandBuffer: '',
-    outputBuffer: '',
     lastSequenceTime: Date.now(),
   })
 
@@ -67,8 +66,6 @@ export function useOSC133Parser({
 
     // Register OSC 133 handler
     const disposeOscHandler = terminal.parser.registerOscHandler(133, (data: string) => {
-      console.log('[OSC 133] Received:', data)
-
       const parts = data.split(';')
       const sequence = parts[0] as OSC133Sequence
       const args = parts.slice(1)
@@ -80,14 +77,12 @@ export function useOSC133Parser({
           // Prompt start
           state.currentSequence = sequence
           state.promptBuffer = ''
-          console.log('[Block] Prompt start')
           break
         }
 
         case 'B': {
           // Prompt end / Command input start
           state.currentSequence = sequence
-          console.log('[Block] Prompt end, command start')
 
           // Consume pending command from TerminalInput (set before pty.write)
           const pendingCmd = pendingCommandRef?.current ?? ''
@@ -112,7 +107,6 @@ export function useOSC133Parser({
         case 'C': {
           // Command execution start
           state.currentSequence = sequence
-          console.log('[Block] Command execution start')
 
           if (state.currentBlock) {
             // Only update command from commandBuffer if it's non-empty
@@ -138,7 +132,6 @@ export function useOSC133Parser({
             })
 
             state.currentBlock = outputBlock
-            state.outputBuffer = ''
           }
           break
         }
@@ -146,7 +139,6 @@ export function useOSC133Parser({
         case 'D': {
           // Command end (with exit code)
           const exitCode = args[0] ? parseInt(args[0], 10) : 0
-          console.log('[Block] Command end, exit code:', exitCode)
 
           // Flush any pending output before marking done
           if (rafIdRef.current !== null) {
@@ -167,7 +159,6 @@ export function useOSC133Parser({
           state.currentSequence = undefined
           state.currentBlock = undefined
           state.commandBuffer = ''
-          state.outputBuffer = ''
           break
         }
       }
@@ -222,6 +213,12 @@ export function useOSC133Parser({
 
     // Intercept terminal.write to observe data flowing into the terminal.
     // Installed once per terminal instance (not per workingDir change) to avoid stacking.
+    //
+    // Stacking note: useFallbackParser may also intercept terminal.write when enabled.
+    // It always runs AFTER this hook (registered later in BlockTerminal), so the call
+    // chain is: fallback-wrapper → this wrapper → originalWrite.
+    // Cleanup runs in reverse registration order (React guarantee), so the stacking
+    // unwinds correctly on unmount or terminal change.
     const originalWrite = terminal.write.bind(terminal)
     terminal.write = (data: string | Uint8Array, callback?: () => void) => {
       const state = parserState.current
@@ -244,7 +241,6 @@ export function useOSC133Parser({
         case 'C': {
           // Accumulating command output — buffer and flush via rAF to avoid per-chunk re-renders
           const cleanedOutput = stripEscapeSequences(strData, 'output')
-          state.outputBuffer += cleanedOutput
           if (state.currentBlock && cleanedOutput) {
             const blockId = state.currentBlock.id
             pendingOutputRef.current.set(

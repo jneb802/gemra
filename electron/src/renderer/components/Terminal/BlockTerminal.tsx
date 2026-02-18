@@ -35,6 +35,8 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const [autoInstallAttempted, setAutoInstallAttempted] = useState(false)
   const pendingCommandRef = useRef('')
   const blocksContainerRef = useRef<HTMLDivElement>(null)
+  // Capture initial workingDir so prop changes don't re-trigger the PTY spawn effect
+  const initialWorkingDirRef = useRef(workingDir)
   const prevBlockCountRef = useRef(0)
 
   // AI prompt modal state
@@ -55,8 +57,17 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
   const setActiveTab = useTabStore(s => s.setActiveTab)
   const addMessage = useClaudeChatStore(s => s.addMessage)
 
-  // Check if this terminal is in the active tab
-  const isActiveTab = tabs.find(t => t.id === activeTabId)?.id === terminalId
+  // Check if this terminal's tab is the active tab (standalone terminal or active sub-terminal)
+  const isActiveTab = (() => {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    if (!activeTab) return false
+    // Standalone terminal tab
+    if (activeTab.terminalId === terminalId) return true
+    // Sub-terminal inside an agent-chat tab (only when it's the active sub-terminal)
+    return activeTab.subTerminals?.some(
+      s => s.terminalId === terminalId && s.id === activeTab.activeSubTerminalId
+    ) ?? false
+  })()
 
   // Initialize xterm.js (hidden, used for parsing)
   const { containerRef, terminal, write, focus } = useTerminal({
@@ -77,8 +88,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     terminalId,
     workingDir: currentWorkingDir,
     pendingCommandRef,
-    onBlockCreated: (blockId) => {
-      console.log('[BlockTerminal] Shell integration active, block created:', blockId)
+    onBlockCreated: (_blockId) => {
       setShellIntegrationActive(true)
       setUseFallback(false) // Disable fallback if shell integration works
     },
@@ -127,15 +137,16 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
     return unsubscribe
   }, [terminalId])
 
-  // Spawn PTY on mount
+  // Spawn PTY once xterm is initialized (terminal non-null means fitAddon.fit() has run
+  // and terminal.cols/rows reflect the actual container dimensions)
   useEffect(() => {
-    const spawnPty = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100))
+    if (!terminal) return
 
+    const spawnPty = async () => {
       const result = await window.electron.pty.spawn(terminalId, {
-        cols: 80,
-        rows: 24,
-        cwd: workingDir,
+        cols: terminal.cols,
+        rows: terminal.rows,
+        cwd: initialWorkingDirRef.current,
       })
 
       if (!result.success) {
@@ -147,13 +158,13 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
 
     spawnPty()
 
-    // Cleanup: kill PTY on unmount
+    // Cleanup: kill PTY when terminalId changes or component unmounts
     return () => {
       console.log('[BlockTerminal] Cleaning up terminal:', terminalId)
       window.electron.pty.kill(terminalId)
       clearBlocks(terminalId)
     }
-  }, [terminalId, workingDir, clearBlocks])
+  }, [terminalId, terminal, clearBlocks, focus])
 
   // Fetch git info periodically (only when tab is active)
   useEffect(() => {

@@ -6,6 +6,7 @@ export type BlockType =
   | 'output'       // Command output
   | 'system'       // System message (process exit, etc.)
   | 'prompt'       // Shell prompt (usually hidden)
+  | 'llm'          // LLM step in a workflow
 
 export type BlockStatus =
   | 'pending'      // Command submitted, not started
@@ -29,6 +30,7 @@ export interface TerminalBlock {
   command?: string              // The actual command (for command blocks)
   workingDir: string            // CWD when command ran
   exitCode?: number             // Exit code (0 = success)
+  model?: string                // LLM model name (for 'llm' blocks)
 
   // Timing
   startTime: number             // When command started (ms)
@@ -72,6 +74,5 @@ export interface ParserState {
   currentBlock?: TerminalBlock
   promptBuffer: string
   commandBuffer: string
-  outputBuffer: string
   lastSequenceTime: number
 }

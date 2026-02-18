@@ -113,16 +113,25 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
     fitAddonRef.current?.fit()
   }, [settings])
 
-  // Handle window resize
+  // Handle window resize (debounced to avoid excessive PTY resize signals)
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
     const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current) {
-        fitAddonRef.current.fit()
-      }
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        if (fitAddonRef.current && terminalRef.current) {
+          fitAddonRef.current.fit()
+        }
+      }, 150)
     }
 
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
   }, [])
 
   // Write data to terminal — stable reference via useCallback so effects that
@@ -131,18 +140,15 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
     terminalRef.current?.write(data)
   }, [])
 
-  // Focus terminal
-  const focus = () => {
+  const focus = useCallback(() => {
     terminalRef.current?.focus()
-  }
+  }, [])
 
-  // Fit terminal to container
-  const fit = () => {
+  const fit = useCallback(() => {
     fitAddonRef.current?.fit()
-  }
+  }, [])
 
-  // Copy selected text to clipboard
-  const copySelection = async () => {
+  const copySelection = useCallback(async () => {
     const selection = terminalRef.current?.getSelection()
     if (selection) {
       try {
@@ -151,27 +157,24 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
         console.error('Failed to copy:', err)
       }
     }
-  }
+  }, [])
 
-  // Paste from clipboard
-  const paste = async () => {
+  const paste = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText()
       terminalRef.current?.paste(text)
     } catch (err) {
       console.error('Failed to paste:', err)
     }
-  }
+  }, [])
 
-  // Select all terminal content
-  const selectAll = () => {
+  const selectAll = useCallback(() => {
     terminalRef.current?.selectAll()
-  }
+  }, [])
 
-  // Clear selection
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     terminalRef.current?.clearSelection()
-  }
+  }, [])
 
   return {
     containerRef,
