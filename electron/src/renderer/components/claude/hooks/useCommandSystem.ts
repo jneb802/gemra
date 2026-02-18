@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SlashCommand } from '../SlashCommandMenu'
 import type { ProjectCommand } from '../../../../shared/commandTypes'
 import { useTabStore } from '../../../stores/tabStore'
+import { terminalRegistry } from '../../../lib/terminalRegistry'
 
 /**
  * Hook for managing custom and Claude SDK commands
@@ -97,25 +98,11 @@ export function useCommandSystem({
 
   // Register listeners for workflow events (persistent for the lifetime of the hook)
   useEffect(() => {
-    // Write arbitrary text to the terminal safely.
-    //
-    // Approach: one printf per line using $'...' ANSI-C quoting.
-    // Why line-by-line: macOS PTY canonical mode MAX_CANON = 1024 bytes. A single
-    // large command (e.g. a full git diff) gets silently truncated, breaking the
-    // $'...' quoting and sending the remainder as bare shell commands.
-    //
-    // Echo suppression: stty -echo before the writes, stty echo after. The stty
-    // commands are queued in the PTY input buffer and the shell processes them in
-    // FIFO order, so echo is off by the time the printf commands are read.
+    // Write arbitrary text directly to the xterm.js display, bypassing the shell.
+    // terminalRegistry.write() calls terminal.write() on the live xterm.js instance,
+    // so there is no shell interpretation, no echo, and no PTY buffer limits.
     const safeWrite = (terminalId: string, text: string) => {
-      // Disable terminal echo so printf commands don't appear as visible input
-      window.electron.pty.write(terminalId, 'stty -echo 2>/dev/null\n').catch(() => {})
-      for (const line of text.split('\n')) {
-        // Each line: escape only backslash and single-quote (no newlines present)
-        const esc = line.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-        window.electron.pty.write(terminalId, `printf '%s\\n' $'${esc}'\n`).catch(() => {})
-      }
-      window.electron.pty.write(terminalId, 'stty echo 2>/dev/null\n').catch(() => {})
+      terminalRegistry.write(terminalId, text + '\n')
     }
 
     const unsubStepOutput = window.electron.commands.onStepOutput((data) => {

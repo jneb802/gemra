@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { terminalThemes } from '../../themes/terminalThemes'
+import { terminalRegistry } from '../../lib/terminalRegistry'
 import '@xterm/xterm/css/xterm.css'
 
 interface UseTerminalOptions {
@@ -17,6 +18,7 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [terminalInstance, setTerminalInstance] = useState<XTerm | null>(null)
 
   const settings = useSettingsStore()
 
@@ -58,9 +60,11 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
     // Fit terminal to container
     fitAddon.fit()
 
-    // Store references
+    // Store references and register globally for direct writes
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
+    terminalRegistry.register(terminalId, terminal)
+    setTerminalInstance(terminal)
 
     // Handle terminal data (user input)
     if (onData) {
@@ -81,11 +85,13 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
 
     // Cleanup
     return () => {
+      terminalRegistry.unregister(terminalId)
       webglAddonRef.current?.dispose()
       terminal.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
       webglAddonRef.current = null
+      setTerminalInstance(null)
     }
   }, [terminalId]) // Only re-create when terminalId changes
 
@@ -169,7 +175,7 @@ export function useTerminal({ terminalId, onData, onResize }: UseTerminalOptions
 
   return {
     containerRef,
-    terminal: terminalRef.current,
+    terminal: terminalInstance,
     write,
     focus,
     fit,

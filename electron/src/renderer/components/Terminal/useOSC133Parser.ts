@@ -9,6 +9,7 @@ interface UseOSC133ParserOptions {
   workingDir: string
   pendingCommandRef?: React.MutableRefObject<string>
   onBlockCreated?: (blockId: string) => void
+  onWorkingDirChange?: (dir: string) => void
 }
 
 export function useOSC133Parser({
@@ -16,7 +17,8 @@ export function useOSC133Parser({
   terminalId,
   workingDir,
   pendingCommandRef,
-  onBlockCreated
+  onBlockCreated,
+  onWorkingDirChange,
 }: UseOSC133ParserOptions) {
   const parserState = useRef<ParserState>({
     promptBuffer: '',
@@ -182,7 +184,11 @@ export function useOSC133Parser({
         const newWorkingDir = match[1]
         console.log('[OSC 7] Working directory:', newWorkingDir)
 
-        // Update current block's working dir
+        // Propagate to parent so future blocks and git polling use the new dir
+        workingDirRef.current = newWorkingDir
+        onWorkingDirChange?.(newWorkingDir)
+
+        // Also update the active block's working dir if one is running
         const activeBlock = getActiveBlock(terminalId)
         if (activeBlock) {
           updateBlock(terminalId, activeBlock.id, {

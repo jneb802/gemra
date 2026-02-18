@@ -82,6 +82,7 @@ export function BlockTerminal({ terminalId, workingDir = '~', sessionTabs }: Blo
       setShellIntegrationActive(true)
       setUseFallback(false) // Disable fallback if shell integration works
     },
+    onWorkingDirChange: setCurrentWorkingDir,
   })
 
   // Setup fallback parser (heuristic-based)
