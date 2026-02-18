@@ -15,7 +15,6 @@
     "package:mac:x64": "npm run build && electron-builder --mac --x64"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^0.14.1",
     "@anthropic-ai/claude-agent-sdk": "^0.2.38",
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@types/react-window": "^2.0.0",
@@ -75,7 +74,8 @@
       "package.json"
     ],
     "asarUnpack": [
-      "node_modules/node-pty/**/*"
+      "node_modules/node-pty/**/*",
+      "node_modules/@anthropic-ai/claude-agent-sdk/**/*"
     ],
     "directories": {
       "output": "release"

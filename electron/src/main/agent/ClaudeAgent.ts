@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { ACPClient } from './ACPClient'
-import { DockerOptions, MessageContent } from '../../shared/types'
+import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { getProfile } from '../../shared/profiles'
 import { Logger } from '../../shared/utils/logger'
 
@@ -39,8 +39,9 @@ export class ClaudeAgent extends EventEmitter {
       dockerOptions: options.dockerOptions,
     })
 
-    this.client.on('text', (text: string) => {
-      this.emit('text', text)
+    // Forward client events
+    this.client.on('message', (message: ACPMessage) => {
+      this.handleMessage(message)
     })
 
     this.client.on('error', (error: Error) => {
@@ -57,16 +58,8 @@ export class ClaudeAgent extends EventEmitter {
       this.handleToolExecution(toolInfo)
     })
 
-    this.client.on('toolCompleted', (toolInfo: any) => {
-      this.handleToolCompleted(toolInfo)
-    })
-
     this.client.on('agentStatus', (status: any) => {
       this.emit('agentStatus', status)
-    })
-
-    this.client.on('usage', (usage: any) => {
-      this.emit('usage', usage)
     })
 
     this.client.on('containerStatus', (data: any) => {
@@ -76,17 +69,8 @@ export class ClaudeAgent extends EventEmitter {
     this.client.on('questPrompt', (data: any) => {
       this.emit('questPrompt', data)
     })
-
-    this.client.on('promptComplete', (data: any) => {
-      this.status = 'idle'
-      this.emit('status', 'idle')
-      this.emit('promptComplete', data)
-    })
   }
 
-  /**
-   * Handle tool execution tracking
-   */
   private handleToolExecution(toolInfo: any): void {
     const toolId = toolInfo.id || `tool-${Date.now()}`
     const toolName = toolInfo.name || 'unknown'
@@ -94,12 +78,7 @@ export class ClaudeAgent extends EventEmitter {
 
     if (!this.activeToolCalls.has(toolId)) {
       const startTime = Date.now()
-      this.activeToolCalls.set(toolId, {
-        id: toolId,
-        name: toolName,
-        input: toolInput,
-        startTime,
-      })
+      this.activeToolCalls.set(toolId, { id: toolId, name: toolName, input: toolInput, startTime })
 
       this.emit('tool-started', {
         id: toolId,
@@ -115,36 +94,27 @@ export class ClaudeAgent extends EventEmitter {
     this.emit('toolExecution', toolInfo)
   }
 
-  /**
-   * Handle individual tool completion from ACP tool_call_update events
-   */
-  private handleToolCompleted(toolInfo: any): void {
-    const toolId = toolInfo.id
-    const toolData = this.activeToolCalls.get(toolId)
+  private completeAllActiveTools(): void {
     const now = Date.now()
 
-    if (toolData) {
+    for (const [toolId, toolData] of this.activeToolCalls.entries()) {
       const duration = now - toolData.startTime
-
       this.emit('tool-completed', {
         id: toolId,
         name: toolData.name,
         input: toolData.input,
-        status: toolInfo.status === 'failed' ? 'error' : 'completed',
+        status: 'completed',
         startTime: toolData.startTime,
         endTime: now,
         duration,
-        output: toolInfo.output,
+        output: undefined,
       })
-
-      this.activeToolCalls.delete(toolId)
       this.logger.log(`Tool completed: ${toolData.name} (${toolId}) - ${duration}ms`)
     }
+
+    this.activeToolCalls.clear()
   }
 
-  /**
-   * Start the agent
-   */
   async start(): Promise<void> {
     this.logger.log('Starting...')
     await this.client.start()
@@ -152,9 +122,6 @@ export class ClaudeAgent extends EventEmitter {
     this.emit('started')
   }
 
-  /**
-   * Send a prompt to the agent (supports text or multimodal content)
-   */
   async sendPrompt(content: string | MessageContent[]): Promise<void> {
     this.logger.log('Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
     this.status = 'working'
@@ -169,9 +136,45 @@ export class ClaudeAgent extends EventEmitter {
     }
   }
 
-  /**
-   * Cancel the current turn
-   */
+  private handleMessage(message: ACPMessage): void {
+    this.logger.log('Handling message:', JSON.stringify(message, null, 2))
+
+    if (message.method === 'session/update') {
+      const update = message.params?.update
+
+      if (update?.sessionUpdate === 'agent_message_chunk') {
+        const content = update.content
+        const blocks = Array.isArray(content) ? content : [content]
+
+        for (const block of blocks) {
+          if (block.type === 'text' && block.text) {
+            this.emit('text', block.text)
+          }
+        }
+      }
+    }
+
+    if (message.result) {
+      this.completeAllActiveTools()
+
+      if (message.result.usage) {
+        const usage = {
+          inputTokens: message.result.usage.input_tokens || 0,
+          outputTokens: message.result.usage.output_tokens || 0,
+          timestamp: Date.now(),
+        }
+        this.logger.log('Usage:', usage)
+        this.emit('usage', usage)
+      }
+
+      this.status = 'idle'
+      this.emit('status', 'idle')
+      this.emit('promptComplete', { stopReason: message.result.stop_reason ?? null })
+    }
+
+    this.emit('message', message)
+  }
+
   async cancelCurrentTurn(): Promise<void> {
     this.logger.log('Cancelling current turn...')
     await this.client.cancelCurrentTurn()
@@ -179,52 +182,31 @@ export class ClaudeAgent extends EventEmitter {
     this.emit('status', 'idle')
   }
 
-  /**
-   * Set the session mode
-   */
   async setMode(modeId: string): Promise<void> {
     await this.client.setMode(modeId)
   }
 
-  /**
-   * Set the session model
-   */
   async setModel(modelId: string): Promise<void> {
     await this.client.setModel(modelId)
   }
 
-  /**
-   * Respond to a permission/quest prompt
-   */
   respondToPermission(questId: string, optionId: string): void {
     this.client.respondToPermission(questId, optionId)
   }
 
-  /**
-   * Stop the agent
-   */
   async stop(): Promise<void> {
     this.logger.log('Stopping...')
     await this.client.stop()
   }
 
-  /**
-   * Get agent status
-   */
   getStatus(): 'idle' | 'working' | 'error' {
     return this.status
   }
 
-  /**
-   * Check if agent is running
-   */
   isRunning(): boolean {
     return this.client.isRunning()
   }
 
-  /**
-   * Get supported slash commands
-   */
   async getSupportedCommands(): Promise<any[]> {
     return this.client.getSupportedCommands()
   }

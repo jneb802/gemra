@@ -1,11 +1,9 @@
 import { EventEmitter } from 'events'
-import { spawn, ChildProcess } from 'child_process'
-import { Readable, Writable } from 'stream'
-import * as acp from '@agentclientprotocol/sdk'
-import { DockerOptions, MessageContent } from '../../shared/types'
+import { ACPMessage, DockerOptions, MessageContent } from '../../shared/types'
 import { Logger } from '../../shared/utils/logger'
 import { spawnDockerProcess, checkDockerAvailable } from './DockerSpawner'
 import { DockerImageBuilder } from './DockerImageBuilder'
+import type { SDKSpawnOptions } from './DockerSpawner'
 
 export interface ACPClientOptions {
   workingDirectory: string
@@ -15,31 +13,26 @@ export interface ACPClientOptions {
 }
 
 /**
- * ACP Client - Uses @agentclientprotocol/sdk ClientSideConnection directly
+ * ACP Client - Uses @anthropic-ai/claude-agent-sdk directly (no ACP subprocess)
  */
 export class ACPClient extends EventEmitter {
-  private connection: acp.ClientSideConnection | null = null
-  private sessionId: string | null = null
-  private proc: ChildProcess | null = null
+  private session: any // SDKSession from @anthropic-ai/claude-agent-sdk
+  private sessionId?: string
   private logger = new Logger('ACPClient')
   private isActive = false
   private currentPhase: 'idle' | 'thinking' | 'streaming' | 'tool_execution' = 'idle'
+  private lastStreamedText = ''
+  private cancelled = false
 
-  // Pending permission requests waiting for UI response
-  private pendingPermissions = new Map<string, {
-    resolve: (response: acp.RequestPermissionResponse) => void
-    reject: (err: Error) => void
-  }>()
+  // Pending quest responses waiting for user input
+  private pendingQuests = new Map<string, (response: string) => void>()
 
   constructor(private options: ACPClientOptions) {
     super()
   }
 
-  /**
-   * Start the ACP session
-   */
   async start(): Promise<void> {
-    this.logger.log('Starting ACP session...')
+    this.logger.log('Starting Claude Agent SDK session...')
 
     if (this.options.dockerOptions?.enabled) {
       await this.startWithDocker()
@@ -49,49 +42,116 @@ export class ACPClient extends EventEmitter {
     }
   }
 
-  /**
-   * Start session in direct mode (no Docker)
-   */
   private async startDirect(): Promise<void> {
     try {
+      const sdk = await import('@anthropic-ai/claude-agent-sdk')
       const cliPath = await this.getCliPath()
       this.logger.log(`Using SDK CLI from: ${cliPath}`)
 
-      const env = {
-        ...process.env,
-        ...this.options.customEnv,
-        PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
-      }
-
-      this.proc = spawn('node', [cliPath], {
+      // SDKSessionOptions (unstable_v2_createSession) does not expose cwd or
+      // spawnClaudeCodeProcess.  Use query() with a persistent input stream
+      // instead — it accepts the full Options type which includes both.
+      this.session = this.buildQuerySession(sdk, {
+        model: this.options.model || 'claude-sonnet-4-5-20250929',
+        pathToClaudeCodeExecutable: cliPath,
+        executable: 'node',
         cwd: this.options.workingDirectory,
-        env: env as Record<string, string>,
-        stdio: ['pipe', 'pipe', 'inherit'],
+        env: {
+          ...process.env,
+          ...this.options.customEnv,
+          PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
+        },
       })
 
-      this.proc.on('error', (err) => {
-        this.logger.error('Process error:', err)
-        this.emit('error', err)
-      })
-
-      this.proc.on('exit', (code, signal) => {
-        this.logger.log(`Process exited (code: ${code}, signal: ${signal})`)
-        this.isActive = false
-        this.emit('exit', { code, signal })
-      })
-
-      await this.connectACP()
       this.isActive = true
       this.logger.log('Session created successfully (direct mode)')
     } catch (error) {
-      this.logger.error('Failed to start direct session:', error)
+      this.logger.error('Failed to start SDK session:', error)
       throw error
     }
   }
 
   /**
-   * Start session in Docker mode
+   * Build a session-compatible object backed by query() instead of
+   * unstable_v2_createSession().  query() accepts the full Options type
+   * (including cwd and spawnClaudeCodeProcess) which SDKSessionOptions omits.
+   *
+   * Internally mirrors what V9 (unstable_v2_createSession) does: an async
+   * input queue drives a persistent query, and stream() pauses at each result.
    */
+  private buildQuerySession(sdk: any, queryOptions: any): any {
+    const inputQueue: any[] = []
+    const waiters: Array<() => void> = []
+    let closed = false
+    let sessionId: string | null = null
+
+    async function* makeInputStream() {
+      while (!closed) {
+        if (inputQueue.length > 0) {
+          yield inputQueue.shift()
+        } else {
+          await new Promise<void>(resolve => {
+            waiters.push(resolve)
+          })
+        }
+      }
+    }
+
+    const queryObj = sdk.query({ prompt: makeInputStream(), options: queryOptions })
+    const iterator = queryObj[Symbol.asyncIterator]()
+
+    async function* streamGenerator() {
+      while (true) {
+        const { value, done } = await iterator.next()
+        if (done) return
+        if (value?.type === 'system' && value?.subtype === 'init') {
+          sessionId = value.session_id
+        }
+        yield value
+        if (value?.type === 'result') return // stop; resume on next stream() call
+      }
+    }
+
+    return {
+      get sessionId(): string {
+        if (sessionId === null) throw new Error('Session ID not yet available')
+        return sessionId
+      },
+      async send(message: string | any): Promise<void> {
+        if (closed) throw new Error('Cannot send to closed session')
+        const userMsg =
+          typeof message === 'string'
+            ? {
+                type: 'user',
+                session_id: '',
+                message: { role: 'user', content: [{ type: 'text', text: message }] },
+                parent_tool_use_id: null,
+              }
+            : Array.isArray(message)
+              ? {
+                  type: 'user',
+                  session_id: '',
+                  message: { role: 'user', content: message },
+                  parent_tool_use_id: null,
+                }
+              : message
+        inputQueue.push(userMsg)
+        if (waiters.length > 0) waiters.shift()!()
+      },
+      stream: streamGenerator,
+      close(): void {
+        if (closed) return
+        closed = true
+        while (waiters.length > 0) waiters.shift()!()
+        try {
+          queryObj.close?.()
+        } catch {
+          /* ignore */
+        }
+      },
+    }
+  }
+
   private async startWithDocker(): Promise<void> {
     try {
       this.logger.log('Starting in Docker mode...')
@@ -115,9 +175,8 @@ export class ACPClient extends EventEmitter {
           this.logger.log('[Docker Build]', output.trim())
         })
 
-        const { app } = await import('electron')
-        const path = await import('path')
         const projectRoot = this.options.workingDirectory
+        const path = await import('path')
         const dockerfilePath = path.join(projectRoot, 'Dockerfile.claude')
         const buildResult = await builder.ensureImage(imageName, dockerfilePath, projectRoot)
 
@@ -130,47 +189,53 @@ export class ACPClient extends EventEmitter {
         this.logger.log('Docker image built successfully')
       }
 
+      const sdk = await import('@anthropic-ai/claude-agent-sdk')
       const cliPath = await this.getCliPath()
       this.logger.log(`Using SDK CLI from: ${cliPath}`)
       this.emit('containerStatus', { status: 'starting' })
 
-      const sdkOptions = {
-        command: 'node',
-        args: [cliPath],
-        cwd: this.options.workingDirectory,
+      this.session = this.buildQuerySession(sdk, {
+        model: this.options.model || 'claude-sonnet-4-5-20250929',
+        pathToClaudeCodeExecutable: cliPath,
+        executable: 'node',
         env: {
           ...process.env,
           ...this.options.customEnv,
           PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
-        } as Record<string, string | undefined>,
-        signal: new AbortController().signal,
-      }
+        },
+        spawnClaudeCodeProcess: (options: SDKSpawnOptions) => {
+          this.logger.log('Spawning Claude CLI in Docker container...')
 
-      this.proc = spawnDockerProcess(sdkOptions, {
-        imageName,
-        workingDir: this.options.workingDirectory,
-        cliPath,
-        env: this.options.customEnv,
+          try {
+            const dockerProcess = spawnDockerProcess(options, {
+              imageName,
+              workingDir: this.options.workingDirectory,
+              cliPath,
+              env: this.options.customEnv,
+            })
+
+            dockerProcess.on('spawn', () => {
+              this.logger.log('Docker container spawned successfully')
+              this.emit('containerStatus', { status: 'running' })
+            })
+
+            dockerProcess.on('error', (error) => {
+              this.logger.error('Docker container error:', error)
+              this.emit('containerStatus', { status: 'error', error: error.message })
+            })
+
+            return dockerProcess
+          } catch (error) {
+            this.logger.error('Failed to spawn Docker container:', error)
+            this.emit('containerStatus', {
+              status: 'error',
+              error: error instanceof Error ? error.message : String(error),
+            })
+            throw error
+          }
+        },
       })
 
-      this.proc.on('spawn', () => {
-        this.logger.log('Docker container spawned successfully')
-        this.emit('containerStatus', { status: 'running' })
-      })
-
-      this.proc.on('error', (error) => {
-        this.logger.error('Docker container error:', error)
-        this.emit('containerStatus', { status: 'error', error: error.message })
-        this.emit('error', error)
-      })
-
-      this.proc.on('exit', (code, signal) => {
-        this.logger.log(`Docker container exited (code: ${code}, signal: ${signal})`)
-        this.isActive = false
-        this.emit('exit', { code, signal })
-      })
-
-      await this.connectACP()
       this.isActive = true
       this.logger.log('Session created successfully (Docker mode)')
     } catch (error) {
@@ -183,9 +248,6 @@ export class ACPClient extends EventEmitter {
     }
   }
 
-  /**
-   * Get path to the Claude Code CLI executable
-   */
   private async getCliPath(): Promise<string> {
     const { app } = await import('electron')
     const path = await import('path')
@@ -194,153 +256,113 @@ export class ACPClient extends EventEmitter {
     if (app.isPackaged && appPath.endsWith('.asar')) {
       appPath = appPath.replace('.asar', '.asar.unpacked')
     }
-
     return path.join(appPath, 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'cli.js')
   }
 
-  /**
-   * Establish ACP connection over the spawned process stdio
-   */
-  private async connectACP(): Promise<void> {
-    if (!this.proc || !this.proc.stdin || !this.proc.stdout) {
-      throw new Error('Process not started or stdio not available')
-    }
+  private handleSDKMessage(sdkMessage: any): void {
+    this.logger.log('SDK message type:', sdkMessage.type)
 
-    // Convert Node.js streams to Web streams
-    const webWritable = Writable.toWeb(this.proc.stdin) as WritableStream<Uint8Array>
-    const webReadable = Readable.toWeb(this.proc.stdout) as ReadableStream<Uint8Array>
+    if (sdkMessage.type === 'assistant') {
+      const message = sdkMessage.message
+      if (message?.content) {
+        if (this.currentPhase !== 'streaming') {
+          this.currentPhase = 'streaming'
+          this.emit('agentStatus', { type: 'streaming' })
+        }
 
-    // ndJsonStream(output: WritableStream, input: ReadableStream)
-    const stream = acp.ndJsonStream(webWritable, webReadable)
-
-    this.connection = new acp.ClientSideConnection(
-      (_agent) => this.buildClient(),
-      stream
-    )
-
-    // Initialize
-    await this.connection.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
-      clientCapabilities: {},
-      clientInfo: { name: 'Gemra', version: '1.0.0' },
-    })
-
-    // Create session
-    const result = await this.connection.newSession({
-      cwd: this.options.workingDirectory,
-      mcpServers: [],
-    })
-    this.sessionId = result.sessionId
-    this.logger.log('Session ID:', this.sessionId)
-
-    // Apply initial model if specified
-    if (this.options.model && this.connection.setSessionConfigOption) {
-      try {
-        await this.connection.setSessionConfigOption({
-          sessionId: this.sessionId,
-          configId: 'model',
-          value: this.options.model,
-        })
-        this.logger.log('Initial model set to:', this.options.model)
-      } catch (err) {
-        this.logger.error('Failed to set initial model (non-fatal):', err)
-      }
-    }
-  }
-
-  /**
-   * Build the ACP Client implementation (callbacks for server-sent events)
-   */
-  private buildClient(): acp.Client {
-    return {
-      sessionUpdate: async (params: acp.SessionNotification): Promise<void> => {
-        const update = params.update
-
-        switch (update.sessionUpdate) {
-          case 'agent_message_chunk': {
-            const block = update.content
-            if (block.type === 'text') {
-              this.emit('text', (block as acp.TextContent).text)
-            }
-            if (this.currentPhase !== 'streaming') {
-              this.currentPhase = 'streaming'
-              this.emit('agentStatus', { type: 'streaming' })
-            }
-            break
+        // Accumulate all text in this message and emit the delta
+        let currentAccumulatedText = ''
+        for (const block of message.content) {
+          if (block.type === 'text' && block.text) {
+            currentAccumulatedText += block.text
           }
+        }
 
-          case 'tool_call': {
+        if (currentAccumulatedText) {
+          const delta = currentAccumulatedText.slice(this.lastStreamedText.length)
+          if (delta) {
+            const acpMessage: ACPMessage = {
+              jsonrpc: '2.0',
+              method: 'session/update',
+              params: {
+                update: {
+                  sessionUpdate: 'agent_message_chunk',
+                  content: { type: 'text', text: delta },
+                },
+              },
+            }
+            this.emit('message', acpMessage)
+            this.lastStreamedText = currentAccumulatedText
+          }
+        }
+
+        // Handle tool_use blocks
+        for (const block of message.content) {
+          if (block.type === 'tool_use') {
+            if (block.name === 'AskUserQuestion') {
+              this.logger.log('AskUserQuestion tool detected:', block.id)
+              const questions = block.input?.questions || []
+              if (questions.length > 0) {
+                const question = questions[0]
+                this.emit('questPrompt', {
+                  questId: block.id,
+                  prompt: {
+                    id: block.id,
+                    question: question.question,
+                    header: question.header,
+                    answerType: 'select',
+                    options: question.options || [],
+                    multiSelect: question.multiSelect || false,
+                  },
+                })
+                continue
+              }
+            }
+
             this.currentPhase = 'tool_execution'
-            const toolCall = update as acp.ToolCall & { sessionUpdate: 'tool_call' }
             this.emit('toolExecution', {
-              id: toolCall.toolCallId,
-              name: toolCall.title,
-              input: toolCall.rawInput ?? {},
+              id: block.id,
+              name: block.name,
+              input: block.input,
               status: 'running',
             })
             this.emit('agentStatus', {
               type: 'tool_execution',
               tool: {
-                id: toolCall.toolCallId,
-                name: toolCall.title,
-                input: toolCall.rawInput ?? {},
+                id: block.id,
+                name: block.name,
+                input: block.input,
                 status: 'running',
               },
             })
-            break
           }
-
-          case 'tool_call_update': {
-            const toolUpdate = update as acp.ToolCallUpdate & { sessionUpdate: 'tool_call_update' }
-            if (toolUpdate.status === 'completed' || toolUpdate.status === 'failed') {
-              this.emit('toolCompleted', {
-                id: toolUpdate.toolCallId,
-                status: toolUpdate.status,
-                output: toolUpdate.rawOutput,
-              })
-            }
-            break
-          }
-
-          case 'usage_update':
-            // UsageUpdate contains context window stats (size/used), not token counts.
-            // Token usage (inputTokens/outputTokens) is reported via PromptResponse.
-            break
-
-          default:
-            break
         }
-      },
+      }
+    } else if (sdkMessage.type === 'result') {
+      const acpMessage: ACPMessage = {
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          usage: sdkMessage.usage,
+        },
+      }
+      this.emit('message', acpMessage)
 
-      requestPermission: async (params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> => {
-        return new Promise((resolve, reject) => {
-          const permId = crypto.randomUUID()
-          this.pendingPermissions.set(permId, { resolve, reject })
+      this.lastStreamedText = ''
+      this.currentPhase = 'idle'
+      this.emit('agentStatus', { type: 'idle' })
 
-          this.emit('questPrompt', {
-            questId: permId,
-            prompt: {
-              id: permId,
-              question: params.toolCall.title ?? 'Permission required',
-              header: 'Permission',
-              answerType: 'select',
-              options: params.options.map((o) => ({
-                label: o.name,
-                value: o.optionId,
-                optionId: o.optionId,
-                description: o.kind,
-              })),
-              multiSelect: false,
-            },
-          })
-        })
-      },
+      if (sdkMessage.is_error || sdkMessage.error) {
+        this.emit('error', new Error(sdkMessage.result || sdkMessage.error || 'Unknown error'))
+      }
+    } else if (sdkMessage.type === 'system') {
+      if (sdkMessage.session_id && !this.sessionId) {
+        this.sessionId = sdkMessage.session_id
+        this.logger.log('Session ID from SDK:', this.sessionId)
+      }
     }
   }
 
-  /**
-   * Create a session (compatibility shim — session is created in connectACP)
-   */
   async createSession(): Promise<string> {
     if (!this.sessionId) {
       this.sessionId = `session-${Date.now()}`
@@ -348,61 +370,29 @@ export class ACPClient extends EventEmitter {
     return this.sessionId
   }
 
-  /**
-   * Send a prompt to the agent
-   */
   async sendPrompt(content: string | MessageContent[]): Promise<void> {
-    if (!this.connection || !this.sessionId) {
+    if (!this.session) {
       throw new Error('Session not started')
     }
 
     this.logger.log('Sending content:', typeof content === 'string' ? content : `[${content.length} blocks]`)
 
+    this.cancelled = false
+    this.lastStreamedText = ''
     this.currentPhase = 'thinking'
     this.emit('agentStatus', { type: 'thinking' })
 
-    // Convert content to ACP ContentBlock array
-    const prompt: acp.ContentBlock[] = typeof content === 'string'
-      ? [{ type: 'text', text: content }]
-      : content.flatMap((block): acp.ContentBlock[] => {
-          if (block.type === 'text') {
-            return [{ type: 'text', text: block.text }]
-          }
-          if (block.type === 'image') {
-            return [{
-              type: 'image',
-              data: block.source.data,
-              mimeType: block.source.media_type as acp.ImageContent['mimeType'],
-            }]
-          }
-          return []
-        })
-
     try {
-      const response = await this.connection.prompt({
-        sessionId: this.sessionId,
-        prompt,
-      })
+      await this.session.send(content)
 
-      this.logger.log('Prompt completed, stopReason:', response.stopReason)
-
-      // Emit token usage if available
-      if (response.usage) {
-        this.emit('usage', {
-          inputTokens: response.usage.inputTokens,
-          outputTokens: response.usage.outputTokens,
-          timestamp: Date.now(),
-        })
+      for await (const message of this.session.stream()) {
+        if (this.cancelled) break
+        this.handleSDKMessage(message)
       }
 
-      // Transition to idle
-      this.currentPhase = 'idle'
-      this.emit('agentStatus', { type: 'idle' })
-
-      // Signal turn complete (for usage/status tracking in ClaudeAgent)
-      this.emit('promptComplete', { stopReason: response.stopReason })
+      this.logger.log('Message stream completed for this turn')
     } catch (error) {
-      this.logger.error('Error during prompt:', error)
+      this.logger.error('Error during prompt/streaming:', error)
       this.currentPhase = 'idle'
       this.emit('agentStatus', { type: 'idle' })
       this.emit('error', error)
@@ -410,119 +400,68 @@ export class ACPClient extends EventEmitter {
     }
   }
 
-  /**
-   * Cancel the current turn
-   */
   async cancelCurrentTurn(): Promise<void> {
-    if (!this.connection || !this.sessionId) return
-
     this.logger.log('Cancelling current turn...')
-    try {
-      await this.connection.cancel({ sessionId: this.sessionId })
-    } catch (error) {
-      this.logger.error('Error cancelling turn:', error)
-    }
-  }
-
-  /**
-   * Set the session mode
-   */
-  async setMode(modeId: string): Promise<void> {
-    if (!this.connection || !this.sessionId) return
-
-    this.logger.log('Setting mode to:', modeId)
-    try {
-      if (this.connection.setSessionConfigOption) {
-        await this.connection.setSessionConfigOption({
-          sessionId: this.sessionId,
-          configId: 'mode',
-          value: modeId,
-        })
+    this.cancelled = true
+    // Close the underlying session so the stream terminates
+    if (this.session) {
+      try {
+        this.session.close()
+      } catch {
+        // Ignore errors during cancel
       }
-    } catch (error) {
-      this.logger.error('Error setting mode (non-fatal):', error)
+      this.session = null
+      this.isActive = false
     }
+    this.currentPhase = 'idle'
+    this.emit('agentStatus', { type: 'idle' })
   }
 
-  /**
-   * Set the session model
-   */
-  async setModel(modelId: string): Promise<void> {
-    if (!this.connection || !this.sessionId) return
+  // setMode and setModel are not supported by the SDK session API;
+  // the renderer stores these values and they take effect on next session start.
+  async setMode(_modeId: string): Promise<void> {}
+  async setModel(_modelId: string): Promise<void> {}
 
-    this.logger.log('Setting model to:', modelId)
-    try {
-      if (this.connection.setSessionConfigOption) {
-        await this.connection.setSessionConfigOption({
-          sessionId: this.sessionId,
-          configId: 'model',
-          value: modelId,
-        })
-      }
-    } catch (error) {
-      this.logger.error('Error setting model (non-fatal):', error)
-    }
-  }
-
-  /**
-   * Respond to a pending permission request
-   */
   respondToPermission(questId: string, optionId: string): void {
-    const pending = this.pendingPermissions.get(questId)
-    if (!pending) {
-      this.logger.error('No pending permission for questId:', questId)
-      return
+    // Quest responses are sent as regular user messages
+    this.logger.log('Responding to quest:', questId, 'with:', optionId)
+    if (this.session && this.isActive) {
+      this.session.send(optionId).catch((err: any) => {
+        this.logger.error('Failed to send quest response:', err)
+      })
     }
-
-    this.pendingPermissions.delete(questId)
-    pending.resolve({
-      outcome: { outcome: 'selected', optionId },
-    })
   }
 
-  /**
-   * Stop the agent
-   */
   async stop(): Promise<void> {
+    if (!this.session) return
+
     this.logger.log('Stopping session...')
     this.isActive = false
 
-    // Reject all pending permissions
-    for (const [, pending] of this.pendingPermissions) {
-      pending.reject(new Error('Session stopped'))
+    try {
+      this.session.close()
+      this.logger.log('Session closed')
+    } catch (error) {
+      this.logger.error('Error closing session:', error)
     }
-    this.pendingPermissions.clear()
-
-    if (this.proc) {
-      try {
-        this.proc.kill()
-      } catch (error) {
-        this.logger.error('Error killing process:', error)
-      }
-      this.proc = null
-    }
-
-    this.connection = null
   }
 
-  /**
-   * Get process ID
-   */
   getPid(): number | undefined {
-    return this.proc?.pid
+    return undefined
   }
 
-  /**
-   * Check if session is running
-   */
   isRunning(): boolean {
-    return this.isActive && !!this.connection
+    return this.isActive && !!this.session
   }
 
-  /**
-   * Get supported slash commands (not available via ACP; return empty)
-   */
   async getSupportedCommands(): Promise<any[]> {
-    return []
+    if (!this.session || typeof this.session.supportedCommands !== 'function') {
+      return []
+    }
+    try {
+      return await this.session.supportedCommands()
+    } catch {
+      return []
+    }
   }
 }

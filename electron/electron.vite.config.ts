@@ -7,9 +7,10 @@ export default defineConfig({
     build: {
       outDir: 'dist-electron/main'
     },
-    // Exclude ESM-only packages so Vite bundles them (converts ESM→CJS).
-    // externalizeDepsPlugin leaves them as require() calls which fails at runtime.
-    plugins: [externalizeDepsPlugin({ exclude: ['@agentclientprotocol/sdk', '@anthropic-ai/claude-agent-sdk'] })],
+    // Exclude @anthropic-ai/claude-agent-sdk so Vite bundles it (converts ESM→CJS).
+    // It has "type":"module" so externalizing it causes ERR_REQUIRE_ESM at runtime.
+    // Note: cli.js (the spawned subprocess) is kept in asarUnpack separately.
+    plugins: [externalizeDepsPlugin({ exclude: ['@anthropic-ai/claude-agent-sdk'] })],
     resolve: {
       alias: {
         '@main': resolve('src/main'),
