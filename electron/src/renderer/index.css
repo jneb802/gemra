@@ -3,34 +3,34 @@
    ========================================================================== */
 
 :root {
-  /* Colors - Background */
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #2d2d2d;
-  --bg-user-message: #2a2a2a;
-  --bg-error: #3e1f1f;
+  /* Colors - Background (cool dark, precision tool aesthetic) */
+  --bg-primary: #111318;
+  --bg-secondary: #181d26;
+  --bg-user-message: #1d2233;
+  --bg-error: #2c1212;
 
-  /* Colors - Borders */
-  --border-color: #3e3e3e;
-  --border-color-focus: #569cd6;
-  --border-color-error: #ff5555;
-  --border-color-system: #555;
+  /* Colors - Borders (rgba for softness, not VS Code solid gray) */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-focus: #4a8cf0;
+  --border-color-error: #e05252;
+  --border-color-system: rgba(255, 255, 255, 0.2);
 
   /* Colors - Text */
-  --text-primary: #d4d4d4;
-  --text-muted: #888;
-  --text-error: #ff5555;
+  --text-primary: #dde4f0;
+  --text-muted: #525c72;
+  --text-error: #e05252;
   --text-thinking: #9cdcfe;
   --text-streaming: #4ec9b0;
   --text-tool: #dcdcaa;
 
   /* Colors - Interactive */
-  --button-primary: #569cd6;
-  --button-primary-hover: #6aadee;
+  --button-primary: #4a8cf0;
+  --button-primary-hover: #6099f5;
 
   /* Colors - Scrollbar */
-  --scrollbar-track: #1e1e1e;
-  --scrollbar-thumb: #3e3e3e;
-  --scrollbar-thumb-hover: #4e4e4e;
+  --scrollbar-track: #111318;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.10);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 
   /* Colors - Terminal Selection */
   --selection-bg: rgba(255, 255, 255, 0.3);
@@ -61,18 +61,18 @@
   --message-padding-vertical: 20px;
   --message-padding-horizontal: 16px;
 
-  /* Border Radius */
-  --radius-sm: 4px;
+  /* Border Radius — differentiated scale */
+  --radius-sm: 3px;
   --radius-md: 5px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 
   /* Colors - Additional UI elements */
-  --bg-hover: #252525;
-  --bg-active: #3a3a3a;
-  --text-secondary: #b0b0b0;
-  --text-tertiary: #666;
-  --border-separator: #3e3e3e;
+  --bg-hover: #1a1f2c;
+  --bg-active: #232b3e;
+  --text-secondary: #8890a6;
+  --text-tertiary: #3f4a60;
+  --border-separator: rgba(255, 255, 255, 0.08);
 
   /* Container status colors */
   --container-building: #f59e0b;
@@ -82,6 +82,10 @@
   /* Git colors */
   --git-addition: #4ade80;
   --git-deletion: #f87171;
+
+  /* Git branch badge */
+  --git-branch-bg: rgba(74, 140, 240, 0.15);
+  --git-branch-text: #7ab3f5;
 
   /* Other */
   --scrollbar-width: 10px;

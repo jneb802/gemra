@@ -23,64 +23,23 @@ const formatTimestamp = (timestamp: number): string => {
 
 export const RecentItem: React.FC<RecentItemProps> = ({ item, onClick }) => {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '12px',
-        backgroundColor: 'transparent',
-        border: '1px solid transparent',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-        color: 'var(--text-primary)',
-        width: '100%',
-        textAlign: 'left'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'
-        e.currentTarget.style.borderColor = 'var(--border-color)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent'
-        e.currentTarget.style.borderColor = 'transparent'
-      }}
-    >
+    <button className="recent-item" onClick={onClick}>
       <Folder size={20} color="var(--button-primary)" />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>
-            {item.name}
-          </span>
+      <div className="recent-item__info">
+        <div className="recent-item__name-row">
+          <span className="recent-item__name">{item.name}</span>
           {item.gitBranch && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                backgroundColor: '#264f78',
-                borderRadius: '10px',
-                fontSize: '11px',
-                color: '#4fc3f7'
-              }}
-            >
+            <span className="recent-item__branch">
               <GitBranch size={10} />
               {item.gitBranch}
             </span>
           )}
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.path}
-        </div>
+        <div className="recent-item__path">{item.path}</div>
       </div>
 
-      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', flexShrink: 0 }}>
-        {formatTimestamp(item.timestamp)}
-      </div>
+      <div className="recent-item__timestamp">{formatTimestamp(item.timestamp)}</div>
     </button>
   )
 }
