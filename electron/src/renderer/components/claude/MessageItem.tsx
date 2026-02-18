@@ -193,11 +193,6 @@ export const MessageItem = ({
           </div>
         )}
 
-        {/* Live status for streaming message */}
-        {!isQuestPrompt && message.role === 'assistant' && isStreaming && currentTurnMetadata && (
-          <MessageStatusIndicator metadata={currentTurnMetadata} isLive model={model} />
-        )}
-
         {/* Final status for completed message */}
         {!isQuestPrompt && message.role === 'assistant' && message.metadata?.isComplete && (
           <MessageStatusIndicator metadata={message.metadata} isLive={false} model={model} />

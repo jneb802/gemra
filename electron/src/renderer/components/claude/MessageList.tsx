@@ -3,6 +3,7 @@ import { List, useDynamicRowHeight, type ListImperativeAPI } from 'react-window'
 import type { ClaudeMessage, MessageMetadata } from '../../../shared/types'
 import { estimateMessageHeight, useMessageGrouping } from './useMessageHeights'
 import { MessageItem, type MessageItemProps } from './MessageItem'
+import { MessageStatusIndicator } from './MessageStatusIndicator'
 
 interface MessageListProps {
   messages: ClaudeMessage[]
@@ -127,16 +128,21 @@ export const MessageList: React.FC<MessageListProps> = ({
   }), [messages, currentTurnMetadata, onRespondToQuest, model])
 
   return (
-    <div ref={containerRef} className="message-list">
-      <List<MessageItemProps>
-        listRef={listRef}
-        rowComponent={MessageItem}
-        rowCount={messages.length}
-        rowHeight={rowHeight}
-        rowProps={rowProps}
-        overscanCount={3}
-        style={{ height: containerHeight }}
-      />
+    <div className="message-list">
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <List<MessageItemProps>
+          listRef={listRef}
+          rowComponent={MessageItem}
+          rowCount={messages.length}
+          rowHeight={rowHeight}
+          rowProps={rowProps}
+          overscanCount={3}
+          style={{ height: containerHeight }}
+        />
+      </div>
+      {currentTurnMetadata && !currentTurnMetadata.isComplete && (
+        <MessageStatusIndicator metadata={currentTurnMetadata} isLive model={model} />
+      )}
     </div>
   )
 }

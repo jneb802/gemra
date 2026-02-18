@@ -4,7 +4,6 @@ import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import { SessionTabs } from './SessionTabs'
 import { BlockTerminal } from '../Terminal/BlockTerminal'
-import { MessageStatusIndicator } from './MessageStatusIndicator'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
@@ -253,14 +252,6 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
               isStreaming={agent.agentStatus.type === 'streaming'}
               currentTurnMetadata={agent.currentTurnMetadata}
               onRespondToQuest={agent.respondToQuest}
-              model={agentConfig.model}
-            />
-          )}
-
-          {agent.currentTurnMetadata && !agent.currentTurnMetadata.isComplete && (
-            <MessageStatusIndicator
-              metadata={agent.currentTurnMetadata}
-              isLive
               model={agentConfig.model}
             />
           )}
