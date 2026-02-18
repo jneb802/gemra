@@ -70,9 +70,8 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
     set((state) => {
       const lists = new Map(state.blockLists)
-      const list = lists.get(terminalId) || { terminalId, blocks: [], lastExitCode: 0 }
-      list.blocks.push(block)
-      lists.set(terminalId, list)
+      const existing = lists.get(terminalId) || { terminalId, blocks: [], lastExitCode: 0 }
+      lists.set(terminalId, { ...existing, blocks: [...existing.blocks, block] })
       return { blockLists: lists }
     })
 
@@ -88,63 +87,88 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       const blockIndex = list.blocks.findIndex(b => b.id === blockId)
       if (blockIndex === -1) return state
 
-      list.blocks[blockIndex] = {
-        ...list.blocks[blockIndex],
+      const newBlocks = list.blocks.slice()
+      newBlocks[blockIndex] = {
+        ...newBlocks[blockIndex],
         ...updates,
         updatedAt: Date.now(),
       }
 
-      lists.set(terminalId, list)
+      lists.set(terminalId, { ...list, blocks: newBlocks })
       return { blockLists: lists }
     })
   },
 
   startBlockExecution: (terminalId, blockId) => {
-    get().updateBlock(terminalId, blockId, {
-      status: 'running',
-      startTime: Date.now(),
-    })
-
     set((state) => {
       const lists = new Map(state.blockLists)
       const list = lists.get(terminalId)
-      if (list) {
-        list.activeBlockId = blockId
-        lists.set(terminalId, list)
+      if (!list) return state
+
+      const blockIndex = list.blocks.findIndex(b => b.id === blockId)
+      if (blockIndex === -1) return state
+
+      const newBlocks = list.blocks.slice()
+      newBlocks[blockIndex] = {
+        ...newBlocks[blockIndex],
+        status: 'running',
+        startTime: Date.now(),
+        updatedAt: Date.now(),
       }
+
+      lists.set(terminalId, { ...list, blocks: newBlocks, activeBlockId: blockId })
       return { blockLists: lists }
     })
   },
 
   finishBlockExecution: (terminalId, blockId, exitCode) => {
     const endTime = Date.now()
-    const block = get().getBlock(terminalId, blockId)
-
-    get().updateBlock(terminalId, blockId, {
-      status: exitCode === 0 ? 'completed' : 'failed',
-      exitCode,
-      endTime,
-      duration: block ? endTime - block.startTime : 0,
-    })
 
     set((state) => {
       const lists = new Map(state.blockLists)
       const list = lists.get(terminalId)
-      if (list) {
-        list.activeBlockId = undefined
-        list.lastExitCode = exitCode
-        lists.set(terminalId, list)
-      }
+      if (!list) return state
+
+      const newBlocks = list.blocks.map(b => {
+        if (b.id !== blockId) return b
+        return {
+          ...b,
+          status: (exitCode === 0 ? 'completed' : 'failed') as BlockStatus,
+          exitCode,
+          endTime,
+          duration: endTime - b.startTime,
+          updatedAt: endTime,
+        }
+      })
+
+      lists.set(terminalId, {
+        ...list,
+        blocks: newBlocks,
+        activeBlockId: undefined,
+        lastExitCode: exitCode,
+      })
       return { blockLists: lists }
     })
   },
 
   appendToBlock: (terminalId, blockId, content) => {
-    const block = get().getBlock(terminalId, blockId)
-    if (!block) return
+    set((state) => {
+      const lists = new Map(state.blockLists)
+      const list = lists.get(terminalId)
+      if (!list) return state
 
-    get().updateBlock(terminalId, blockId, {
-      content: block.content + content,
+      const blockIndex = list.blocks.findIndex(b => b.id === blockId)
+      if (blockIndex === -1) return state
+
+      const newBlocks = list.blocks.slice()
+      newBlocks[blockIndex] = {
+        ...newBlocks[blockIndex],
+        content: newBlocks[blockIndex].content + content,
+        updatedAt: Date.now(),
+      }
+
+      lists.set(terminalId, { ...list, blocks: newBlocks })
+      return { blockLists: lists }
     })
   },
 
@@ -152,34 +176,65 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
     set((state) => {
       const lists = new Map(state.blockLists)
       const list = lists.get(terminalId)
-      if (list) {
-        list.activeBlockId = blockId
-        lists.set(terminalId, list)
-      }
+      if (!list) return state
+      lists.set(terminalId, { ...list, activeBlockId: blockId })
       return { blockLists: lists }
     })
   },
 
   toggleBlockCollapse: (terminalId, blockId) => {
-    const block = get().getBlock(terminalId, blockId)
-    if (!block) return
+    set((state) => {
+      const lists = new Map(state.blockLists)
+      const list = lists.get(terminalId)
+      if (!list) return state
 
-    get().updateBlock(terminalId, blockId, {
-      collapsed: !block.collapsed,
+      const blockIndex = list.blocks.findIndex(b => b.id === blockId)
+      if (blockIndex === -1) return state
+
+      const newBlocks = list.blocks.slice()
+      newBlocks[blockIndex] = {
+        ...newBlocks[blockIndex],
+        collapsed: !newBlocks[blockIndex].collapsed,
+        updatedAt: Date.now(),
+      }
+
+      lists.set(terminalId, { ...list, blocks: newBlocks })
+      return { blockLists: lists }
     })
   },
 
   selectBlock: (terminalId, blockId) => {
-    get().deselectAll(terminalId)
-    get().updateBlock(terminalId, blockId, { selected: true })
+    set((state) => {
+      const lists = new Map(state.blockLists)
+      const list = lists.get(terminalId)
+      if (!list) return state
+
+      const newBlocks = list.blocks.map(b => ({
+        ...b,
+        selected: b.id === blockId,
+        updatedAt: b.id === blockId || b.selected ? Date.now() : b.updatedAt,
+      }))
+
+      lists.set(terminalId, { ...list, blocks: newBlocks })
+      return { blockLists: lists }
+    })
   },
 
   deselectAll: (terminalId) => {
-    const blocks = get().getBlocks(terminalId)
-    blocks.forEach(block => {
-      if (block.selected) {
-        get().updateBlock(terminalId, block.id, { selected: false })
-      }
+    set((state) => {
+      const lists = new Map(state.blockLists)
+      const list = lists.get(terminalId)
+      if (!list) return state
+
+      const hasSelected = list.blocks.some(b => b.selected)
+      if (!hasSelected) return state
+
+      const newBlocks = list.blocks.map(b =>
+        b.selected ? { ...b, selected: false, updatedAt: Date.now() } : b
+      )
+
+      lists.set(terminalId, { ...list, blocks: newBlocks })
+      return { blockLists: lists }
     })
   },
 
@@ -189,8 +244,7 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       const list = lists.get(terminalId)
       if (!list) return state
 
-      list.blocks = list.blocks.filter(b => b.id !== blockId)
-      lists.set(terminalId, list)
+      lists.set(terminalId, { ...list, blocks: list.blocks.filter(b => b.id !== blockId) })
       return { blockLists: lists }
     })
   },

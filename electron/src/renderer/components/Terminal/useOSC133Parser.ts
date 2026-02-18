@@ -25,6 +25,16 @@ export function useOSC133Parser({
     lastSequenceTime: Date.now(),
   })
 
+  // Keep workingDir current without causing the effect to re-run and re-wrap terminal.write
+  const workingDirRef = useRef(workingDir)
+  useEffect(() => {
+    workingDirRef.current = workingDir
+  }, [workingDir])
+
+  // Pending output buffer for rAF-batched appendToBlock calls
+  const pendingOutputRef = useRef<Map<string, string>>(new Map())
+  const rafIdRef = useRef<number | null>(null)
+
   const createBlock = useBlockStore(s => s.createBlock)
   const updateBlock = useBlockStore(s => s.updateBlock)
   const appendToBlock = useBlockStore(s => s.appendToBlock)
@@ -32,10 +42,26 @@ export function useOSC133Parser({
   const finishBlockExecution = useBlockStore(s => s.finishBlockExecution)
   const getActiveBlock = useBlockStore(s => s.getActiveBlock)
 
+  // Effect only re-runs when the terminal instance or terminalId changes, not on workingDir changes.
+  // workingDir is read via workingDirRef.current inside callbacks.
   useEffect(() => {
     if (!terminal) return
 
     console.log('[OSC 133] Parser registered for terminal:', terminalId)
+
+    // Flush buffered output to the store in a single update per animation frame
+    const flushPendingOutput = () => {
+      rafIdRef.current = null
+      for (const [blockId, content] of pendingOutputRef.current) {
+        if (content) appendToBlock(terminalId, blockId, content)
+      }
+      pendingOutputRef.current.clear()
+    }
+
+    const scheduleFlush = () => {
+      if (rafIdRef.current !== null) return
+      rafIdRef.current = requestAnimationFrame(flushPendingOutput)
+    }
 
     // Register OSC 133 handler
     const disposeOscHandler = terminal.parser.registerOscHandler(133, (data: string) => {
@@ -71,7 +97,7 @@ export function useOSC133Parser({
             status: 'pending',
             content: pendingCmd,
             command: pendingCmd,
-            workingDir,
+            workingDir: workingDirRef.current,
             promptText: state.promptBuffer,
           })
 
@@ -105,7 +131,7 @@ export function useOSC133Parser({
               type: 'output',
               status: 'running',
               content: '',
-              workingDir,
+              workingDir: workingDirRef.current,
               parentBlockId: state.currentBlock.id,
             })
 
@@ -119,6 +145,12 @@ export function useOSC133Parser({
           // Command end (with exit code)
           const exitCode = args[0] ? parseInt(args[0], 10) : 0
           console.log('[Block] Command end, exit code:', exitCode)
+
+          // Flush any pending output before marking done
+          if (rafIdRef.current !== null) {
+            cancelAnimationFrame(rafIdRef.current)
+            flushPendingOutput()
+          }
 
           if (state.currentBlock) {
             // Finish the output block
@@ -145,7 +177,7 @@ export function useOSC133Parser({
     // Register OSC 7 handler (working directory updates)
     const disposeOsc7Handler = terminal.parser.registerOscHandler(7, (data: string) => {
       // Format: file://hostname/path
-      const match = data.match(/^file:\/\/[^\/]*(.*)$/)
+      const match = data.match(/^file:\/\/[^/]*(.*)$/)
       if (match) {
         const newWorkingDir = match[1]
         console.log('[OSC 7] Working directory:', newWorkingDir)
@@ -182,9 +214,8 @@ export function useOSC133Parser({
       return cleaned
     }
 
-    // Capture terminal output to detect command input
-    // Note: We need to intercept data BEFORE it's written to terminal
-    // This is tricky with xterm.js - we'll handle it via the write callback
+    // Intercept terminal.write to observe data flowing into the terminal.
+    // Installed once per terminal instance (not per workingDir change) to avoid stacking.
     const originalWrite = terminal.write.bind(terminal)
     terminal.write = (data: string | Uint8Array, callback?: () => void) => {
       const state = parserState.current
@@ -204,14 +235,20 @@ export function useOSC133Parser({
           state.commandBuffer += stripEscapeSequences(strData, 'command')
           break
 
-        case 'C':
-          // Accumulating command output (strip all escape sequences)
+        case 'C': {
+          // Accumulating command output — buffer and flush via rAF to avoid per-chunk re-renders
           const cleanedOutput = stripEscapeSequences(strData, 'output')
           state.outputBuffer += cleanedOutput
           if (state.currentBlock && cleanedOutput) {
-            appendToBlock(terminalId, state.currentBlock.id, cleanedOutput)
+            const blockId = state.currentBlock.id
+            pendingOutputRef.current.set(
+              blockId,
+              (pendingOutputRef.current.get(blockId) ?? '') + cleanedOutput
+            )
+            scheduleFlush()
           }
           break
+        }
       }
 
       // Call original write
@@ -219,11 +256,17 @@ export function useOSC133Parser({
     }
 
     return () => {
+      // Cancel any pending flush
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+      pendingOutputRef.current.clear()
       disposeOscHandler.dispose()
       disposeOsc7Handler.dispose()
       terminal.write = originalWrite
     }
-  }, [terminal, terminalId, workingDir])
+  }, [terminal, terminalId]) // workingDir intentionally omitted — read via workingDirRef
 
   return {
     parserState: parserState.current,
