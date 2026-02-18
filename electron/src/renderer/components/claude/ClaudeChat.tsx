@@ -4,6 +4,7 @@ import { InputBox } from './InputBox'
 import { WelcomeScreen } from '../Welcome/WelcomeScreen'
 import { SessionTabs } from './SessionTabs'
 import { BlockTerminal } from '../Terminal/BlockTerminal'
+import { MessageStatusIndicator } from './MessageStatusIndicator'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useClaudeChatStore } from '../../stores/claudeChatStore'
@@ -27,21 +28,6 @@ interface ClaudeChatProps {
 
 type ClaudeMode = 'default' | 'acceptEdits' | 'plan'
 
-const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  Read: 'Reading file',
-  Write: 'Writing file',
-  Edit: 'Editing file',
-  Bash: 'Running command',
-  Grep: 'Searching code',
-  Glob: 'Finding files',
-  Task: 'Spawning agent',
-  WebSearch: 'Searching web',
-  WebFetch: 'Fetching URL'
-}
-
-function getToolDisplayName(toolName: string): string {
-  return TOOL_DISPLAY_NAMES[toolName] || `Running ${toolName}`
-}
 
 export const ClaudeChat: React.FC<ClaudeChatProps> = ({
   agentId: propAgentId,
@@ -271,34 +257,12 @@ export const ClaudeChat: React.FC<ClaudeChatProps> = ({
             />
           )}
 
-          {agent.agentStatus.type === 'thinking' && (
-            <div className="status-indicator thinking">
-              <span className="status-icon">🤔</span>
-              <span className="status-text">Thinking...</span>
-            </div>
-          )}
-
-          {agent.agentStatus.type === 'streaming' && agent.isWorking && (
-            <div className="status-indicator streaming">
-              <span className="status-icon">✍️</span>
-              <span className="status-text">Writing response...</span>
-            </div>
-          )}
-
-          {agent.agentStatus.type === 'tool_execution' && agent.agentStatus.tool && (
-            <div className="status-indicator tool-execution">
-              <span className="status-icon">🔧</span>
-              <span className="status-text">{getToolDisplayName(agent.agentStatus.tool.name)}</span>
-              {agent.agentStatus.tool.name === 'Read' && agent.agentStatus.tool.input?.file_path && (
-                <span className="status-detail">{agent.agentStatus.tool.input.file_path}</span>
-              )}
-              {agent.agentStatus.tool.name === 'Bash' && agent.agentStatus.tool.input?.command && (
-                <span className="status-detail">{agent.agentStatus.tool.input.command}</span>
-              )}
-              {agent.agentStatus.tool.name === 'Grep' && agent.agentStatus.tool.input?.pattern && (
-                <span className="status-detail">"{agent.agentStatus.tool.input.pattern}"</span>
-              )}
-            </div>
+          {agent.currentTurnMetadata && !agent.currentTurnMetadata.isComplete && (
+            <MessageStatusIndicator
+              metadata={agent.currentTurnMetadata}
+              isLive
+              model={agentConfig.model}
+            />
           )}
 
           {agent.isInitializingAgent && (
